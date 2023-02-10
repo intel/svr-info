@@ -1,0 +1,34 @@
+#########
+# Intel Accelerators (sorted by devid)
+# references:
+#   https://pci-ids.ucw.cz/read/PC/8086
+#########
+- name: DLB
+  mfgid: 8086
+  devid: 2710
+  full_name: Intel Dynamic Load Balancer
+  description: hardware managed system of queues and arbiters connecting producers and consumers
+
+- name: DSA
+  mfgid: 8086
+  devid: B25
+  full_name: Intel Data Streaming Accelerator
+  description:  a high-performance data copy and transformation accelerator
+
+- name: IAX
+  mfgid: 8086
+  devid: CFE
+  full_name: Intel Analytics Accelerator
+  description: accelerates compression and decompression for big data applications and in-memory analytic databases
+
+- name: QAT (on CPU)
+  mfgid: 8086
+  devid: (4940|4942)
+  full_name: Intel Quick Assist Technology
+  description: accelerates data encryption and compression for applications from networking to enterprise, cloud to storage, and content delivery to database
+
+- name: QAT (on chipset)
+  mfgid: 8086
+  devid: 37C8
+  full_name: Intel Quick Assist Technology
+  description: accelerates data encryption and compression for applications from networking to enterprise, cloud to storage, and content delivery to database

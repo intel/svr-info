@@ -1,0 +1,467 @@
+<!--
+ * Copyright (C) 2023 Intel Corporation
+ * SPDX-License-Identifier: MIT
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>System Health Inspector</title>
+    <link rel="icon" type="image/x-icon" href="https://www.intel.com/favicon.ico">
+    <meta name="viewport" content="width=device-width">
+
+    <link rel="stylesheet" href="https://unpkg.com/normalize.css@8.0.1/normalize.css"
+        integrity="sha384-M86HUGbBFILBBZ9ykMAbT3nVb0+2C7yZlF8X2CiKNpDOQjKroMJqIeGZ/Le8N2Qp" crossorigin="anonymous"
+        referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.6/build/pure-min.css"
+        integrity="sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5" crossorigin="anonymous"
+        referrerpolicy="no-referrer" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/d3-flame-graph@4.1.3/dist/d3-flamegraph.css">
+    <script type="text/javascript" src="https://d3js.org/d3.v7.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/d3-flame-graph@4.1.3/dist/d3-flamegraph.min.js"></script>
+    <script src="https://unpkg.com/chart.js@3.7.1/dist/chart.min.js"
+        integrity="sha384-7NrRHqlWUj2hJl3a/dZj/a1GxuQc56mJ3aYsEnydBYrY1jR+RSt6SBvK3sHfj+mJ" crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
+
+    <style>
+        .content {
+            padding: 0 2em;
+            line-height: 1.6em;
+        }
+
+        .content h2 {
+            font-weight: 300;
+            color: #888;
+        }
+
+        .content h2:before {
+            content: '';
+            display: block;
+            position: relative;
+            width: 0;
+            height: 5em;
+            margin-top: -5em
+        }
+
+        header {
+            position: fixed;
+            top: 0;
+            background-color: whitesmoke;
+            z-index: 99;
+            width: 100%;
+            text-align: center;
+            margin: 0;
+            color: #07578c;
+            border-bottom: 1px solid #eee;
+        }
+
+        header h1 {
+            margin: 0.2em 0;
+            font-size: 3em;
+            font-weight: 300;
+        }
+
+        /* The "layout" div wraps the menu and main divs */
+        #layout,
+        #menu,
+        .menu-link {
+            -webkit-transition: all 0.2s ease-out;
+            -moz-transition: all 0.2s ease-out;
+            -ms-transition: all 0.2s ease-out;
+            -o-transition: all 0.2s ease-out;
+            transition: all 0.2s ease-out;
+        }
+
+        #layout {
+            position: relative;
+            left: 0;
+            padding-left: 0;
+        }
+
+        #layout.active #menu {
+            left: 140px;
+            width: 140px;
+        }
+
+        #layout.active .menu-link {
+            left: 140px;
+        }
+
+        /* The menu div contains the `.pure-menu` that appears on the left side of the page. */
+        #menu {
+            margin-left: -140px;
+            /* "#menu" width */
+            width: 140px;
+            position: fixed;
+            top: 115px;
+            bottom: 0;
+            z-index: 99;
+            /* so the menu or its navicon stays above all content */
+            background: #191818;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* All anchors inside the menu should be styled like this. */
+        #menu a {
+            color: #999;
+            border: none;
+            padding: 0.6em 0 0.6em 0.6em;
+        }
+
+        /* Remove all background/borders, since we are applying them to #menu. */
+        #menu .pure-menu,
+        #menu .pure-menu ul {
+            border: none;
+            background: transparent;
+        }
+
+        /* Add that light border to separate items into groups. */
+        #menu .pure-menu ul,
+        #menu .pure-menu .menu-item-divided {
+            border-top: 1px solid #333;
+        }
+
+        /* Change color of the anchor links on hover/focus. */
+        #menu .pure-menu li a:hover,
+        #menu .pure-menu li a:focus {
+            background: #333;
+        }
+
+        /* This styles the selected menu item `<li>`. */
+        #menu .pure-menu-selected,
+        #menu .pure-menu-heading {
+            background: #1f8dd6;
+        }
+
+        /* This styles a link within a selected menu item `<li>`. */
+        #menu .pure-menu-selected a {
+            color: #fff;
+        }
+
+        /* This styles the menu heading. */
+        #menu .pure-menu-heading {
+            font-size: 110%;
+            color: #fff;
+            margin: 0;
+        }
+
+        /* -- Dynamic Button For Responsive Menu -------------------------------------*/
+
+        /* The button to open/close the Menu is custom-made and not part of Pure. Here's
+              how it works: */
+
+        /* `.menu-link` represents the responsive menu toggle that shows/hides on
+               small screens. */
+        .menu-link {
+            position: fixed;
+            display: block;
+            /* show this only on small screens */
+            top: 115px;
+            left: 0;
+            /* "#menu width" */
+            background: #000;
+            background: rgba(0, 0, 0, 0.7);
+            font-size: 10px;
+            /* change this value to increase/decrease button size */
+            z-index: 10;
+            width: 2em;
+            height: auto;
+            padding: 1.5em .5em;
+        }
+
+        .menu-link:hover,
+        .menu-link:focus {
+            background: #000;
+        }
+
+        .menu-link span {
+            position: relative;
+            display: block;
+        }
+
+        .menu-link span,
+        .menu-link span:before,
+        .menu-link span:after {
+            background-color: #fff;
+            width: 100%;
+            height: 0.2em;
+        }
+
+        .menu-link span:before,
+        .menu-link span:after {
+            position: absolute;
+            margin-top: -0.6em;
+            content: " ";
+        }
+
+        .menu-link span:after {
+            margin-top: 0.6em;
+        }
+
+        /* -- Responsive Styles (Media Queries) ------------------------------------- */
+
+        /* Hides the menu at `72em`, but modify this based on your app's needs. */
+        @media (min-width: 72em) {
+
+            .header,
+            .content {
+                padding-left: 2em;
+                padding-right: 2em;
+            }
+
+            #layout {
+                padding-left: 140px;
+                /* left col width "#menu" */
+                left: 0;
+            }
+
+            #menu {
+                left: 140px;
+            }
+
+            .menu-link {
+                position: fixed;
+                left: 140px;
+                display: none;
+            }
+
+            #layout.active .menu-link {
+                left: 140px;
+            }
+        }
+
+        @media (max-width: 72em) {
+
+            /* Only apply this when the window is small. Otherwise, the following
+               case results in extra padding on the left:
+               * Make the window small.
+               * Tap the menu to trigger the active state.
+               * Make the window large again. */
+            #layout.active {
+                position: relative;
+                left: 140px;
+            }
+        }
+
+        /* Style the tab */
+        .tab {
+            position: fixed;
+            top: 67px;
+            z-index: 99;
+            height: 46px;
+            width: 100%;
+            background-color: #f5f5f5;
+        }
+
+        /* Style the buttons that are used to open the tab content */
+        .tab button {
+            background-color: inherit;
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            background-color: #ccc;
+            width: 175px;
+        }
+
+        /* Change background color of buttons on hover */
+        .tab button:hover {
+            background-color: #ddd;
+        }
+
+        /* Create an active/current tablink class */
+        .tab button.active {
+            background-color: #fff;
+        }
+
+        /* Style the tab content */
+        .tabcontent {
+            position: relative;
+            top: 115px;
+            display: none;
+            padding: 0px 0px;
+        }
+
+        .tabdefault {
+            display: block;
+        }
+
+        .tabnotdefault {
+        }
+
+        .master {
+            overflow: hidden;
+        }
+    </style>
+    <noscript>
+        <style type="text/css">
+            .tabcontent {display:block;}
+            .tabnotdefault {left: 140px;}
+        </style>
+    </noscript>
+</head>
+
+<body>
+    <header>
+        <h1>Intel&reg; System Health Inspector</h1>
+    </header>
+    <nav class="tab">
+        <button class="tablinks" onclick="openTab(event, 'configuration')" id="defaultOpen">Configuration</button>
+        <button class="tablinks" onclick="openTab(event, 'benchmark')">Benchmark</button>
+        <button class="tablinks" onclick="openTab(event, 'profile')">Profile</button>
+        <button class="tablinks" onclick="openTab(event, 'analyze')">Analyze</button>
+        <button class="tablinks" onclick="openTab(event, 'insights')">Insights</button>
+    </nav>
+    <div id="configuration" class="tabcontent tabdefault">
+        <div id="layout">
+            <!-- Menu toggle -->
+            <a href="#menu" id="menuLink" class="menu-link">
+                <!-- Hamburger icon -->
+                <span></span>
+            </a>
+            <nav id="menu" class="pure-menu">
+                <a class="pure-menu-heading" href="#">Contents</a>
+                <ul class="pure-menu-list">
+                    {{.RenderMenuItems .ConfigurationReport}}
+                </ul>
+            </nav>
+            <main id="main" class="content">
+                <noscript>
+                    <h3>JavaScript is disabled. Functionality is limited.</h3>
+                </noscript>
+                {{$reportGen := .}}
+                {{range .ConfigurationReport.Tables}}
+                <section>
+                    {{$reportGen.RenderDataTable . $reportGen.ConfigurationReportReferenceData}}
+                </section>
+                {{end}}
+                <h3>svr-info version: {{.Version}}</h3>
+            </main>
+        </div>
+    </div>
+    <div id="benchmark" class="tabcontent tabnotdefault">
+        <main class="content">
+            <h3>Use the "-benchmark all" option to collect all micro-benchmarking data. See "-help" for finer control.</h3>
+            {{$reportGen := .}}
+            {{range .BenchmarkReport.Tables}}
+            <section>
+                {{$reportGen.RenderDataTable . $reportGen.BenchmarkReportReferenceData}}
+            </section>
+            {{end}}
+            <h3>&nbsp;</h3>
+        </main>
+    </div>
+    <div id="profile" class="tabcontent tabnotdefault">
+        <main class="content">
+            <h3>Use the "-profile all" option to collect all system profiling data. See "-help" for finer control.</h3>
+            {{$reportGen := .}}
+            {{range .ProfileReport.Tables}}
+            <section>
+                {{$reportGen.RenderDataTable . $reportGen.ProfileReportReferenceData}}
+            </section>
+            {{end}}
+            <h3>&nbsp;</h3>
+        </main>
+    </div>
+    <div id="analyze" class="tabcontent tabnotdefault">
+        <main class="content">
+            <h3>Use the "-analyze all" option to collect all analysis data. See "-help" for finer control.</h3>
+            Upload your Intel&reg; System Health Inspector JSON-formatted reports to <a href=https://optimizations.intel.com/gProfilerAnalyzer target="_blank" rel="noopener noreferrer">Intel&reg; Optimization Hub</a> for deeper analysis.
+            {{$reportGen := .}}
+            {{range .AnalyzeReport.Tables}}
+            <section>
+                {{$reportGen.RenderDataTable . $reportGen.AnalyzeReportReferenceData}}
+            </section>
+            {{end}}
+            <h3>&nbsp;</h3>
+        </main>
+    </div>
+    <div id="insights" class="tabcontent tabnotdefault">
+        <main class="content">
+        <h3>Insights are derived from data collected by Intel&reg; System Health Inspector. They are provided for consideration but may not always be relevant.</h3>
+            {{$reportGen := .}}
+            {{range .InsightsReport.Tables}}
+            <section>
+                {{$reportGen.RenderDataTable . $reportGen.InsightsReportReferenceData}}
+            </section>
+            {{end}}
+            <h3>&nbsp;</h3>
+        </main>
+    </div>
+    <script> // set up hiding/showing menu on button press when screen is small
+        (function (window, document) {
+            var layout = document.getElementById('layout'),
+                menu = document.getElementById('menu'),
+                menuLink = document.getElementById('menuLink'),
+                content = document.getElementById('main');
+
+            function toggleClass(element, className) {
+                var classes = element.className.split(/\s+/),
+                    length = classes.length,
+                    i = 0;
+                for (; i < length; i++) {
+                    if (classes[i] === className) {
+                        classes.splice(i, 1);
+                        break;
+                    }
+                }
+                // The className is not found
+                if (length === classes.length) {
+                    classes.push(className);
+                }
+                element.className = classes.join(' ');
+            }
+
+            function toggleAll(e) {
+                var active = 'active';
+                e.preventDefault();
+                toggleClass(layout, active);
+                toggleClass(menu, active);
+                toggleClass(menuLink, active);
+            }
+
+            menuLink.onclick = function (e) {
+                toggleAll(e);
+            };
+
+            content.onclick = function (e) {
+                if (menu.className.indexOf('active') !== -1) {
+                    toggleAll(e);
+                }
+            };
+
+        }(this, this.document));
+    </script>
+    <script>
+        function openTab(evt, tabName) {
+            // Declare all variables
+            var i, tabcontent, tablinks;
+
+            // Get all elements with class="tabcontent" and hide them
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+
+            // Get all elements with class="tablinks" and remove the class "active"
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+
+            // Show the current tab, and add an "active" class to the button that opened the tab
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+        // Get the element with id="defaultOpen" and click on it
+        document.getElementById("defaultOpen").click();
+    </script>
+</body>
+
+</html>

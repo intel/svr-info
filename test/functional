@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+
+app="svr-info/svr-info"
+testout="./svr-info/testout"
+testout_base=$( basename $testout )
+
+failures=0
+
+# helper function: test_output_files_exist
+# arguments:
+#   $1 - test name
+#   $2 - arguments to pass to the app
+#   $3 - the file names expected to exist
+test_output_files_exist () {
+    mkdir -p $testout
+    # shellcheck disable=SC2086
+    output=$( $app -output $testout $2 2>&1 )
+    missing=false
+    for filename in $3; do
+        if [ ! -f "$testout/$filename" ]; then
+            echo "> missing expected output file: $filename"
+            missing=true
+        fi
+    done
+    if ! $missing; then
+        echo "PASS: test_output_files_exist - $1"
+    else
+        echo "FAIL: test_output_files_exist - $1"
+        failures=$((failures+1))
+    fi
+    rm -rf $testout
+}
+
+# helper function: test_stdout
+# arguments
+#   $1 - test name
+#   $2 - arguments to pass to the app
+#   $3 - regex describing output to expect
+test_stdout () {
+    mkdir -p $testout
+    # shellcheck disable=SC2086
+    output=$( $app -output $testout $2 2>&1 )
+    if [[ $output =~ $3 ]]; then
+        echo "PASS: test_stdout - $1"
+    else
+        echo "> expected: $3"
+        echo "> got: $output"
+        echo "FAIL: test_stdout - $1"
+        failures=$((failures+1))
+    fi
+    rm -rf $testout
+}
+
+test_stdout "local w/ -h" "-h" "^usage:"
+test_stdout "local w/ -v" "-v" "^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*).*$"
+test_stdout "local w/ no args" "" "Reports:"
+
+test_output_files_exist "local w/ no args"                     ""                            "$HOSTNAME.html $HOSTNAME.json $HOSTNAME.xlsx $testout_base.tgz"
+test_output_files_exist "local w/ -format all"                 "-format all"                 "$HOSTNAME.html $HOSTNAME.json $HOSTNAME.xlsx $HOSTNAME.txt $testout_base.tgz"
+test_output_files_exist "local w/ -format html"                "-format html"                "$HOSTNAME.html $testout_base.tgz"
+test_output_files_exist "local w/ -format json"                "-format json"                "$HOSTNAME.json $testout_base.tgz"
+test_output_files_exist "local w/ -format xlsx"                "-format xlsx"                "$HOSTNAME.xlsx $testout_base.tgz"
+test_output_files_exist "local w/ -format txt"                 "-format txt"                 "$HOSTNAME.txt $testout_base.tgz"
+test_output_files_exist "local w/ -format html,json,xlsx,txt"  "-format html,json,xlsx,txt"  "$HOSTNAME.html $HOSTNAME.json $HOSTNAME.xlsx $HOSTNAME.txt $testout_base.tgz"
+
+#### test for valid JSON in json report
+mkdir -p $testout
+output=$( $app -output $testout -format json 2>&1 )
+if jq '.' $testout/"$HOSTNAME".json > /dev/null 2>&1 ; then
+    echo "PASS: json report is valid JSON"
+else
+    echo "FAIL: json report is NOT valid JSON"
+    failures=$((failures+1))
+fi
+# these sections names should remain consistent in the JSON report
+alphaSections=("Analyze" "Brief" "Configuration" "Performance" "Profile" "Recommendations")
+numKeys=$( jq 'length' $testout/"$HOSTNAME".json )
+if [[ $numKeys == "${#alphaSections[@]}" ]]; then
+    echo "PASS: json report has $numKeys sections"
+else
+    echo "FAIL: json report has $numKeys sections but should have ${#alphaSections[@]} sections"
+    failures=$((failures+1))
+fi
+for index in "${!alphaSections[@]}"; do
+    key=$( jq --raw-output keys["$index"] $testout/"$HOSTNAME".json )
+    if [[ $key == "${alphaSections[$index]}" ]]; then
+        echo "PASS: found the ${alphaSections[$index]} section in the JSON  report"
+    else
+        echo "FAIL: did not find the ${alphaSections[$index]} section in the JSON  report"
+        failures=$((failures+1))
+    fi
+done
+rm -rf $testout
+####
+
+
+if [ $failures -gt 0 ]; then
+    echo "FAILED $failures TESTS"
+    exit 1
+else
+    echo "PASSED ALL TESTS"
+    exit 0
+fi

@@ -1,0 +1,14 @@
+Intel® System Health Inspector (aka svr-info) is a Linux OS utility for assessing
+the state and health of Intel Xeon computers.
+
+HOW TO REPORT SECURITY VULNERABILITIES: If you have information about a
+security issue or vulnerability with Intel® System Health Inspector, please
+send an e-mail to secure@intel.com. Encrypt sensitive information using our
+PGP public key.
+
+To see program options and usage, run the program with the -h option, e.g.,
+   ./svr-info -h
+
+See the included UserGuide.pdf for more details.
+
+Note: additional data collection tools can be used by svr-info by placing them in the config/extras directory. For example, Intel® Memory Latency Checker can be downloaded from here: https://www.intel.com/content/www/us/en/download/736633/intel-memory-latency-checker-intel-mlc.html. Once downloaded, extract the Linux executable and place in the config/extras directory.

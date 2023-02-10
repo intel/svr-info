@@ -1,0 +1,28 @@
+############
+# Collector's YAML format
+#   Root level keys
+#       arguments
+#       commands
+#   Commands are list items. Command names label the command output.
+#   Required command attributes:
+#       command - will be executed by bash
+#   Optional command attributes:
+#       superuser - bool indicates need for elevated privilege, default is false
+#       run - bool indicates if command will be run, default is true
+#       modprobe - kernel module required for command
+###########
+
+############
+# global arguments
+############
+arguments:
+    name: windows_example
+    bin_path:
+############
+# commands --
+############
+commands:
+- systeminfo:
+    command: systeminfo
+- cpu name:
+    command: wmic cpu get name

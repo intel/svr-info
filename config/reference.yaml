@@ -1,0 +1,333 @@
+# Note: section names, e.g., Host, Summary, etc. must match table names and 
+# field names, e.g., CPU Speed, Idle TDP, defined in report.go.
+# Note: the Hostref section does not match a table name...this is intentional as
+# it is used only to label the data from the other sections.
+BDX_2:
+  Hostref:
+    Name: Reference (Intel 2S Xeon E5-2699A v4)
+  Summary:
+    CPU Speed: "403415 ops/s"
+    Single-core Turbo: "3509 MHz"
+    All-core Turbo: "2980 MHz"
+    Turbo TDP: "289.90 Watts"
+    Memory Peak Bandwidth: "138.1 GB/s"
+    Memory Minimum Latency: "78 ns"
+  Memory NUMA Bandwidth:
+    - - 67528.4 # 0, 0
+      - 30178.1 # 0, 1
+    - - 30177.9 # 1, 0
+      - 66665.4 # 1, 1
+  Memory Bandwidth and Latency:
+    - - 260.83
+      - 138143.3
+    - - 260.46
+      - 138140.4
+    - - 258.29
+      - 138157.3
+    - - 255.44
+      - 138157.6
+    - - 244.98
+      - 137865.8
+    - - 237.88
+      - 137261.6
+    - - 183.86
+      - 134105.2
+    - - 117.99
+      - 104405.7
+    - - 103.18
+      - 79949.2
+    - - 96.78
+      - 64741.7
+    - - 92.01
+      - 46826.3
+    - - 87.52
+      - 33253.9
+    - - 85.84
+      - 25834.4
+    - - 84.74
+      - 19985.6
+    - - 82.61
+      - 13877.7
+    - - 81.18
+      - 10159.7
+    - - 80.17
+      - 7364.5
+    - - 79.07
+      - 4460.8
+    - - 78.45
+      - 2460.2
+
+SKX_2:
+  Hostref:
+    Name: Reference (Intel 2S Xeon Platinum 8180)
+  Summary:
+    CPU Speed: "585157 ops/s"
+    Single-core Turbo: "3758 MHz"
+    All-core Turbo: "3107 MHz"
+    Turbo TDP: "429.07 Watts"
+    Memory Peak Bandwidth: "225.1 GB/s"
+    Memory Minimum Latency: "71 ns"
+  Memory NUMA Bandwidth:
+    - - 112716.9 # 0, 0
+      - 34291.2  # 0, 1
+    - - 34257.8  # 1, 0
+      - 113079.8 # 1, 1
+  Memory Bandwidth and Latency:
+    - - 261.65
+      - 225060.9
+    - - 261.63
+      - 225040.5
+    - - 261.54
+      - 225073.3
+    - - 261.03
+      - 225391.4
+    - - 259.18
+      - 225531.5
+    - - 258.36
+      - 223341.7
+    - - 130.38
+      - 191690.7
+    - - 104.12
+      - 137739.3
+    - - 95.75
+      - 105822.1
+    - - 91.50
+      - 86089.3
+    - - 88.78
+      - 62492.2
+    - - 85.23
+      - 44499.9
+    - - 81.25
+      - 34629.0
+    - - 80.27
+      - 26765.5
+    - - 78.69
+      - 18546.2
+    - - 77.70
+      - 13517.3
+    - - 77.02
+      - 9729.6
+    - - 75.32
+      - 5800.3
+    - - 71.93
+      - 3120.3
+
+CLX_2:
+  Hostref:
+    Name: Reference (Intel 2S Xeon Platinum 8280)
+  Summary:
+    CPU Speed: "548644 ops/s"
+    Single-core Turbo: "3928 MHz"
+    All-core Turbo: "3296 MHz"
+    Turbo TDP: "415.93 Watts"
+    Memory Peak Bandwidth: "223.9 GB/s"
+    Memory Minimum Latency: "72 ns"
+  Memory NUMA Bandwidth:
+    - - 111839.9 # 0, 0
+      - 34387.8  # 0, 1
+    - - 34380.3  # 1, 0
+      - 112027.7 # 1, 1
+  Memory Bandwidth and Latency:
+    - - 268.27
+      - 223908.5
+    - - 268.64
+      - 223891.8
+    - - 268.53
+      - 223828.3
+    - - 267.58
+      - 224106.5
+    - - 265.87
+      - 224268.6
+    - - 264.55
+      - 224256.8
+    - - 162.33
+      - 215762.2
+    - - 104.92
+      - 150466.7
+    - - 95.38
+      - 113869.3
+    - - 91.80
+      - 91630.5
+    - - 88.08
+      - 65975.0
+    - - 85.60
+      - 46608.5
+    - - 83.85
+      - 36100.3
+    - - 81.31
+      - 27844.9
+    - - 79.09
+      - 19233.6
+    - - 77.85
+      - 13992.8
+    - - 76.77
+      - 10059.2
+    - - 74.92
+      - 5984.2
+    - - 72.38
+      - 3193.8
+
+ICX_2:
+  Hostref:
+    Name: Reference (Intel 2S Xeon Platinum 8380)
+  Summary:
+    CPU Speed: "933644 ops/s"
+    Single-core Turbo: "3334 MHz"
+    All-core Turbo: "2950 MHz"
+    Turbo TDP: "552.00 Watts"
+    Idle TDP: "175.38 Watts"
+    Memory Peak Bandwidth: "350.7 GB/s"
+    Memory Minimum Latency: "70 ns"
+  Memory NUMA Bandwidth:
+    - - 175610.3 # 0, 0
+      - 55579.7  # 0, 1
+    - - 55575.2  # 1, 0
+      - 175656.7 # 1, 1
+  Memory Bandwidth and Latency:
+    - - 290.48
+      - 350735.9
+    - - 290.30
+      - 350805.9
+    - - 289.14
+      - 350576.1
+    - - 284.21
+      - 350422.2
+    - - 259.29
+      - 348951.0
+    - - 254.07
+      - 346280.0
+    - - 120.78
+      - 247546.4
+    - - 102.95
+      - 186700.8
+    - - 97.06
+      - 144059.6
+    - - 93.23
+      - 116781.5
+    - - 90.17
+      - 84848.4
+    - - 85.63
+      - 60229.3
+    - - 81.36
+      - 46738.1
+    - - 80.28
+      - 36037.0
+    - - 79.26
+      - 24840.0
+    - - 78.57
+      - 18011.3
+    - - 76.28
+      - 12895.6
+    - - 73.85
+      - 7572.9
+    - - 70.75
+      - 3925.1
+
+SPR_2:
+  Hostref:
+    Name: Reference (Intel 2S Xeon Platinum 8480+)
+  Summary:
+    CPU Speed: "1678712 ops/s"
+    Single-core Turbo: "3776 MHz"
+    All-core Turbo: "2996 MHz"
+    Turbo TDP: "698.35 Watts"
+    Idle TDP: "349.21 Watts"
+    Memory Peak Bandwidth: "524.6 GB/s"
+    Memory Minimum Latency: "111.8 ns"
+  Memory NUMA Bandwidth:
+    - - 262558.6 # 0, 0
+      - 126800.3 # 0, 1
+    - - 126781.7 # 1, 0
+      - 263070.9 # 1, 1
+  Memory Bandwidth and Latency:
+    - - 267.75
+      - 524605.9
+    - - 268.16
+      - 524342.0
+    - - 265.58
+      - 523682.5
+    - - 247.12
+      - 521625.5
+    - - 237.96
+      - 523357.2
+    - - 137.62
+      - 313650.5
+    - - 121.98
+      - 152560.4
+    - - 118.63
+      - 103609.7
+    - - 116.84
+      - 77599.0
+    - - 116.04
+      - 62391.6
+    - - 115.08
+      - 44766.1
+    - - 114.76
+      - 31628.2
+    - - 114.33
+      - 24443.1
+    - - 113.74
+      - 18683.9
+    - - 113.45
+      - 12907.2
+    - - 113.07
+      - 9346.8
+    - - 113.33
+      - 6864.3
+    - - 113.09
+      - 4093.3
+    - - 111.80
+      - 2200.9
+
+SPR_1:
+  Hostref:
+    Name: Reference (Intel 1S Xeon Platinum 8480+)
+  Summary:
+    All-core Turbo: "2999 MHz"
+    CPU Speed: "845743 ops/s"
+    Idle TDP: "163.79 Watts"
+    Memory Minimum Latency: "112.2 ns"
+    Memory Peak Bandwidth: "264.0 GB/s"
+    Single-core Turbo: "3783 MHz"
+    Turbo TDP: "334.68 Watts"
+  Memory NUMA Bandwidth:
+    - - 263646.3 # 0, 0
+  Memory Bandwidth and Latency:
+    - - 272.24
+      - 263696.7
+    - - 272.30
+      - 263816.2
+    - - 269.44
+      - 263469.2
+    - - 254.81
+      - 262244.5
+    - - 252.53
+      - 263984.0
+    - - 135.86
+      - 155828.1
+    - - 119.94
+      - 75906.8
+    - - 117.47
+      - 51345.4
+    - - 116.02
+      - 38755.0
+    - - 115.51
+      - 31200.3
+    - - 114.71
+      - 22499.1
+    - - 114.26
+      - 15980.3
+    - - 113.88
+      - 12418.5
+    - - 113.59
+      - 9584.2
+    - - 113.45
+      - 6658.4
+    - - 113.32
+      - 4937.0
+    - - 113.00
+      - 3697.8
+    - - 113.12
+      - 2292.5
+    - - 112.24
+      - 1383.6
