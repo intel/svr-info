@@ -1,0 +1,209 @@
+// Copyright (C) 2023 Intel Corporation
+// SPDX-License-Identifier: MIT
+
+//
+// hardware insights
+//
+rule XeonGeneration {
+	when
+		Report.CompareMicroarchitecture(Report.GetValue("Configuration", "CPU", "Microarchitecture"), "ICX") == -1
+	then
+		Report.AddInsight(
+			"CPU is 2 or more generations behind current generation Xeon.",
+			"Consider upgrading to the latest generation Xeon CPU."
+			);
+		Retract("XeonGeneration");
+}
+
+rule DIMMSpeed {
+	when
+		Report.GetValue("Configuration", "DIMM", "Speed") != "" && Report.GetValue("Configuration", "DIMM", "Speed") != "Unknown" &&
+		(
+		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "CLX" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 2933) ||
+		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "ICX" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 3200) ||
+		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "SPR" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 4800) ||
+		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "EMR" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 4800)
+		)
+	then
+		Report.AddInsight(
+			"DRAM DIMMs are running at a speed less than the maximum speed supported by system's CPU.",
+			"Consider upgrading and/or configuring DIMMs for maximum supported speed."
+			);
+		Retract("DIMMSpeed");
+}
+
+rule ConfiguredDIMMSpeed {
+	when
+		Report.GetValue("Configuration", "DIMM", "Configured Speed") != "" && Report.GetValue("Configuration", "DIMM", "Configured Speed") != "Unknown" &&
+		Report.GetValue("Configuration", "DIMM", "Speed") != "" && Report.GetValue("Configuration", "DIMM", "Speed") != "Unknown" &&
+		Report.GetValueAsInt("Configuration", "DIMM", "Configured Speed") < Report.GetValueAsInt("Configuration", "DIMM", "Speed")
+	then
+		Report.AddInsight(
+			"DRAM DIMMs are configured at less than their maximum supported speed.",
+			"Consider configuring DIMMs for their maximum supported speed."
+			);
+		Retract("ConfiguredDIMMSpeed");
+}
+
+rule MemoryChannels {
+	when
+		Report.GetValue("Configuration", "CPU", "Memory Channels") != "" &&
+		Report.GetValue("Configuration", "CPU", "Sockets") != "" &&
+		Report.GetValue("Configuration", "Memory", "Populated Memory Channels") != "" &&
+		Report.GetValueAsInt("Configuration", "CPU", "Memory Channels") * Report.GetValueAsInt("Configuration", "CPU", "Sockets") !=
+		Report.GetValueAsInt("Configuration", "Memory", "Populated Memory Channels")
+	then
+		Report.AddInsight(
+			"Not all memory channels are populated with DRAM DIMMs.",
+			"Populate all memory channels for best memory bandwidth."
+			);
+		Retract("MemoryChannels");
+}
+
+rule Vulnerabilities {
+	when
+		Report.GetValuesFromColumn("Configuration", "Vulnerability", 0).Count("Vuln") != 0
+	then
+		Report.AddInsight(
+			"Detected '" + Report.GetValuesFromColumn("Configuration", "Vulnerability", 0).Count("Vuln") + "' security vulnerabilities.",
+			"Consider mitigating security vulnerabilities."
+			);
+		Retract("Vulnerabilities");
+}
+
+//
+// configuration insights
+//
+rule PowerPerfPolicy {
+	when
+		Report.GetValue("Configuration", "Power", "Power & Perf Policy") != "" &&
+		Report.GetValue("Configuration", "Power", "Power & Perf Policy") != "Performance"
+	then
+		Report.AddInsight(
+			"Power and Performance policy is set to '" + Report.GetValue("Configuration", "Power", "Power & Perf Policy") + "'.",
+			"Consider setting the Power and Performance policy to 'Performance'."
+			);
+		Retract("PowerPerfPolicy");
+}
+
+rule FrequencyDriver {
+	when
+		Report.GetValue("Configuration", "Power", "Frequency Driver") != "" &&
+		Report.GetValue("Configuration", "Power", "Frequency Driver") != "intel_pstate"
+	then
+		Report.AddInsight(
+			"Frequency driver is '" + Report.GetValue("Configuration", "Power", "Frequency Driver") + "'.",
+			"Consider using the 'Intel PState' frequency driver."
+			);
+		Retract("FrequencyDriver");
+}
+
+rule FrequencyGovernor {
+	when
+		Report.GetValue("Configuration", "Power", "Frequency Governor") != "" &&
+		Report.GetValue("Configuration", "Power", "Frequency Governor") != "performance"
+	then
+		Report.AddInsight("CPU frequency governors are set to '" + Report.GetValue("Configuration", "Power", "Frequency Governor") + "'.",
+		"Consider setting the CPU frequency governors to 'performance'."
+		);
+		Retract("FrequencyGovernor");
+}
+
+rule IRQBalance {
+	when
+		Report.GetValue("Configuration", "NIC", "IRQBalance") != "" &&
+		Report.GetValue("Configuration", "NIC", "IRQBalance") == "Enabled"
+	then
+		Report.AddInsight(
+			"System is using the IRQ Balance service to manage IRQ CPU affinity.",
+			"Consider manually configuring IRQ CPU affinity for network intensive workloads."
+			);
+		Retract("IRQBalance");
+}
+
+rule TurboBoost {
+	when
+		Report.GetValue("Configuration", "CPU", "Intel Turbo Boost") != "" &&
+		Report.GetValue("Configuration", "CPU", "Intel Turbo Boost") != "Enabled"
+	then
+		Report.AddInsight(
+			"Intel Turbo Boost is not enabled.",
+			"Consider enabling Intel Turbo Boost."
+			);
+		Retract("TurboBoost");
+}
+
+rule Hyperthreading {
+	when
+		Report.GetValue("Configuration", "CPU", "Hyperthreading") != "" &&
+		Report.GetValue("Configuration", "CPU", "Hyperthreading") != "Enabled"
+	then
+		Report.AddInsight(
+			"Hyper-threading is not enabled.",
+			"Consider enabling hyper-threading."
+			);
+		Retract("Hyperthreading");
+}
+
+//
+// software insights
+//
+rule JAVAVersion {
+	when
+		Report.CompareVersions(Report.GetValue("Configuration", "Software Version", "Java"), "11.0.11") == -1 &&
+		Report.CompareMicroarchitecture(Report.GetValue("Configuration", "CPU", "Microarchitecture"), "ICX") >= 0
+	then
+		Report.AddInsight(
+			"Detected Java JDK '" + Report.GetValue("Configuration", "Software Version", "Java") +"' and Xeon '" + Report.GetValue("Configuration", "CPU", "Microarchitecture") + "' CPU.",
+			"Consider upgrading Java to extract the best performance from Xeon CPUs."
+			);
+		Retract("JAVAVersion");
+}
+
+rule GLIBCVersion {
+	when
+		Report.CompareVersions(Report.GetValue("Configuration", "Software Version", "GLIBC"), "2.31") == -1
+	then
+		Report.AddInsight(
+			"Detected GLIBC '" + Report.GetValue("Configuration", "Software Version", "GLIBC") + "'.",
+			"Consider upgrading GLIBC to extract the best performance from Xeon CPUs."
+			);
+		Retract("GLIBCVersion");
+}
+
+rule OpenSSLVersion {
+	when
+		Report.CompareVersions(Report.GetValue("Configuration", "Software Version", "OpenSSL"), "1.1.1e") == -1
+	then
+		Report.AddInsight(
+			"Detected OpenSSL '" + Report.GetValue("Configuration", "Software Version", "OpenSSL") + "'.",
+			"Consider upgrading OpenSSL to extract the best performance from Xeon CPUs."
+			);
+		Retract("OpenSSLVersion");
+}
+
+//
+// Profile insights
+//
+rule CPUUtilizationHigh {
+	when
+		Report.GetValueAsFloat("Profile", "Summary", "CPU Utilization (%)") > 80
+	then
+		Report.AddInsight(
+			"Average CPU Utilization is approaching saturation...measured: '" + Report.GetValue("Profile", "Summary", "CPU Utilization (%)") + "%'.",
+			"Consider changing the distribution of work among available systems and/or applying hardware and software optimizations."
+		);
+		Retract("CPUUtilizationHigh");
+}
+
+rule CPUUtilizationLow {
+	when
+		Report.GetValue("Profile", "Summary", "CPU Utilization (%)") != "" &&
+		Report.GetValueAsFloat("Profile", "Summary", "CPU Utilization (%)") < 40
+	then
+		Report.AddInsight(
+			"Average CPU Utilization is relatively low...measured: '" + Report.GetValue("Profile", "Summary", "CPU Utilization (%)") + "%'.",
+			"Consider adding more load to system or selecting a system with less CPU capacity."
+		);
+		Retract("CPUUtilizationLow");
+}

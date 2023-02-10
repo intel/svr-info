@@ -1,0 +1,19 @@
+# example targets file
+#   for use with the -targets command line option
+#   Line format: 
+#       <label:>ip_address:<ssh_port>:user_name:<private_key_path>:<ssh_password>:<sudo_password>  # trailing comments are supported
+#          - ip_address and user_name are required
+#          - ssh_port defaults to 22
+#          - Field separators required (except for label separator)
+
+# example - ip address, user name, and ssh key
+192.168.1.1::elaine:/home/elaine/.ssh/id_rsa::
+
+# example - ip address, user name, ssh key, and sudo password
+192.168.1.2::jerry:/home/jerry/.ssh/id_rsa::elevateme
+
+# example - optional label, ip address, user name, ssh password, sudo password, and trailing comment
+Xeon_Gen_4:192.168.1.3::kramer::logmein:logmein  # example comment
+
+# example - minimum required, e.g., passwordless ssh and passwordless sudo are configured
+192.168.1.2::george:::

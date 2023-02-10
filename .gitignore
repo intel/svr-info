@@ -1,0 +1,45 @@
+# make output
+/dist
+# apps
+src/orchestrator/orchestrator*
+src/reporter/reporter*
+src/collector/collector
+src/collector/collector.exe
+src/collector/collector_arm64
+src/rdmsr/rdmsr
+src/msrbusy/msrbusy
+src/calcfreq/calcfreq
+# src
+async-profiler
+burn
+cpuid
+dmidecode
+ethtool
+fio
+flamegraph
+ipmitool
+linux
+lshw
+mlc
+pmu-checker
+spectre-meltdown-checker
+sshpass
+stress-ng
+sysstat
+src/async-profiler-*
+src/linux-*
+src/cpuid-*
+src/libcrypt*
+src/glibc*
+src/zlib*
+# build output in config
+collector_deps_a*
+# run/debug output
+src/collector/collector.log
+src/collector/collector.pid
+src/orchestrator/orchestrator_20*
+src/reporter/debug_out/*
+__debug_bin*.log
+# other
+src/orchestrator/targets
+config/sums.md5

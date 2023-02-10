@@ -1,0 +1,87 @@
+#########
+# Intel Discrete GPUs (sorted by devid)
+# references:
+#   https://pci-ids.ucw.cz/read/PC/8086
+#   https://dgpu-docs.intel.com/devices/hardware-table.html
+# 
+#   The devid field will be interpreted as a regular expression.
+#########
+- model: ATS-P
+  mfgid: 8086
+  devid: 201
+
+- model: Ponte Vecchio 2T
+  mfgid: 8086
+  devid: BD0
+
+- model: Ponte Vecchio 1T
+  mfgid: 8086
+  devid: BD5
+
+- model: Intel® Iris® Xe MAX Graphics (DG1)
+  mfgid: 8086
+  devid: 4905
+
+- model: Intel® Iris® Xe Pod (DG1)
+  mfgid: 8086
+  devid: 4906
+
+- model: SG1
+  mfgid: 8086
+  devid: 4907
+
+- model: Intel® Iris® Xe Graphics (DG1)
+  mfgid: 8086
+  devid: 4908
+
+- model: Intel® Iris® Xe MAX 100 (DG1)
+  mfgid: 8086
+  devid: 4909
+
+- model: DG2
+  mfgid: 8086
+  devid: (4F80|4F81|4F82)
+
+- model: Intel® Arc ™ A770M Graphics
+  mfgid: 8086
+  devid: 5690
+
+- model: Intel® Arc ™ A730M Graphics (Alchemist)
+  mfgid: 8086
+  devid: 5691
+
+- model: Intel® Arc ™ A550M Graphics (Alchemist)
+  mfgid: 8086
+  devid: 5692
+
+- model: Intel® Arc ™ A370M Graphics (Alchemist)
+  mfgid: 8086
+  devid: 5693
+
+- model: Intel® Arc ™ A350M Graphics (Alchemist)
+  mfgid: 8086
+  devid: 5694
+
+- model: Intel® Arc ™ A770 Graphics
+  mfgid: 8086
+  devid: 56A0
+
+- model: Intel® Arc ™ A750 Graphics (Alchemist)
+  mfgid: 8086
+  devid: 56A1
+
+- model: Intel® Arc ™ A380 Graphics (Alchemist)
+  mfgid: 8086
+  devid: 56A5
+
+- model: Intel® Arc ™ A310 Graphics (Alchemist)
+  mfgid: 8086
+  devid: 56A6
+
+- model: Intel® Data Center GPU Flex 170
+  mfgid: 8086
+  devid: 56C0
+
+- model: Intel® Data Center GPU Flex 140
+  mfgid: 8086
+  devid: 56C1

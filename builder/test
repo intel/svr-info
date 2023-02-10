@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+docker container run                                \
+    --volume "$(pwd)"/builder/scripts:/scripts      \
+    --volume "$(pwd)":/workdir                      \
+    --volume "/home/$USER/.ssh":/home/$USER/.ssh    \
+    --rm                                            \
+    --name build_svr_info4                          \
+    svr_info_builder:v4                             \
+    test

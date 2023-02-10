@@ -1,0 +1,49 @@
+############
+# Collector's YAML format
+#   Root level keys
+#       arguments
+#       commands
+#   Commands are list items.
+#   Required command attributes:
+#       label - unique name for the command
+#       command - will be executed by bash
+#   Optional command attributes:
+#       superuser - bool indicates need for elevated privilege, default is false
+#       run - bool indicates if command will be run, default is true
+#       modprobe - kernel module required for command
+#       parallel - bool indicates if command can be run in parallel with other commands (default: false)
+###########
+
+############
+# global arguments
+############
+arguments:
+    name: test_linux
+    bin_path: ../../build/amd64
+    command_timeout: 30
+############
+# commands --
+############
+commands:
+  - label: date -u
+    command: date -u
+    parallel: true
+  - label: cpuid -1
+    command: cpuid -1 | grep family
+    modprobe: cpuid
+    parallel: true
+  - label: gcc version
+    command: gcc --version
+    parallel: true
+  - label: binutils version
+    command: ld -v
+    parallel: true
+############
+# Micro-benchmark commands below.
+############
+  - label: stress-ng --vm
+    run: true
+    command: stress-ng --vm 0 -t 1s --metrics-brief 2>&1
+  - label: stress-ng --cpu
+    run: true
+    command: stress-ng --vm 0 -t 5s --metrics-brief 2>&1

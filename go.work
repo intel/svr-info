@@ -1,0 +1,7 @@
+go 1.19
+
+use ./src/collector
+use ./src/msrbusy
+use ./src/orchestrator
+use ./src/rdmsr
+use ./src/reporter
