@@ -9,8 +9,7 @@ jobs:
       - uses: actions/checkout@v3
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y docker.io
+          docker run hello-world
       - name: Build builder image
         run: |
           builder/build_docker_image
