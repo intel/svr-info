@@ -1,0 +1,24 @@
+name: Build & Test
+
+on: [pull_request, push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y docker.io
+      - name: Build builder image
+        run: |
+          builder/build_docker_image
+      - name: Build svr-info
+        run: |
+          builder/build
+      - name: Upload build
+        uses: actions/upload-artifact@v3
+        with:
+          name: svr-info
+          path: dist/
