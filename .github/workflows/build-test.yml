@@ -7,10 +7,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y docker.io
       - name: Build builder image
         run: |
           builder/build_docker_image
@@ -21,4 +17,24 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: svr-info
-          path: dist/
+          path: dist/svr-info*.tgz
+
+  test:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: download svr-info
+        uses: actions/download-artifact@v3
+        with:
+          name: svr-info
+      - name: run test
+        run: |
+          tar -xf svr-info*
+          cd svr-info
+          ./svr-info -benchmark all -profile all -analyze all -format all -megadata
+      - name: upload report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.runner }} report
+          path: svr-info/svr-info*/
