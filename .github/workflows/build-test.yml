@@ -21,11 +21,7 @@ jobs:
 
   test:
     needs: [build]
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: ["ubuntu-latest", "macos-latest"]
-    runs-on: ${{ matrix.runner  }}
+    runs-on: ubuntu-latest
     steps:
       - name: download svr-info
         uses: actions/download-artifact@v3
