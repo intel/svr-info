@@ -17,4 +17,28 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: svr-info
-          path: dist/
+          path: dist/svr-info*.tgz
+
+  test:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ["ubuntu-latest", "macos-latest"]
+    runs-on: ${{ matrix.runner  }}
+    steps:
+      - name: download svr-info
+        uses: actions/download-artifact@v3
+        with:
+          name: svr-info
+      - name: run test
+        run: |
+          tar -xf svr-info*
+          cd svr-info
+          ./svr-info -benchmark all -profile all -analyze all -format all -megadata
+      - name: upload report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.runner }} report
+          path: svr-info/svr-info*/
