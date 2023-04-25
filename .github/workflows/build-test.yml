@@ -18,6 +18,11 @@ jobs:
         with:
           name: svr-info
           path: dist/svr-info*.tgz
+      - name: Upload oss package
+        uses: actions/upload-artifact@v3
+        with:
+          name: oss_source
+          path: dist/oss_source.tgz
 
   test:
     needs: [build]
