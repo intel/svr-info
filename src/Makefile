@@ -3,39 +3,62 @@
 # Copyright (C) 2023 Intel Corporation
 # SPDX-License-Identifier: MIT
 #
+COMMIT_ID := $(shell git rev-parse --short=8 HEAD)
+COMMIT_DATE := $(shell git show -s --format=%cd --date=short HEAD)
+VERSION_FILE := ../version.txt
+VERSION_NUMBER := $(shell cat ${VERSION_FILE})
+VERSION := $(VERSION_NUMBER)_$(COMMIT_DATE)_$(COMMIT_ID)
 
-VERSION ?= dev
+default: check orchestrator
+.PHONY: default test check format_check format linux-source collector reporter orchestrator rdmsr msrbusy reset clean tools libs async-profiler burn calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
 
-default: apps
-.PHONY: default all linux-source collector reporter orchestrator rdmsr msrbusy reset clean tools libs async-profiler burn calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
+collector_tools: async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc msrbusy perf rdmsr spectre-meltdown-checker stress-ng sysstat turbostat
 
-package_tests:
+test:
 	cd pkg/commandfile && go test -v -vet=all .
 	cd pkg/core && go test -v -vet=all .
 	cd pkg/cpu && go test -v -vet=all .
 	# these tests require access to MSRs which we don't have on WSL2 and may not have on build machine -- cd pkg/msr && go test -v -vet=all .
 	cd pkg/progress && go test -v -vet=all .
 	cd pkg/target && go test -v -vet=all .
-
-orchestrator: package_tests
 	cd orchestrator && go test -v -vet=all .
+	cd collector && go test -v -vet=all .
+	cd reporter && go test -v -vet=all .
+	cd rdmsr && go test -v -vet=all .
+	cd msrbusy && go test -v -vet=all .
+
+format:
+	gofmt -l -w -s pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/
+
+lint:
+	golint -set_exit_status pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/
+
+format_check:
+	@echo "Running gofmt -l to check for code formatting issues..."
+	@test -z $(shell gofmt -l -s pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/) || { echo "[WARN] Formatting issues detected. Resolve with 'make format'"; exit 1; }
+	@echo "gofmt detected no issues"
+
+check: format_check
+
+orchestrator: sshpass reporter collector collector-deps
+	cp sshpass/sshpass orchestrator/resources/
+	cp reporter/reporter orchestrator/resources/
+	cp collector/collector orchestrator/resources/
+	cp collector/collector_arm64 orchestrator/resources/
 	cd orchestrator && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o orchestrator
 
 collector:
-	cd collector && go test -v -vet=all .
 	cd collector && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o collector
 	cd collector && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o collector_arm64
 
-reporter:
-	cd reporter && go test -v -vet=all .
+reporter: burn
+	cp burn/burn reporter/resources/
 	cd reporter && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o reporter
 
 rdmsr:
-	cd rdmsr && go test -v -vet=all .
 	cd rdmsr && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o rdmsr
 
 msrbusy:
-	cd msrbusy && go test -v -vet=all .
 	cd msrbusy && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy
 
 async-profiler:
@@ -129,6 +152,14 @@ endif
 	cd lshw && git checkout B.02.19
 	cd lshw/src && make static
 
+lspci:
+ifeq ("$(wildcard lspci)","")
+	git clone https://github.com/pciutils/pciutils.git lspci
+else
+	cd lspci && git checkout master && git pull
+endif
+	cd lspci && make
+
 mlc:
 ifeq ("$(wildcard mlc)","")
 	-if [ ${CI} = true ]; then\
@@ -184,20 +215,53 @@ endif
 
 linux-source:
 ifeq ("$(wildcard linux)","")
-ifeq ("$(wildcard linux-5.19.16.tar.xz)","")
-	wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.19.16.tar.xz
+ifeq ("$(wildcard linux-6.0.7.tar.xz)","")
+	wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.0.7.tar.xz
 endif
-	tar -xf linux-5.19.16.tar.xz && mv linux-5.19.16/ linux/
+	tar -xf linux-6.0.7.tar.xz && mv linux-6.0.7/ linux/
 endif
 
 turbostat: linux-source
 	cd linux/tools/power/x86/turbostat && make
 
-apps: collector reporter orchestrator
-tools: rdmsr msrbusy async-profiler burn calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat
+collector-deps-amd64: collector_tools
+	$(eval TMPDIR := $(shell mktemp -d build.XXXXXX))
+	cp calcfreq/calcfreq $(TMPDIR)
+	cp cpuid/cpuid $(TMPDIR)
+	cp dmidecode/dmidecode $(TMPDIR)
+	cp ethtool/ethtool $(TMPDIR)
+	cp fio/fio $(TMPDIR)
+	cp ipmitool/src/ipmitool.static $(TMPDIR)/ipmitool
+	cp lshw/src/lshw-static $(TMPDIR)/lshw
+	cp lspci/lspci $(TMPDIR)
+	-cp mlc/mlc $(TMPDIR)
+	cp msrbusy/msrbusy $(TMPDIR)
+	cp linux/tools/perf/perf $(TMPDIR)
+	cp -R async-profiler $(TMPDIR)
+	cp flamegraph/stackcollapse-perf.pl $(TMPDIR)
+	cp rdmsr/rdmsr $(TMPDIR)
+	cp spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
+	cp stress-ng/stress-ng $(TMPDIR)
+	cp sysstat/mpstat $(TMPDIR)
+	cp sysstat/iostat $(TMPDIR)
+	cp sysstat/sar $(TMPDIR)
+	cp sysstat/sadc $(TMPDIR)
+	cp linux/tools/power/x86/turbostat/turbostat $(TMPDIR)
+	-cp -r ../bin/* $(TMPDIR)
+	for f in $(TMPDIR)/*; do strip -s -p --strip-unneeded $$f; done
+	cd $(TMPDIR) && tar -czf ../orchestrator/resources/collector_deps_amd64.tgz .
+	rm -rf $(TMPDIR)
+
+collector-deps-arm64: spectre-meltdown-checker
+	$(eval TMPDIR := $(shell mktemp -d build.XXXXXX))
+	cp spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
+	cd $(TMPDIR) && tar -czf ../orchestrator/resources/collector_deps_arm64.tgz .
+	rm -rf $(TMPDIR)
+
+collector-deps: collector-deps-amd64 collector-deps-arm64
 
 clean:
-	rm -rf async-profiler burn cpuid dmidecode ethtool fio flamegraph ipmitool linux lshw mlc spectre-meltdown-checker sshpass stress-ng sysstat oss_source.* linux-*.xz cpuid-*.gz glibc-*.bz2 libcrypt*.gz zlib.*.gz
+	rm -rf async-profiler burn cpuid dmidecode ethtool fio flamegraph ipmitool linux lshw lspci mlc spectre-meltdown-checker sshpass stress-ng sysstat oss_source.* linux-*.xz cpuid-*.gz glibc-*.bz2 libcrypt*.gz zlib.*.gz
 	rm -f calcfreq/calcfreq
 	rm -f collector/collector
 	rm -f collector/collector_arm64
@@ -208,6 +272,12 @@ clean:
 	rm -f orchestrator/orchestrator
 	rm -f orchestrator/orchestrator_arm64
 	rm -f orchestrator/orchestrator.exe
+	rm -f orchestrator/resources/collector
+	rm -f orchestrator/resources/collector_arm64
+	rm -f orchestrator/resources/collector_deps_amd64.tgz
+	rm -f orchestrator/resources/collector_deps_arm64.tgz
+	rm -f orchestrator/resources/reporter
+	rm -f orchestrator/resources/sshpass
 	rm -f rdmsr/rdmsr
 	rm -f msrbusy/msrbusy
 
@@ -220,6 +290,7 @@ reset:
 	cd flamegraph && git clean -fdx && git reset --hard
 	cd ipmitool && git clean -fdx && git reset --hard
 	cd lshw && git clean -fdx && git reset --hard
+	cd lspci && git clean -fdx && git reset --hard
 	-cd mlc && git clean -fdx && git reset --hard
 	cd linux/tools/perf && make clean
 	cd sshpass && make clean
@@ -237,5 +308,5 @@ libcrypt.tar.gz:
 libs: glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 
 oss-source: reset libs
-	tar --exclude-vcs -czf oss_source.tgz async-profiler/ dmidecode/ ethtool/ fio/ flamegraph/ ipmitool/ linux/ lshw/ spectre-meltdown-checker/ sshpass/ sysstat/ stress-ng/ glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
+	tar --exclude-vcs -czf oss_source.tgz async-profiler/ dmidecode/ ethtool/ fio/ flamegraph/ ipmitool/ linux/ lshw/ lspci/ spectre-meltdown-checker/ sshpass/ sysstat/ stress-ng/ glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 	md5sum oss_source.tgz > oss_source.tgz.md5

@@ -38,6 +38,8 @@ type CmdLineArgs struct {
 	temp             string
 	dumpConfig       bool
 	cmdTimeout       int
+	reporter         string
+	collector        string
 	debug            bool
 }
 
@@ -53,7 +55,8 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "                [-analyze SELECT] [-analyze_duration SECONDS] [-analyze_frequency N]\n")
 	fmt.Fprintf(os.Stderr, "                [-megadata]\n")
 	fmt.Fprintf(os.Stderr, "                [-ip IP] [-port PORT] [-user USER] [-key KEY] [-targets TARGETS]\n")
-	fmt.Fprintf(os.Stderr, "                [-output OUTPUT] [-temp TEMP] [-dumpconfig] [-cmd_timeout] [-debug]\n")
+	fmt.Fprintf(os.Stderr, "                [-output OUTPUT] [-temp TEMP] [-dumpconfig] [-cmd_timeout]\n")
+	fmt.Fprintf(os.Stderr, "                [-reporter \"args\"] [-collector \"args\"] [-debug]\n")
 
 	longHelp := `
 Intel System Health Inspector. Creates configuration, benchmark, profile, and insights reports for one or more systems.
@@ -102,7 +105,11 @@ advanced arguments:
   -temp DIR             path to temporary directory on target. Directory must exist. (default: system default)
   -dumpconfig           dump the collector configuration file and exit (default: False)
   -cmd_timeout          the maximum number of seconds to wait for each data collection command (default: 300)
-  -debug                additional logging and retain temporary files
+  -reporter             run the the reporter sub-component with args
+                        e.g., -reporter "-input /home/rex -output /home/rex -format html" (default: Nil)
+  -collector            run the the collector sub-component with args
+                        e.g., -collector "collect.yaml" (default: Nil)
+  -debug                additional logging and retain temporary files (default: False)
 
 Examples:
 $ ./%[1]s
@@ -154,6 +161,8 @@ func (cmdLineArgs *CmdLineArgs) parse(name string, arguments []string) (err erro
 	flagSet.IntVar(&cmdLineArgs.analyzeDuration, "analyze_duration", 60, "")
 	flagSet.IntVar(&cmdLineArgs.profileInterval, "profile_interval", 2, "")
 	flagSet.IntVar(&cmdLineArgs.analyzeFrequency, "analyze_frequency", 11, "")
+	flagSet.StringVar(&cmdLineArgs.reporter, "reporter", "", "")
+	flagSet.StringVar(&cmdLineArgs.collector, "collector", "", "")
 	err = flagSet.Parse(arguments)
 	if err != nil {
 		return
@@ -325,6 +334,11 @@ func (cmdLineArgs *CmdLineArgs) validate() (err error) {
 			err = fmt.Errorf("-targets %s : %s", path, err.Error())
 			return
 		}
+	}
+	// -collector and -reporter are mutually exclusive
+	if cmdLineArgs.collector != "" && cmdLineArgs.reporter != "" {
+		err = fmt.Errorf("-collector and -reporter are mutually exclusive options")
+		return
 	}
 	return
 }

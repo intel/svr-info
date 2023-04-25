@@ -286,7 +286,6 @@ func (r *ReportGeneratorXLSX) fillSheet(f *excelize.File, reportSheetName string
 	if briefReport {
 		row += 1
 	}
-	f.SetCellStr(reportSheetName, cellName(1, row), fmt.Sprintf("svr-info version: %s", gVersion))
 	return
 }
 

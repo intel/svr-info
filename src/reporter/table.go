@@ -20,7 +20,7 @@ type TableCategory int
 const (
 	System TableCategory = iota
 	Software
-	CPU
+	CPUCategory
 	Power
 	Memory
 	Network

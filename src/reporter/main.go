@@ -5,6 +5,8 @@
 package main
 
 import (
+	"embed"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -16,6 +18,9 @@ import (
 	"intel.com/svr-info/pkg/core"
 	"intel.com/svr-info/pkg/cpu"
 )
+
+//go:embed resources
+var resources embed.FS
 
 type CmdLineArgs struct {
 	help         bool
@@ -154,19 +159,8 @@ func getSources(inputFilePaths []string) (sources []*Source) {
 	return
 }
 
-func getCpusInfo() (cpusInfo *cpu.CPU, err error) {
-	// public cpus are required
-	cpusYaml, err := core.FindAsset("cpus.yaml")
-	if err != nil {
-		err = fmt.Errorf("failed to find cpus.yaml: %v", err)
-		return
-	}
-	cpusInfo, err = cpu.NewCPU([]string{cpusYaml})
-	return
-}
-
 func getReports(sources []*Source, reportTypes []string, outputDir string) (reportFilePaths []string, err error) {
-	cpusInfo, err := getCpusInfo()
+	cpusInfo, err := cpu.NewCPU()
 	if err != nil {
 		return
 	}
@@ -205,6 +199,43 @@ func getReports(sources []*Source, reportTypes []string, outputDir string) (repo
 	return
 }
 
+func getBinPath() (binPath string, err error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	binPath = filepath.Join(filepath.Dir(exePath), "tmpbin")
+	return
+}
+
+func writeExecutableResources() (binPath string, err error) {
+	toolName := "burn"
+	// get the exe from our embedded resources
+	toolBytes, err := resources.ReadFile("resources/" + toolName)
+	if err != nil {
+		return
+	}
+	binPath, err = getBinPath()
+	if err != nil {
+		return
+	}
+	err = os.MkdirAll(binPath, 0744)
+	if err != nil {
+		return
+	}
+	toolPath := filepath.Join(binPath, toolName)
+	f, err := os.OpenFile(toolPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0744)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	err = binary.Write(f, binary.LittleEndian, toolBytes)
+	if err != nil {
+		return
+	}
+	return
+}
+
 func mainReturnWithCode() int {
 	if gCmdLineArgs.help {
 		showUsage()
@@ -237,7 +268,13 @@ func mainReturnWithCode() int {
 		os.Getppid(),
 		strings.Join(os.Args, " "),
 	)
-
+	binPath, err := writeExecutableResources()
+	if err != nil {
+		log.Printf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	defer os.RemoveAll(binPath)
 	inputFilePaths, err := getInputFilePaths(gCmdLineArgs.input)
 	if err != nil {
 		log.Printf("Error: %v", err)

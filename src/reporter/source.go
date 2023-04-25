@@ -636,18 +636,24 @@ func (s *Source) getCPUSpeed() (val string) {
 }
 
 func (s *Source) getTurbo() (singleCoreTurbo, allCoreTurbo, turboTDP string) {
+	var allTurbos []string
+	var allTDPs []string
 	var turbos []string
 	var tdps []string
 	var headers []string
-	var idxTurbo, idxTdp int
-	var turbo, tdp string
+	idxTurbo := -1
+	idxTdp := -1
 	re := regexp.MustCompile(`\s+`) // whitespace
 	for _, line := range s.getCommandOutputLines("CPU Turbo Test") {
 		if strings.Contains(line, "stress-ng") {
 			if strings.Contains(line, "completed") {
-				if turbo != "" && tdp != "" {
-					turbos = append(turbos, turbo)
-					tdps = append(tdps, tdp)
+				if idxTurbo >= 0 && len(allTurbos) >= 2 {
+					turbos = append(turbos, allTurbos[len(allTurbos)-2])
+					allTurbos = nil
+				}
+				if idxTdp >= 0 && len(allTDPs) >= 2 {
+					tdps = append(tdps, allTDPs[len(allTDPs)-2])
+					allTDPs = nil
 				}
 			}
 			continue
@@ -664,8 +670,12 @@ func (s *Source) getTurbo() (singleCoreTurbo, allCoreTurbo, turboTDP string) {
 			continue
 		}
 		tokens := re.Split(line, -1)
-		turbo = tokens[idxTurbo]
-		tdp = tokens[idxTdp]
+		if idxTurbo >= 0 {
+			allTurbos = append(allTurbos, tokens[idxTurbo])
+		}
+		if idxTdp >= 0 {
+			allTDPs = append(allTDPs, tokens[idxTdp])
+		}
 	}
 	if len(turbos) == 2 {
 		singleCoreTurbo = turbos[0] + " MHz"

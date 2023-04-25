@@ -12,6 +12,8 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	"golang.org/x/term"
 )
 
 var spinChars []string = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
@@ -19,8 +21,9 @@ var spinChars []string = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯
 type MultiSpinnerUpdateFunc func(string, string) error
 
 type spinnerState struct {
-	status    string
-	spinIndex int
+	status      string
+	statusIsNew bool
+	spinIndex   int
 }
 
 type MultiSpinner struct {
@@ -42,7 +45,7 @@ func (ms *MultiSpinner) AddSpinner(label string) (err error) {
 		err = fmt.Errorf("spinner with label %s already exists", label)
 		return
 	}
-	ms.spinners[label] = &spinnerState{"?", 0}
+	ms.spinners[label] = &spinnerState{"?", false, 0}
 	return
 }
 
@@ -63,7 +66,10 @@ func (ms *MultiSpinner) Finish() {
 
 func (ms *MultiSpinner) Status(label string, status string) (err error) {
 	if spinner, ok := ms.spinners[label]; ok {
-		spinner.status = status
+		if status != spinner.status {
+			spinner.statusIsNew = true
+			spinner.status = status
+		}
 	} else {
 		err = fmt.Errorf("did not find spinner with label %s", label)
 		return
@@ -90,13 +96,17 @@ func (ms *MultiSpinner) draw(goUp bool) {
 	sort.Strings(spinnerLabels)
 	for _, label := range spinnerLabels {
 		spinner := ms.spinners[label]
+		if !term.IsTerminal(int(os.Stderr.Fd())) && !spinner.statusIsNew {
+			return
+		}
 		fmt.Fprintf(os.Stderr, "%-20s  %s  %-40s\n", label, spinChars[spinner.spinIndex], spinner.status)
+		spinner.statusIsNew = false
 		spinner.spinIndex += 1
 		if spinner.spinIndex >= len(spinChars) {
 			spinner.spinIndex = 0
 		}
 	}
-	if goUp {
+	if goUp && term.IsTerminal(int(os.Stderr.Fd())) {
 		for range ms.spinners {
 			fmt.Fprintf(os.Stderr, "\x1b[1A")
 		}

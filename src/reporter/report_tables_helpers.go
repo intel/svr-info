@@ -7,12 +7,9 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"intel.com/svr-info/pkg/core"
 )
 
 func enabledIfVal(val string) string {
@@ -186,6 +183,23 @@ func getDIMMSocketSlot(dimmType DIMMType, reBankLoc *regexp.Regexp, reLoc *regex
 			slot, _ = strconv.Atoi(match[2])
 			return
 		}
+	} else if dimmType == DIMMType12 {
+		match := reLoc.FindStringSubmatch(locator)
+		if match != nil {
+			socket, _ = strconv.Atoi(match[1])
+			socket = socket - 1
+			slot, _ = strconv.Atoi(match[3])
+			slot = slot - 1
+			return
+		}
+	} else if dimmType == DIMMType13 {
+		match := reLoc.FindStringSubmatch(locator)
+		if match != nil {
+			socket, _ = strconv.Atoi(match[1])
+			slot, _ = strconv.Atoi(match[3])
+			slot = slot - 1
+			return
+		}
 	}
 	err = fmt.Errorf("unrecognized bank locator and/or locator in dimm info: %s %s", bankLocator, locator)
 	return
@@ -207,6 +221,8 @@ const (
 	DIMMType9
 	DIMMType10
 	DIMMType11
+	DIMMType12
+	DIMMType13
 )
 
 func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, reBankLoc *regexp.Regexp, reLoc *regexp.Regexp) {
@@ -231,6 +247,19 @@ func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, re
 	reBankLoc = regexp.MustCompile(`NODE ([0-9]) CHANNEL ([0-9]) DIMM ([0-9])`)
 	if reBankLoc.FindStringSubmatch(bankLocator) != nil {
 		dimmType = DIMMType3
+		return
+	}
+	/* Added for SuperMicro X13DET-B (SPR). Must be before Type4 because Type4 matches, but data in BankLoc is invalid.
+	 * Locator: P1-DIMMA1
+	 * Locator: P1-DIMMB1
+	 * Locator: P1-DIMMC1
+	 * ...
+	 * Locator: P2-DIMMA1
+	 * ...
+	 */
+	reLoc = regexp.MustCompile(`P([1,2])-DIMM([A-L])([1])`)
+	if reLoc.FindStringSubmatch(locator) != nil {
+		dimmType = DIMMType12
 		return
 	}
 	reBankLoc = regexp.MustCompile(`P([0-9])_Node([0-9])_Channel([0-9])_Dimm([0-9])`)
@@ -305,6 +334,20 @@ func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, re
 		dimmType = DIMMType11
 		return
 	}
+	/* BIRCHSTREAM
+	 * LOCATOR      BANK LOCATOR
+	 * CPU0_DIMM_A1 BANK 0
+	 * CPU0_DIMM_A2 BANK 0
+	 * CPU0_DIMM_B1 BANK 1
+	 * CPU0_DIMM_B2 BANK 1
+	 * ...
+	 * CPU0_DIMM_H2 BANK 7
+	 */
+	reLoc = regexp.MustCompile(`CPU([\d])_DIMM_([A-H])([1-2])`)
+	if reLoc.FindStringSubmatch(locator) != nil {
+		dimmType = DIMMType13
+		return
+	}
 	return
 }
 
@@ -330,6 +373,11 @@ func deriveDIMMInfoOther(dimms *[][]string, numSockets int, channelsPerSocket in
 			channel = 0
 		} else if previousSocket == socket && slot == 0 {
 			channel++
+		}
+		// sanity check
+		if channel >= channelsPerSocket {
+			err = fmt.Errorf("invalid interpretation of DIMM data")
+			return
 		}
 		previousSocket = socket
 		dimm[DerivedSocketIdx] = fmt.Sprintf("%d", socket)
@@ -575,15 +623,57 @@ func getSumOfFields(hostValues *HostValues, fieldNames []string, separatorFieldN
 }
 
 func getInsightsRules() (rules []byte, err error) {
-	rulesFilePath, err := core.FindAsset("insights.grl")
+	rules, err = resources.ReadFile("resources/insights.grl")
 	if err != nil {
-		err = fmt.Errorf("could not find rules file, %v", err)
+		err = fmt.Errorf("failed to read insights.grl, %v", err)
 		return
 	}
-	rules, err = os.ReadFile(rulesFilePath)
+	return
+}
+
+func getMicroArchitectureExt(model, sockets string, capid4 string, devices string) (uarch string, err error) {
+	capid4Int, err := strconv.ParseInt(capid4, 16, 64)
 	if err != nil {
-		err = fmt.Errorf("failed to read rules file, %v", err)
 		return
+	}
+	bits := (capid4Int >> 6) & 0b11
+	if model == "143" { // SPR
+		if bits == 3 {
+			uarch = "SPR_XCC"
+		} else if bits == 1 {
+			uarch = "SPR_MCC"
+		} else {
+			uarch = "SPR_Unknown"
+		}
+	} else if model == "207" { /*EMR*/
+		if bits == 3 {
+			uarch = "EMR_XCC"
+		} else if bits == 1 {
+			uarch = "EMR_MCC"
+		} else {
+			uarch = "EMR_Unknown"
+		}
+	} else if model == "173" { /*GNR*/
+		var devCount int
+		devCount, err = strconv.Atoi(devices)
+		if err != nil {
+			return
+		}
+		var socketsCount int
+		socketsCount, err = strconv.Atoi(sockets)
+		if socketsCount == 0 || err != nil {
+			return
+		}
+		ratio := devCount / socketsCount
+		if ratio == 3 {
+			uarch = "GNR_X1"
+		} else if ratio == 4 {
+			uarch = "GNR_X2"
+		} else if ratio == 5 {
+			uarch = "GNR_X3"
+		} else {
+			uarch = "GNR_Unknown"
+		}
 	}
 	return
 }

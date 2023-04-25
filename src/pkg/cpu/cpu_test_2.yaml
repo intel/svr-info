@@ -19,3 +19,34 @@
   model: 1
   stepping: r3p1
   channels: 8
+
+##########
+# AMD CPUs
+##########
+#  Naples
+- architecture: Zen
+  family: 23
+  model: 1
+  stepping:
+  channels: 8
+
+#  Rome
+- architecture: Zen2
+  family: 23
+  model: 49
+  stepping:
+  channels: 8
+
+#  Milan
+- architecture: Zen3
+  family: 25
+  model: 1
+  stepping:
+  channels: 8
+
+#  Genoa
+- architecture: Zen4
+  family: 25
+  model: 17
+  stepping:
+  channels: 12

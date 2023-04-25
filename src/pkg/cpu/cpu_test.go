@@ -10,7 +10,7 @@ import (
 )
 
 func TestFindCPU(t *testing.T) {
-	cpu, err := NewCPU([]string{"cpu_test.yaml", "cpu_test_2.yaml"})
+	cpu, err := NewCPU()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +55,13 @@ func TestFindCPU(t *testing.T) {
 		t.Fatal(err)
 	}
 	if uarch != "BDW" {
+		t.Fatal(fmt.Errorf("Found the wrong CPU"))
+	}
+	uarch, err = cpu.GetMicroArchitecture("25", "17", "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uarch != "Zen4" {
 		t.Fatal(fmt.Errorf("Found the wrong CPU"))
 	}
 

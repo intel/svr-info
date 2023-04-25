@@ -111,14 +111,21 @@
 - architecture: SPR
   family: 6
   model: 143
-  stepping: (0|1|2|3|4|5|6|7|8)
+  stepping:
   channels: 8
 
 #  Emerald Rapids
 - architecture: EMR
   family: 6
-  model: 143
-  stepping: (9|10|11|12)
+  model: 207
+  stepping:
+  channels: 8
+
+#  Sierra Forest
+- architecture: SRF
+  family: 6
+  model: 175
+  stepping:
   channels: 8
 
 ##########
@@ -144,6 +151,13 @@
   model: 1
   stepping:
   channels: 8
+
+#  Genoa
+- architecture: Zen4
+  family: 25
+  model: 17
+  stepping:
+  channels: 12
 
 ##########
 # ARM CPUs

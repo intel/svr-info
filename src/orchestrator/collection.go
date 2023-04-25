@@ -17,14 +17,12 @@ import (
 
 	"gopkg.in/yaml.v2"
 	"intel.com/svr-info/pkg/commandfile"
-	"intel.com/svr-info/pkg/core"
 	"intel.com/svr-info/pkg/target"
 )
 
 type Collection struct {
 	target         target.Target
 	cmdLineArgs    *CmdLineArgs
-	assets         *core.Assets
 	outputDir      string
 	outputFilePath string
 	stdout         string
@@ -32,11 +30,10 @@ type Collection struct {
 	ok             bool
 }
 
-func newCollection(target target.Target, cmdLineArgs *CmdLineArgs, assets *core.Assets, outputDir string) *Collection {
+func newCollection(target target.Target, cmdLineArgs *CmdLineArgs, outputDir string) *Collection {
 	c := Collection{
 		target:      target,
 		cmdLineArgs: cmdLineArgs,
-		assets:      assets,
 		outputDir:   outputDir,
 		stdout:      "",
 		stderr:      "",
@@ -51,13 +48,9 @@ func (c *Collection) getCommandFilePath(extra string) (commandFilePath string) {
 	return
 }
 
-func customizeCommandYAML(sourceFilePath string, cmdLineArgs *CmdLineArgs, targetBinDir string, targetHostName string) (customized []byte, err error) {
-	defaultCollectorYAML, err := os.ReadFile(sourceFilePath)
-	if err != nil {
-		return
-	}
+func customizeCommandYAML(cmdTemplate []byte, cmdLineArgs *CmdLineArgs, targetBinDir string, targetHostName string) (customized []byte, err error) {
 	var cf commandfile.CommandFile
-	err = yaml.Unmarshal(defaultCollectorYAML, &cf)
+	err = yaml.Unmarshal(cmdTemplate, &cf)
 	if err != nil {
 		return
 	}
@@ -145,12 +138,12 @@ func customizeCommandYAML(sourceFilePath string, cmdLineArgs *CmdLineArgs, targe
 	return
 }
 
-func (c *Collection) customizeCommandFile(sourceFilePath string, targetFilePath string, targetBinDir string) (err error) {
-	return customizeCmdFile(sourceFilePath, targetFilePath, targetBinDir, c.target.GetName(), c.cmdLineArgs)
+func (c *Collection) customizeCommandFile(cmdTemplate []byte, targetFilePath string, targetBinDir string) (err error) {
+	return customizeCmdFile(cmdTemplate, targetFilePath, targetBinDir, c.target.GetName(), c.cmdLineArgs)
 }
 
-func customizeCmdFile(sourceFilePath string, targetFilePath string, targetBinDir string, targetHostName string, cmdLineArgs *CmdLineArgs) (err error) {
-	customized, err := customizeCommandYAML(sourceFilePath, cmdLineArgs, targetBinDir, targetHostName)
+func customizeCmdFile(cmdTemplate []byte, targetFilePath string, targetBinDir string, targetHostName string, cmdLineArgs *CmdLineArgs) (err error) {
+	customized, err := customizeCommandYAML(cmdTemplate, cmdLineArgs, targetBinDir, targetHostName)
 	if err != nil {
 		return
 	}
@@ -163,11 +156,16 @@ func (c *Collection) getDepsFile() (depsFile string, err error) {
 	if err != nil {
 		return
 	}
+	var binPath string
+	binPath, err = getBinPath()
+	if err != nil {
+		return
+	}
 	switch arch {
 	case "x86_64", "amd64":
-		depsFile = c.assets[core.Amd64Deps]
+		depsFile = filepath.Join(binPath, "collector_deps_amd64.tgz")
 	case "aarch64", "arm64":
-		depsFile = c.assets[core.Arm64Deps]
+		depsFile = filepath.Join(binPath, "collector_deps_arm64.tgz")
 	}
 	if depsFile == "" {
 		err = fmt.Errorf("unsupported architecture: '%s'", arch)
@@ -180,11 +178,16 @@ func (c *Collection) getCollectorFile() (collectorFile string, err error) {
 	if err != nil {
 		return
 	}
+	var binPath string
+	binPath, err = getBinPath()
+	if err != nil {
+		return
+	}
 	switch arch {
 	case "x86_64", "amd64":
-		collectorFile = c.assets[core.Amd64Collector]
+		collectorFile = filepath.Join(binPath, "collector")
 	case "aarch64", "arm64":
-		collectorFile = c.assets[core.Arm64Collector]
+		collectorFile = filepath.Join(binPath, "collector_arm64")
 	}
 	if collectorFile == "" {
 		err = errors.New("unsupported architecture: " + "'" + arch + "'")
@@ -225,10 +228,11 @@ func (c *Collection) getCollectorOutputFile(workingDirectory string) (outputFile
 }
 
 func (c *Collection) getExtraFiles() (extras []string, err error) {
-	extrasDir, err := core.FindAsset("extras")
+	exePath, err := os.Executable()
 	if err != nil {
 		return
 	}
+	extrasDir := filepath.Join(exePath, "extras")
 	dir, err := os.Open(extrasDir)
 	if err != nil {
 		return
@@ -281,7 +285,7 @@ func (c *Collection) Collect() (err error) {
 	}
 
 	if (strings.Contains(c.cmdLineArgs.analyze, "system") || strings.Contains(c.cmdLineArgs.analyze, "all")) &&
-	   !hasPreReqs(c.target, []string{"perl"}) {
+		!hasPreReqs(c.target, []string{"perl"}) {
 		log.Printf("perl not found on target: %s. Analyze system requires perl to process data.", c.target.GetName())
 	}
 
@@ -291,8 +295,12 @@ func (c *Collection) Collect() (err error) {
 		return
 	}
 	defer c.cleanupTarget(tempDir)
+	cmdTemplate, err := resources.ReadFile("resources/collector_reports.yaml.tmpl")
+	if err != nil {
+		return
+	}
 	commandFilePath := c.getCommandFilePath("_reports")
-	err = c.customizeCommandFile(c.assets[core.ReportsYaml], commandFilePath, tempDir)
+	err = c.customizeCommandFile(cmdTemplate, commandFilePath, tempDir)
 	if err != nil {
 		log.Print("failed to customize command file path")
 		return
@@ -356,8 +364,13 @@ func (c *Collection) Collect() (err error) {
 		return
 	}
 	if c.cmdLineArgs.megadata {
+		var cmdTemplate []byte
+		cmdTemplate, err = resources.ReadFile("resources/collector_megadata.yaml.tmpl")
+		if err != nil {
+			return
+		}
 		commandFilePath := c.getCommandFilePath("_megadata")
-		err = c.customizeCommandFile(c.assets[core.MegadataYaml], commandFilePath, tempDir)
+		err = c.customizeCommandFile(cmdTemplate, commandFilePath, tempDir)
 		if err != nil {
 			log.Print("failed to customize command file path")
 			return

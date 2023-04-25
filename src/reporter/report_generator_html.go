@@ -21,7 +21,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"gopkg.in/yaml.v2"
-	"intel.com/svr-info/pkg/core"
 	"intel.com/svr-info/pkg/cpu"
 	"intel.com/svr-info/pkg/target"
 )
@@ -68,7 +67,7 @@ type ReportGen struct {
 	Version                          string
 }
 
-func newReportGen(reportsData []*Report, hostIndices []int, hostsReferenceData []*HostReferenceData, version string) (gen *ReportGen) {
+func newReportGen(reportsData []*Report, hostIndices []int, hostsReferenceData []*HostReferenceData) (gen *ReportGen) {
 	gen = &ReportGen{
 		HostIndices:                      hostIndices,
 		ConfigurationReport:              reportsData[configurationDataIndex],
@@ -81,7 +80,6 @@ func newReportGen(reportsData []*Report, hostIndices []int, hostsReferenceData [
 		AnalyzeReportReferenceData:       []*HostReferenceData{},
 		InsightsReport:                   reportsData[insightDataIndex],
 		InsightsReportReferenceData:      []*HostReferenceData{},
-		Version:                          version,
 	}
 	return
 }
@@ -90,20 +88,15 @@ type HostReferenceData map[string]interface{}
 type ReferenceData map[string]HostReferenceData
 
 func newReferenceData() (data *ReferenceData) {
-	refDataPath, err := core.FindAsset("reference.yaml")
+	refYaml, err := resources.ReadFile("resources/reference.yaml")
 	if err != nil {
-		log.Printf("Failed to find reference data: %v", err)
-		return
-	}
-	refYaml, err := os.ReadFile(refDataPath)
-	if err != nil {
-		log.Printf("Failed to read reference data file: %v.", err)
+		log.Printf("Failed to read reference.yaml: %v.", err)
 		return
 	}
 	data = &ReferenceData{}
 	err = yaml.Unmarshal(refYaml, data)
 	if err != nil {
-		log.Printf("Failed to parse reference data: %v.", err)
+		log.Printf("Failed to parse reference.yaml: %v.", err)
 	}
 	return
 }
@@ -113,12 +106,20 @@ func (r *ReportGeneratorHTML) getRefLabel(hostIndex int) (refLabel string) {
 	family := source.valFromRegexSubmatch("lscpu", `^CPU family.*:\s*([0-9]+)$`)
 	model := source.valFromRegexSubmatch("lscpu", `^Model.*:\s*([0-9]+)$`)
 	stepping := source.valFromRegexSubmatch("lscpu", `^Stepping.*:\s*(.+)$`)
-	uarch, err := r.cpusInfo.GetMicroArchitecture(family, model, stepping)
+	sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
+	capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
+	devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
+	var uarch string
+	var err error
+	if family == "6" && (model == "143" /*SPR*/ || model == "207" /*EMR*/ || model == "173" /*GNR*/) {
+		uarch, err = getMicroArchitectureExt(model, sockets, capid4, devices)
+	} else {
+		uarch, err = r.cpusInfo.GetMicroArchitecture(family, model, stepping)
+	}
 	if err != nil {
 		log.Printf("Did not find a matching CPU: %v", err)
 		return
 	}
-	sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
 	refLabel = fmt.Sprintf("%s_%s", uarch, sockets)
 	return
 }
@@ -983,10 +984,11 @@ type flameGraphTemplateStruct struct {
 // getBurned -- converts folded code path frequency into hierarchical json
 // format for use in d3-flame-graph
 func getBurned(folded string) (burned string, err error) {
-	burnPath, err := core.FindAsset("burn")
+	binPath, err := getBinPath()
 	if err != nil {
 		return
 	}
+	burnPath := filepath.Join(binPath, "burn")
 	// run burn to convert folded to hierarchical format for d3-flame-graph
 	bashCmd := fmt.Sprintf("%s convert --type folded", burnPath)
 	cmd := exec.Command("bash", "-c", bashCmd)
@@ -1015,6 +1017,7 @@ func renderFlameGraph(header string, hv *HostValues, field string, hostIndex int
 	if err != nil {
 		log.Printf("failed to burn folded data: %v", err)
 		out += "Error."
+		return
 	}
 	fg := texttemplate.Must(texttemplate.New("flameGraphTemplate").Parse(flameGraphTemplate))
 	buf := new(bytes.Buffer)
@@ -1272,13 +1275,14 @@ func (r *ReportGen) renderDIMMPopulationTable(table *Table, refData []*HostRefer
 			socketTableValues = append(socketTableValues, []string{})
 			var channelTableHeaders = []string{"Channel", "Slots"}
 			var channelTableValues [][]string
-			var channelKeys []string
+			var channelKeys []int
 			for k := range socketMap {
-				channelKeys = append(channelKeys, k)
+				channel, _ := strconv.Atoi(k)
+				channelKeys = append(channelKeys, channel)
 			}
-			sort.Strings(channelKeys)
+			sort.Ints(channelKeys)
 			for _, channel := range channelKeys {
-				channelMap := socketMap[channel]
+				channelMap := socketMap[strconv.Itoa(channel)]
 				channelTableValues = append(channelTableValues, []string{})
 				var slotTableHeaders []string
 				var slotTableValues [][]string
@@ -1306,7 +1310,7 @@ func (r *ReportGen) renderDIMMPopulationTable(table *Table, refData []*HostRefer
 				}
 				slotTable := renderHTMLTable(slotTableHeaders, slotTableValues, "pure-table pure-table-bordered", slotTableValuesStyles)
 				// channel number
-				channelTableValues[len(channelTableValues)-1] = append(channelTableValues[len(channelTableValues)-1], channel)
+				channelTableValues[len(channelTableValues)-1] = append(channelTableValues[len(channelTableValues)-1], strconv.Itoa(channel))
 				// slot table
 				channelTableValues[len(channelTableValues)-1] = append(channelTableValues[len(channelTableValues)-1], slotTable)
 				// style
@@ -1368,7 +1372,7 @@ func HTMLEscapeTable(table *Table) (safeTable Table) {
 func (r *ReportGen) RenderDataTable(unsafeTable *Table, refData []*HostReferenceData) template.HTML {
 	t := HTMLEscapeTable(unsafeTable)
 	table := &t
-	out := fmt.Sprintf("<h2 id=%s>%s</h2>\n", table.Name, table.Name)
+	out := fmt.Sprintf("<h2 id=%s>%s</h2>\n", "\""+table.Name+"\"", table.Name)
 	if table.Name == "Core Frequency" {
 		out += r.renderFrequencyChart(table, refData)
 	} else if table.Name == "Memory Bandwidth and Latency" {
@@ -1400,11 +1404,7 @@ func (r *ReportGen) RenderDataTable(unsafeTable *Table, refData []*HostReference
 }
 
 func (r *ReportGeneratorHTML) generate() (reportFilePaths []string, err error) {
-	reportTemplate, err := core.FindAsset("report.html.tmpl")
-	if err != nil {
-		return
-	}
-	t, err := template.ParseFiles(reportTemplate)
+	t, err := template.ParseFS(resources, "resources/report.html.tmpl")
 	if err != nil {
 		return
 	}
@@ -1428,7 +1428,7 @@ func (r *ReportGeneratorHTML) generate() (reportFilePaths []string, err error) {
 		if err != nil {
 			return
 		}
-		err = t.Execute(f, newReportGen(r.reports, []int{hostIndex}, hostsReferenceData, gVersion))
+		err = t.Execute(f, newReportGen(r.reports, []int{hostIndex}, hostsReferenceData))
 		f.Close()
 		if err != nil {
 			return
@@ -1467,7 +1467,7 @@ func (r *ReportGeneratorHTML) generate() (reportFilePaths []string, err error) {
 		for i := 0; i < len(hostnames); i++ {
 			hostIndices = append(hostIndices, i)
 		}
-		err = t.Execute(f, newReportGen(r.reports, hostIndices, hostsReferenceData, gVersion))
+		err = t.Execute(f, newReportGen(r.reports, hostIndices, hostsReferenceData))
 		f.Close()
 		if err != nil {
 			return
