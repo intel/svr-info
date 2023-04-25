@@ -235,10 +235,10 @@ int main(int argc, char **argv)
     // Detect architecture to determine cycles_expected
     int family, model, stepping;
     get_arch(&family, &model, &stepping);
-    if (model == 143 /*SPR*/) {
+    if (model == 143 /*SPR*/ || model == 207 /*EMR*/) {
         use_aperf = check_whether_ia32_aperf_is_accessible();
         if (!use_aperf) {
-            fprintf(stderr, "Failed to read APERF MSR. Cannot proceed on SPR.\n");
+            fprintf(stderr, "Failed to read APERF MSR.\n");
             return 1;
         }
     }

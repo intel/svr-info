@@ -104,12 +104,7 @@ func runConfigCommand(cmd commandfile.Command, args commandfile.Arguments, sudo 
 	if err != nil {
 		log.Printf("Error: %v Stderr: %s, Exit Code: %d", err, stderr, exitCode)
 	}
-	// if a sudo password was provided, make sure it doesn't show up in any of the command results
-	if sudo != "" {
-		result["stdout"] = strings.ReplaceAll(stdout, sudo, "********")
-	} else {
-		result["stdout"] = stdout
-	}
+	result["stdout"] = stdout
 	result["stderr"] = stderr
 	result["exitstatus"] = fmt.Sprint(exitCode)
 	ch <- result

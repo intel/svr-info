@@ -73,8 +73,6 @@ func (t *RemoteTarget) getSSHFlags(scp bool) (flags []string) {
 		"-o",
 		"StrictHostKeyChecking=no",
 		"-o",
-		"IdentitiesOnly=yes",
-		"-o",
 		"ConnectTimeout=10",       // This one exposes a bug in Windows' SSH client. Each connection takes
 		"-o",                      // 10 seconds to establish. https://github.com/PowerShell/Win32-OpenSSH/issues/1352
 		"GSSAPIAuthentication=no", // This one is not supported, but is ignored on Windows.
@@ -88,6 +86,9 @@ func (t *RemoteTarget) getSSHFlags(scp bool) (flags []string) {
 		"ControlMaster=auto",
 		"-o",
 		"ControlPersist=1m",
+	}
+	if scp == false {
+		flags = append(flags, "-tt")
 	}
 	if t.key != "" {
 		keyFlags := []string{
@@ -393,7 +394,7 @@ func (t *LocalTarget) CanConnect() bool {
 
 func (t *RemoteTarget) CanConnect() bool {
 	cmd := exec.Command("exit", "0")
-	_, _, _, err := t.RunCommand(cmd)
+	_, _, _, err := t.RunCommandWithTimeout(cmd, 5)
 	return err == nil
 }
 

@@ -223,7 +223,7 @@ ICX_2:
     - - 70.75
       - 3925.1
 
-SPR_2:
+SPR_XCC_2:
   Hostref:
     Name: Reference (Intel 2S Xeon Platinum 8480+)
   Summary:
@@ -279,7 +279,7 @@ SPR_2:
     - - 111.80
       - 2200.9
 
-SPR_1:
+SPR_XCC_1:
   Hostref:
     Name: Reference (Intel 1S Xeon Platinum 8480+)
   Summary:

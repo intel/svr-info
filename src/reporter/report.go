@@ -39,11 +39,11 @@ func NewConfigurationReport(sources []*Source, cpusInfo *cpu.CPU) (report *Repor
 			newOperatingSystemTable(sources, Software),
 			newSoftwareTable(sources, Software),
 
-			newCPUTable(sources, cpusInfo, CPU),
-			newISATable(sources, CPU),
-			newAcceleratorTable(sources, CPU),
-			newFeatureTable(sources, CPU),
-			newUncoreTable(sources, CPU),
+			newCPUTable(sources, cpusInfo, CPUCategory),
+			newISATable(sources, CPUCategory),
+			newAcceleratorTable(sources, CPUCategory),
+			newFeatureTable(sources, CPUCategory),
+			newUncoreTable(sources, CPUCategory),
 
 			newPowerTable(sources, Power),
 		}...,
@@ -76,6 +76,7 @@ func NewConfigurationReport(sources []*Source, cpusInfo *cpu.CPU) (report *Repor
 			newSystemEventLogTable(sources, Status),
 			newKernelLogTable(sources, Status),
 			newPMUTable(sources, Status),
+			newSvrinfoTable(sources, Status),
 		}...,
 	)
 	// TODO: remove check when code is stable
@@ -99,8 +100,8 @@ func NewBriefReport(sources []*Source, fullReport *Report, cpusInfo *cpu.CPU) (r
 			newSystemSummaryTable(fullReport.findTable("System"), System),
 			newBaseboardSummaryTable(fullReport.findTable("Baseboard"), System),
 			newChassisSummaryTable(fullReport.findTable("Chassis"), System),
-			newCPUBriefTable(fullReport.findTable("CPU"), CPU),
-			newAcceleratorSummaryTable(fullReport.findTable("Accelerator"), CPU),
+			newCPUBriefTable(fullReport.findTable("CPU"), CPUCategory),
+			newAcceleratorSummaryTable(fullReport.findTable("Accelerator"), CPUCategory),
 			newMemoryBriefTable(fullReport.findTable("Memory"), Memory),
 			tableNicSummary,
 			tableDiskSummary,

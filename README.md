@@ -1,43 +1,59 @@
-# Intel&reg; System Health Inspector (aka svr-info)
-
-## Getting svr-info
-
-Download the latest release of svr-info from the repository's Releases page.
-
-## Running svr-info
-
-### Extract files from the archive and step into the directory
-
-`tar -xf svr-info.tgz`
-
-`cd svr-info`
-
-### View options
-
-`./svr-info -h`
-
-### Collect configuration data on local host
-
-`./svr-info`
-
+# Intel&reg; System Health Inspector (AKA svr-info)
+Intel® System Health Inspector (aka svr-info) is a Linux OS utility for assessing the state and health of Intel Xeon computers.
+## Example Reports
+- Single server: [HTML](documentation/examples/SDP_8058.html), [JSON](documentation/examples/SDP_8058.json), [XLSX](documentation/examples/SDP_8058.xlsx)
+- Multiple Servers: [HTML](documentation/examples/all_hosts.html), [JSON](documentation/examples/all_hosts.json), [XLSX](documentation/examples/all_hosts.xlsx)
+## Quick Start
+```
+wget -qO- https://github.com/intel/svr-info/releases/latest/download/svr-info.tgz | tar xvz
+cd svr-info
+./svr-info
+```
+## Remote Target
+Data can be collected from a single remote target by providing the login credentials of the target on the svr-info command line.
+```
+./svr-info -ip 10.100.222.123 -user fred -key ~/.ssh/id_rsa
+```
+## Multiple Targets
+Data can be collected from multiple remote targets by placing login credentials of the targets in a 'targets' file and then referencing that targets file on the svr-info command line. See the included [targets.example](src/orchestrator/targets.example) file for the required file format.
+```
+./svr-info -targets <targets file>
+```
+## Benchmarks
+Micro-benchmarks can be executed by svr-info to assess the health of the target system(s). See the help (-h) for the complete list of available benchmarks. To run all benchmarks:
+```
+./svr-info -benchmark all
+```
+Note: **Benchmarks should not be run on live/production systems.** Production workload performance may be impacted.
+## System Profiling
+Subsystems on live/production system(s) can be profiled by svr-info. See the help (-h) for the complete list of subsystems. To profile all subsystems:
+```
+./svr-info -profile all
+```
+## Workload Analysis
+Workloads on live/production system(s) can be analyzed by svr-info. One or more perf flamegraphs will be produced. See the help (-h) for options. To analyze system and Java apps:
+```
+./svr-info -analyze all
+```
+## Report Types
+By default svr-info produces HTML, JSON, and Microsoft Excel formatted reports. There is an optional txt report that includes the commands that were executed on the target to collect data and their output. See the help (-h) for report format options. To generate only HTML reports:
+```
+./svr-info -format html
+```
+## Additional Data Collection Tools
+Additional data collection tools can be used by svr-info by placing them in a directory named "extras".
+For example, Intel® Memory Latency Checker can be downloaded from here: [MLC](https://www.intel.com/content/www/us/en/download/736633/intel-memory-latency-checker-intel-mlc.html). Once downloaded, extract the Linux executable and place in the svr-info/extras directory.
 ## Contributing
-
 We welcome bug reports, questions and feature requests. Please submit via Github Issues.
-
 ## Building svr-info
-
 Due to the large number of build dependencies required, a Docker container-based build environment is provided. Assuming your system has Docker installed (instructions not provided here), the following steps are required to build svr-info:
-
 - `builder/build_docker_image` creates the docker image
 - `builder/build` runs `make dist` in the container
-
 After a successful build, you will find the build output in the `dist` folder.
 
 Other builder commands available:
-
 - `builder/test` runs the automated tests in the container via `make test`
 - `builder/shell` starts the container and provides a bash prompt useful for debugging build problems
-
 ### Incremental Builds
 After a complete build using the build container, you can perform incremental builds directly on your host assuming dependencies are installed there. This can make the code/build/test cycle much quicker than rebuilding everything using the Docker container. You can look at the Dockerfile in the builder directory to get the build dependencies for everything or, more likely, you only need go(lang) so install the latest and get to work.
 
@@ -45,11 +61,5 @@ From the project's root directory, you can use the makefile. There are quite a f
 
 If you are working on a single go-based app. You can run `go build` in the app's source directory to build it.
 
-### Additional Collection Tools
-Additional data collection tools can be built into svr-info by placing binaries in the bin directory before starting the build. For example, Intel® Memory Latency Checker is a useful tool for identifying the health and performance of a server's memory subsystem. It can be downloaded from here: https://www.intel.com/content/www/us/en/download/736633/intel-memory-latency-checker-intel-mlc.html. Once downloaded, extract the Linux executable and place in the bin directory before starting the build.
-
-## Architecture
-There are three primary applications that make up svr-info. They are written in go and can all be run/tested independently.
-1. orchestrator - runs on local host, communicates with remote targets via SSH, configures and runs the collector component on selected targets, then runs the reporter component to generate reports. Svr-info is a symbolic link to the orchestrator application.
-2. collector - runs on local and/or remote targets to collect information to be fed into the reporter
-3. reporter - generates reports from collector output
+### Including Additional Collection Tools In The Build
+Additional data collection tools can be built into the svr-info distribution by placing binaries in the bin directory before starting the build.

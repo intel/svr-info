@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -21,7 +20,6 @@ import (
 	"github.com/hyperjumptech/grule-rule-engine/engine"
 	"github.com/hyperjumptech/grule-rule-engine/pkg"
 	"gopkg.in/yaml.v2"
-	"intel.com/svr-info/pkg/core"
 	"intel.com/svr-info/pkg/cpu"
 )
 
@@ -268,26 +266,24 @@ func newFrequencyTable(sources []*Source, category TableCategory) (table *Table)
 			x.measured = ghz
 			vals[count] = x
 		}
-		if len(vals) > 0 {
-			// get spec frequencies (these also may not be present)
-			countFreqs, err := source.getSpecCountFrequencies()
-			if err != nil {
-				log.Print(err)
-			} else {
-				// fill in gaps in sparse list...
-				// go through list in reverse order so we can fill previous slots with same frequency
-				for i := len(countFreqs) - 1; i >= 0; i-- {
-					countFreq := countFreqs[i]
-					count, _ := strconv.Atoi(countFreq[0])
-					ghz, _ := strconv.ParseFloat(countFreq[1], 64)
-					for j := count; j > 0; j-- {
-						if _, ok := vals[j]; !ok {
-							vals[j] = freq{}
-						}
-						x := vals[j]
-						x.spec = ghz
-						vals[j] = x
+		// get spec frequencies (these also may not be present)
+		countFreqs, err := source.getSpecCountFrequencies()
+		if err != nil {
+			log.Print(err)
+		} else {
+			// fill in gaps in sparse list...
+			// go through list in reverse order so we can fill previous slots with same frequency
+			for i := len(countFreqs) - 1; i >= 0; i-- {
+				countFreq := countFreqs[i]
+				count, _ := strconv.Atoi(countFreq[0])
+				ghz, _ := strconv.ParseFloat(countFreq[1], 64)
+				for j := count; j > 0; j-- {
+					if _, ok := vals[j]; !ok {
+						vals[j] = freq{}
 					}
+					x := vals[j]
+					x.spec = ghz
+					vals[j] = x
 				}
 			}
 		}
@@ -699,7 +695,16 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 		family := source.valFromRegexSubmatch("lscpu", `^CPU family.*:\s*([0-9]+)$`)
 		model := source.valFromRegexSubmatch("lscpu", `^Model.*:\s*([0-9]+)$`)
 		stepping := source.valFromRegexSubmatch("lscpu", `^Stepping.*:\s*(.+)$`)
-		microarchitecture, err := cpusInfo.GetMicroArchitecture(family, model, stepping)
+		sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
+		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
+		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
+		var microarchitecture string
+		var err error
+		if family == "6" && (model == "143" /*SPR*/ || model == "207" /*EMR*/ || model == "173" /*GNR*/) {
+			microarchitecture, err = getMicroArchitectureExt(model, sockets, capid4, devices)
+		} else {
+			microarchitecture, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
+		}
 		if err != nil && family == "6" {
 			microarchitecture = "Unknown Intel"
 		}
@@ -805,37 +810,47 @@ func newISATable(sources []*Source, category TableCategory) (table *Table) {
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
+	type ISA struct {
+		Name     string
+		FullName string
+		CpuID    string
+		lscpu    string
+	}
+	isas := []ISA{
+		{"AVX", "Advanced Vector Extensions", "AVX: advanced vector extensions", "avx"},
+		{"AVX2", "Advanced Vector Extensions 2", "AVX2: advanced vector extensions 2", "avx2"},
+		{"AVX512F", "AVX-512 Foundation", "AVX512F: AVX-512 foundation instructions", "avx512f"},
+		{"AVX512_VNNI", "Vector Neural Network Instructions", "AVX512_VNNI: neural network instructions", "avx512_vnni"},
+		{"AVX512_BF16", "BFLOAT16", "AVX512_BF16: bfloat16 instructions", "avx512_bf16"},
+		{"AES", "Advanced Encryption Standard New Instructions (AES-NI)", "AES instruction", "aes"},
+		{"VAES", "Vector AES", "VAES instructions", "vaes"},
+		{"AMX-BF16", "Advanced Matrix Extensions Tile BFLOAT16", "AMX-BF16: tile bfloat16 support", "amx_bf16"},
+		{"AMX-TILE", "Advanced Matrix Extensions Tile Architecture", "AMX-TILE: tile architecture support", "amx_tile"},
+		{"AMX-INT8", "Advanced Matrix Extensions Tile 8-bit Integer", "AMX-INT8: tile 8-bit integer support", "amx_int8"},
+	}
 	for _, source := range sources {
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
-				"AVX - Advanced Vector Extensions",
-				"AVX2 - Advanced Vector Extensions 2",
-				"AVX512F - AVX-512 Foundation",
-				"AVX512_VNNI - Vector Neural Network Instructions",
-				"AVX512_4VNNIW - VNNI Word Variable Precision",
-				"AVX512_BF16 - BFLOAT16",
-				"AES - Advanced Encryption Standard New Instructions (AES-NI)",
-				"VAES - Vector AES",
-				"AMX-BF16 - Advanced Matrix Extensions Tile BFLOAT16",
-				"AMX-TILE - Advanced Matrix Extensions Tile Architecture",
-				"AMX-INT8 - Advanced Matrix Extensions Tile 8-bit Integer",
+				"Name",
+				"Full Name",
+				"CPU Support",
+				"Kernel Support",
 			},
-			Values: [][]string{
-				{
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AVX: advanced vector extensions\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AVX2: advanced vector extensions 2\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AVX512F: AVX-512 foundation instructions\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AVX512_VNNI: neural network instructions\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AVX512_4VNNIW: neural network instrs\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AVX512_BF16: bfloat16 instructions\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AES instruction\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `VAES instructions\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AMX-BF16: tile bfloat16 support\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AMX-TILE: tile architecture support\s*= (.+?)$`)),
-					yesIfTrue(source.valFromRegexSubmatch("cpuid -1", `AMX-INT8: tile 8-bit integer support\s*= (.+?)$`)),
-				},
-			},
+		}
+		flags := source.valFromRegexSubmatch("lscpu", `^Flags.*:\s*(.*)$`)
+		for _, isa := range isas {
+			cpuSupport := yesIfTrue(source.valFromRegexSubmatch("cpuid -1", isa.CpuID+`\s*= (.+?)$`))
+			kernelSupport := "Yes"
+			match, err := regexp.MatchString(" "+isa.lscpu+" ", flags)
+			if err != nil {
+				log.Printf("regex match failed: %v", err)
+				return
+			}
+			if !match {
+				kernelSupport = "No"
+			}
+			hostValues.Values = append(hostValues.Values, []string{isa.Name, isa.FullName, cpuSupport, kernelSupport})
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
@@ -856,20 +871,15 @@ func newAcceleratorTable(sources []*Source, category TableCategory) (table *Tabl
 		Description string `yaml:"description"`
 	}
 	var accelDefs []Accelerator
-	// load GPU info from YAML
-	yamlPath, err := core.FindAsset("accelerators.yaml")
+	// load accelerator info from YAML
+	yamlBytes, err := resources.ReadFile("resources/accelerators.yaml")
 	if err != nil {
-		log.Printf("failed to find accelerators.yaml")
-		return
-	}
-	yamlBytes, err := os.ReadFile(yamlPath)
-	if err != nil {
-		log.Printf("failed to read accelerator info file: %s, %v", yamlPath, err)
+		log.Printf("failed to read accelerators.yaml: %v", err)
 		return
 	}
 	err = yaml.UnmarshalStrict(yamlBytes, &accelDefs)
 	if err != nil {
-		log.Printf("failed to parse accelerator info file: %s, %v", yamlPath, err)
+		log.Printf("failed to parse accelerators.yaml: %v", err)
 		return
 	}
 	for _, source := range sources {
@@ -964,19 +974,14 @@ func newGPUTable(sources []*Source, category TableCategory) (table *Table) {
 	}
 	var gpuDefs []GPU
 	// load GPU info from YAML
-	yamlPath, err := core.FindAsset("gpus.yaml")
+	yamlBytes, err := resources.ReadFile("resources/gpus.yaml")
 	if err != nil {
-		log.Printf("failed to find gpus.yaml")
-		return
-	}
-	yamlBytes, err := os.ReadFile(yamlPath)
-	if err != nil {
-		log.Printf("failed to read GPU info file: %s, %v", yamlPath, err)
+		log.Printf("failed to read gpus.yaml: %v", err)
 		return
 	}
 	err = yaml.UnmarshalStrict(yamlBytes, &gpuDefs)
 	if err != nil {
-		log.Printf("failed to parse GPU info file: %s, %v", yamlPath, err)
+		log.Printf("failed to parse gpus.yaml: %v", err)
 		return
 	}
 	for _, source := range sources {
@@ -2149,6 +2154,29 @@ func newInsightTable(sources []*Source, configReport, briefReport, profileReport
 				continue
 			}
 		}
+	}
+	return
+}
+
+func newSvrinfoTable(sources []*Source, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "svr-info",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, source := range sources {
+		var hostValues = HostValues{
+			Name: source.getHostname(),
+			ValueNames: []string{
+				"version",
+			},
+			Values: [][]string{
+				{
+					gVersion,
+				},
+			},
+		}
+		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
 	return
 }

@@ -246,6 +246,13 @@ commands:
         done
     superuser: true
     parallel: true
+  - label: lspci bits
+    command: lspci -s $(lspci | grep 325b | awk 'NR==1{{print $1}}') -xxx |  awk '$1 ~ /^90/{{print $9 $8 $7 $6; exit}}'
+    superuser: true
+    parallel: true
+  - label: lspci devices
+    command: lspci -d 8086:3258 | wc -l
+    parallel: true 
 ############
 # Profile command below
 # Note that this is one command because we want the profiling options to run in parallel with
@@ -381,11 +388,7 @@ commands:
     run: false
     command: |-
         # measure turbo frequencies using calcfreq utility
-        num_vcpus=$( lscpu | grep 'CPU(s):' | head -1 | awk '{print $2}' )
-        threads_per_core=$( lscpu | grep 'Thread(s) per core:' | head -1 | awk '{print $4}' )
-        num_sockets=$( lscpu | grep 'Socket(s):' | head -1 | awk '{print $2}' )
-        num_cores=$(( num_vcpus / threads_per_core ))
-        num_cores_per_socket=$(( num_cores / num_sockets ))
+        num_cores_per_socket=$( lscpu | grep 'Core(s) per socket:' | head -1 | awk '{print $4}' )
         # if the first two 'core ids' from /proc/cpuinfo are the same then use -a1 option
         cpu_0_core_id=$( grep 'core id' /proc/cpuinfo | head -1 | awk '{print $4}' )
         cpu_1_core_id=$( grep 'core id' /proc/cpuinfo | head -2 | tail -1 | awk '{print $4}' )
@@ -399,7 +402,7 @@ commands:
     run: false
     command: |-
         # measure tdp and all-core turbo frequency
-        ((turbostat -i 2 2>/dev/null &) ; stress-ng --cpu 1 -t 9s 2>&1 ; stress-ng --cpu 0 -t 5s 2>&1 ; pkill -9 -f turbostat) | awk '$0~"stress" {print $0} $1=="Package" || $1=="CPU" || $1=="Core" || $1=="Node" {if(f!=1) print $0;f=1} $1=="-" {print $0}'
+        ((turbostat -i 2 2>/dev/null &) ; stress-ng --cpu 1 -t 20s 2>&1 ; stress-ng --cpu 0 -t 20s 2>&1 ; pkill -9 -f turbostat) | awk '$0~"stress" {print $0} $1=="Package" || $1=="CPU" || $1=="Core" || $1=="Node" {if(f!=1) print $0;f=1} $1=="-" {print $0}'
     superuser: true
     modprobe: msr
   - label: CPU Idle

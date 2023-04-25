@@ -5,3 +5,9 @@ use ./src/msrbusy
 use ./src/orchestrator
 use ./src/rdmsr
 use ./src/reporter
+use ./src/pkg/commandfile
+use ./src/pkg/core
+use ./src/pkg/cpu
+use ./src/pkg/msr
+use ./src/pkg/progress
+use ./src/pkg/target

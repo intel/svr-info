@@ -2,6 +2,10 @@
 /dist
 # apps
 src/orchestrator/orchestrator*
+src/orchestrator/resources/collector
+src/orchestrator/resources/collector_arm64
+src/orchestrator/resources/sshpass
+src/orchestrator/resources/reporter
 src/reporter/reporter*
 src/collector/collector
 src/collector/collector.exe
@@ -20,6 +24,7 @@ flamegraph
 ipmitool
 linux
 lshw
+lspci
 mlc
 pmu-checker
 spectre-meltdown-checker
@@ -42,4 +47,3 @@ src/reporter/debug_out/*
 __debug_bin*.log
 # other
 src/orchestrator/targets
-config/sums.md5

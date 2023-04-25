@@ -8,13 +8,16 @@ Package cpu provides a reference of CPU architectures and identification keys fo
 package cpu
 
 import (
+	"embed"
 	"fmt"
 	"log"
-	"os"
 	"regexp"
 
 	"gopkg.in/yaml.v2"
 )
+
+//go:embed resources
+var resources embed.FS
 
 type CPUInfo struct {
 	Architecture string `yaml:"architecture"`
@@ -25,33 +28,21 @@ type CPUInfo struct {
 }
 
 type CPU struct {
-	configFilenames []string
-	cpusInfo        []CPUInfo
+	cpusInfo []CPUInfo
 }
 
-func NewCPU(configFilenames []string) (cpu *CPU, err error) {
-	cpu = &CPU{
-		configFilenames: configFilenames,
-		cpusInfo:        []CPUInfo{},
+func NewCPU() (cpu *CPU, err error) {
+	yamlBytes, err := resources.ReadFile("resources/cpus.yaml")
+	if err != nil {
+		log.Printf("failed to read cpus.yaml: %v", err)
+		return
 	}
-	err = cpu.init()
-	return
-}
-
-func (c *CPU) init() (err error) {
-	for _, filename := range c.configFilenames {
-		yamlBytes, err := os.ReadFile(filename)
-		if err != nil {
-			log.Printf("failed to read CPU info file: %s, %v", filename, err)
-			continue
-		}
-		cpusInfo := []CPUInfo{}
-		err = yaml.UnmarshalStrict(yamlBytes, &cpusInfo)
-		if err != nil {
-			log.Printf("failed to parse CPU info file: %s, %v", filename, err)
-			continue
-		}
-		c.cpusInfo = append(c.cpusInfo, cpusInfo...)
+	cpu = &CPU{
+		cpusInfo: []CPUInfo{},
+	}
+	err = yaml.UnmarshalStrict(yamlBytes, &cpu.cpusInfo)
+	if err != nil {
+		log.Printf("failed to parse cpus.yaml: %v", err)
 	}
 	return
 }
@@ -66,7 +57,7 @@ func (c *CPU) getCPU(family, model, stepping string) (cpu CPUInfo, err error) {
 				return
 			}
 			// if model matches
-			if reModel.FindString(model) != "" {
+			if reModel.FindString(model) == model {
 				// if there is a stepping
 				if info.Stepping != "" {
 					var reStepping *regexp.Regexp

@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+
+app="svr-info/svr-info"
+fuzzer="radamsa"
+
+passes=0
+failures=0
+
+# helper function: check_error
+# arguments
+#   $1 - arguments to pass to the app
+check_error () {
+    if $app "$1" >> /dev/null 2>&1; then
+        echo "FAIL [$1]"
+        failures=$((failures+1))
+    else
+        echo "PASS"
+        passes=$((passes+1))
+    fi
+}
+
+count=10
+# helper function: fuzz_it
+# arguments
+#   $1 argument to fuzz test
+fuzz_it () {
+    for ((i=1; i <= count; i++)); do
+        check_error "$1 $(echo "foo" | $fuzzer )"
+    done
+}
+
+# helper function: fuzz_it_no_space
+# arguments
+#   $1 argument to fuzz test
+fuzz_it_no_space () {
+    for ((i=1; i <= count; i++)); do
+        check_error "$1$(echo "foo" | $fuzzer )"
+    done
+}
+
+# make sure app is present and runs
+if $app -v > /dev/null 2>&1; then
+    echo "$app present"
+else
+    echo "$app not found"
+    exit 1
+fi
+
+# make sure fuzzer is present and runs
+if $fuzzer -V > /dev/null 2>&1; then
+    echo "$fuzzer present"
+else
+    echo "$fuzzer not found"
+    exit 1
+fi
+
+# test invalid argument
+fuzz_it_no_space "-"
+# test invalid format
+fuzz_it "-format"
+# test invalid benchmark
+fuzz_it "-benchmark"
+# test invalid analysis
+fuzz_it "-analyze"
+# test invalid storage_dir
+fuzz_it "-benchmark all -storage"
+# test invalid profile_duration
+fuzz_it "-profile all -profile_duration"
+# test invalid profile_interval
+fuzz_it "-profile all -profile_interval"
+# test invalid analyze_duration
+fuzz_it "-analyze all -analyze_duration"
+# test invalid analyze_frequency
+fuzz_it "-analyze all -analyze_frequency"
+# test invalid ip
+fuzz_it "-ip"
+# test invalid port
+fuzz_it "-port"
+# test invalid user
+fuzz_it "-user"
+# test invalid key
+fuzz_it "-key"
+# test invalid targets
+fuzz_it "-targets"
+# test invalid output dir
+fuzz_it "-output"
+# test invalid temp dir
+fuzz_it "-temp"
+
+if [ $failures -gt 0 ]; then
+    echo "FAILED $failures TESTS"
+    exit 1
+else
+    echo "PASSED ALL ($passes) fuzz TESTS"
+    exit 0
+fi
