@@ -34,10 +34,25 @@ var (
 	gVersion string = "dev" // build overrides this, see makefile
 )
 
-func getTargets(cmdLineArgs *CmdLineArgs) (targets []target.Target, err error) {
+type App struct {
+	outputDir string
+	tempDir   string
+	args      *CmdLineArgs
+}
+
+func newApp(args *CmdLineArgs, outputDir string, tempDir string) *App {
+	app := App{
+		outputDir: outputDir,
+		tempDir:   tempDir,
+		args:      args,
+	}
+	return &app
+}
+
+func (app *App) getTargets() (targets []target.Target, err error) {
 	// if we have a targets file
-	if cmdLineArgs.targets != "" {
-		targetsFile := newTargetsFile(cmdLineArgs.targets)
+	if app.args.targets != "" {
+		targetsFile := newTargetsFile(app.args.targets)
 		var targetsFromFile []targetFromFile
 		targetsFromFile, err = targetsFile.parse()
 		if err != nil {
@@ -61,17 +76,12 @@ func getTargets(cmdLineArgs *CmdLineArgs) (targets []target.Target, err error) {
 				}
 				targets = append(targets, localTarget)
 			} else {
-				var binPath string
-				binPath, err = getBinPath()
-				if err != nil {
-					return
-				}
-				targets = append(targets, target.NewRemoteTarget(t.label, t.ip, t.port, t.user, t.key, t.pwd, filepath.Join(binPath, "sshpass"), t.sudo))
+				targets = append(targets, target.NewRemoteTarget(t.label, t.ip, t.port, t.user, t.key, t.pwd, filepath.Join(app.tempDir, "sshpass"), t.sudo))
 			}
 		}
 	} else {
 		// if collecting on localhost
-		if cmdLineArgs.ipAddress == "" {
+		if app.args.ipAddress == "" {
 			var hostname string
 			hostname, err = os.Hostname()
 			if err != nil {
@@ -104,7 +114,7 @@ func getTargets(cmdLineArgs *CmdLineArgs) (targets []target.Target, err error) {
 			}
 			targets = append(targets, localTarget)
 		} else {
-			targets = append(targets, target.NewRemoteTarget(cmdLineArgs.ipAddress, cmdLineArgs.ipAddress, fmt.Sprintf("%d", cmdLineArgs.port), cmdLineArgs.user, cmdLineArgs.key, "", "", ""))
+			targets = append(targets, target.NewRemoteTarget(app.args.ipAddress, app.args.ipAddress, fmt.Sprintf("%d", app.args.port), app.args.user, app.args.key, "", "", ""))
 		}
 	}
 	return
@@ -129,11 +139,11 @@ func doCollection(collection *Collection, ch chan *Collection, statusUpdate prog
 	ch <- collection
 }
 
-func getCollections(targets []target.Target, workDir string, cmdLineArgs *CmdLineArgs, statusUpdate progress.MultiSpinnerUpdateFunc) (collections []*Collection, err error) {
+func (app *App) getCollections(targets []target.Target, statusUpdate progress.MultiSpinnerUpdateFunc) (collections []*Collection, err error) {
 	// run collections in parallel
 	ch := make(chan *Collection)
 	for _, target := range targets {
-		collection := newCollection(target, cmdLineArgs, workDir)
+		collection := newCollection(target, app.args, app.outputDir, app.tempDir)
 		go doCollection(collection, ch, statusUpdate)
 	}
 	// wait for all collections to complete collecting
@@ -144,7 +154,7 @@ func getCollections(targets []target.Target, workDir string, cmdLineArgs *CmdLin
 	return
 }
 
-func getReports(collections []*Collection, outputDir string, cmdLineArgs *CmdLineArgs, statusUpdate progress.MultiSpinnerUpdateFunc) (reportFilePaths []string, err error) {
+func (app *App) getReports(collections []*Collection, statusUpdate progress.MultiSpinnerUpdateFunc) (reportFilePaths []string, err error) {
 	var okCollections = make([]*Collection, 0)
 	for _, collection := range collections {
 		if collection.ok {
@@ -162,12 +172,7 @@ func getReports(collections []*Collection, outputDir string, cmdLineArgs *CmdLin
 	for _, collection := range okCollections {
 		collectionFilePaths = append(collectionFilePaths, collection.outputFilePath)
 	}
-	var binPath string
-	binPath, err = getBinPath()
-	if err != nil {
-		return
-	}
-	cmd := exec.Command(filepath.Join(binPath, "reporter"), "-input", strings.Join(collectionFilePaths, ","), "-output", outputDir, "-format", cmdLineArgs.format)
+	cmd := exec.Command(filepath.Join(app.tempDir, "reporter"), "-input", strings.Join(collectionFilePaths, ","), "-output", app.outputDir, "-format", app.args.format)
 	log.Printf("run: %s", strings.Join(cmd.Args, " "))
 	stdout, _, _, err := target.RunLocalCommand(cmd)
 	if err != nil {
@@ -284,22 +289,22 @@ func cleanupOutputDir(outputDir string, collections []*Collection, reportFilePat
 	return
 }
 
-func doWork(outputDir string, cmdLineArgs *CmdLineArgs) (err error) {
-	if cmdLineArgs.dumpConfig {
+func (app *App) doWork() (err error) {
+	if app.args.dumpConfig {
 		var bytes []byte
 		bytes, err = resources.ReadFile("resources/collector_reports.yaml.tmpl")
 		if err != nil {
 			return
 		}
 		var customized []byte
-		customized, err = customizeCommandYAML(bytes, cmdLineArgs, ".", "target_hostname")
+		customized, err = customizeCommandYAML(bytes, app.args, ".", "target_hostname")
 		if err != nil {
 			return
 		}
 		fmt.Print(string(customized))
 		return
 	}
-	targets, err := getTargets(cmdLineArgs)
+	targets, err := app.getTargets()
 	if err != nil {
 		return err
 	}
@@ -312,21 +317,21 @@ func doWork(outputDir string, cmdLineArgs *CmdLineArgs) (err error) {
 	}
 	multiSpinner.Start()
 	defer multiSpinner.Finish()
-	collections, err := getCollections(targets, outputDir, cmdLineArgs, multiSpinner.Status)
+	collections, err := app.getCollections(targets, multiSpinner.Status)
 	if err != nil {
 		return err
 	}
 	var reportFilePaths []string
-	reportFilePaths, err = getReports(collections, outputDir, cmdLineArgs, multiSpinner.Status)
+	reportFilePaths, err = app.getReports(collections, multiSpinner.Status)
 	if err != nil {
 		return err
 	}
-	err = archiveOutputDir(outputDir, collections, reportFilePaths)
+	err = archiveOutputDir(app.outputDir, collections, reportFilePaths)
 	if err != nil {
 		return err
 	}
-	if !cmdLineArgs.debug {
-		err = cleanupOutputDir(outputDir, collections, reportFilePaths)
+	if !app.args.debug {
+		err = cleanupOutputDir(app.outputDir, collections, reportFilePaths)
 		if err != nil {
 			return err
 		}
@@ -334,7 +339,7 @@ func doWork(outputDir string, cmdLineArgs *CmdLineArgs) (err error) {
 	multiSpinner.Finish()
 	fmt.Print("Reports:\n")
 	for _, reportFilePath := range reportFilePaths {
-		relativePath, err := filepath.Rel(filepath.Join(outputDir, ".."), reportFilePath)
+		relativePath, err := filepath.Rel(filepath.Join(app.outputDir, ".."), reportFilePath)
 		if err != nil {
 			return err
 		}
@@ -347,16 +352,7 @@ func getLogfileName() string {
 	return filepath.Base(os.Args[0]) + ".log"
 }
 
-func getBinPath() (binPath string, err error) {
-	exePath, err := os.Executable()
-	if err != nil {
-		return
-	}
-	binPath = filepath.Join(filepath.Dir(exePath), "tmpbin")
-	return
-}
-
-func writeExecutableResources() (binPath string, err error) {
+func (app *App) writeExecutableResources() (err error) {
 	toolNames := []string{"sshpass", "reporter", "collector", "collector_deps_amd64.tgz", "collector_deps_arm64.tgz"}
 	for _, toolName := range toolNames {
 		// get the exe from our embedded resources
@@ -365,15 +361,7 @@ func writeExecutableResources() (binPath string, err error) {
 		if err != nil {
 			return
 		}
-		binPath, err = getBinPath()
-		if err != nil {
-			return
-		}
-		err = os.MkdirAll(binPath, 0744)
-		if err != nil {
-			return
-		}
-		toolPath := filepath.Join(binPath, toolName)
+		toolPath := filepath.Join(app.tempDir, toolName)
 		var f *os.File
 		f, err = os.OpenFile(toolPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0744)
 		if err != nil {
@@ -388,12 +376,22 @@ func writeExecutableResources() (binPath string, err error) {
 	return
 }
 
-func runSubComponent(componentName string, componentArgs string) (exitCode int, err error) {
-	binPath, err := getBinPath()
-	if err != nil {
+func (app *App) runSubComponent() (exitCode int, err error) {
+	componentName := ""
+	componentArgs := ""
+	if app.args.collector != "" {
+		componentName = "collector"
+		componentArgs = app.args.collector
+
+	} else if app.args.reporter != "" {
+		componentName = "reporter"
+		componentArgs = app.args.reporter
+	} else {
+		// this shouldn't happen
+		err = fmt.Errorf("runSubComponent error")
 		return
 	}
-	componentPath := filepath.Join(binPath, componentName)
+	componentPath := filepath.Join(app.tempDir, componentName)
 	bashCmd := fmt.Sprintf("%s %s", componentPath, componentArgs)
 	cmd := exec.Command("bash", "-c", bashCmd)
 	stdout, stderr, exitCode, err := target.RunLocalCommand(cmd)
@@ -475,27 +473,27 @@ func mainReturnWithCode() int {
 		os.Getppid(),
 		strings.Join(os.Args, " "),
 	)
-	// write out any executable tools we have in our embedded resources
-	binPath, err := writeExecutableResources()
+	tempDir, err := os.MkdirTemp(cmdLineArgs.temp, fmt.Sprintf("%s.tmp.", filepath.Base(os.Args[0])))
 	if err != nil {
 		log.Printf("Error: %v", err)
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return retError
 	}
 	if !cmdLineArgs.debug {
-		defer os.RemoveAll(binPath)
+		defer os.RemoveAll(tempDir)
 	}
-	if cmdLineArgs.reporter != "" {
-		exitCode, err := runSubComponent("reporter", cmdLineArgs.reporter)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			return retError
-		}
-		return exitCode
+	app := newApp(cmdLineArgs, outputDir, tempDir)
+
+	// write out any executable tools we have in our embedded resources to tempDir
+	err = app.writeExecutableResources()
+	if err != nil {
+		log.Printf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return retError
 	}
-	if cmdLineArgs.collector != "" {
-		exitCode, err := runSubComponent("collector", cmdLineArgs.collector)
+	// if user wants to run the report or collector directly
+	if cmdLineArgs.reporter != "" || cmdLineArgs.collector != "" {
+		exitCode, err := app.runSubComponent()
 		if err != nil {
 			log.Printf("Error: %v", err)
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -504,7 +502,7 @@ func mainReturnWithCode() int {
 		return exitCode
 	}
 	// get to work
-	err = doWork(outputDir, cmdLineArgs)
+	err = app.doWork()
 	if err != nil {
 		log.Printf("Error: %v", err)
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

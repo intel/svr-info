@@ -7,6 +7,18 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 16.04 and newer, CentOS 7 and newer
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.3.1
+Features Added
+- override local temporary directory used by svr-info using the -temp CLI option
+  note: override target temporary directory using the -targettemp CLI option (was -temp)
+Bugs Fixed
+- local temporary directory now created in system's default TEMP location (default)
+Known Issues
+- The storage micro-benchmark may not run on CentOS due to locale settings.
+- HTML report may scroll out of view when menu is minimized and window is small.
+- CPU cache sizes are reported in aggregate on Ubuntu 20.04 and newer.
+- DRAM population may be incorrectly reported on public cloud IaaS VMs.
+
 2.3.0
 Features Added
 - Now an all-inclusive single binary (svr-info) for easy re-location

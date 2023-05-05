@@ -10,7 +10,7 @@ VERSION_NUMBER := $(shell cat ${VERSION_FILE})
 VERSION := $(VERSION_NUMBER)_$(COMMIT_DATE)_$(COMMIT_ID)
 
 default: check orchestrator
-.PHONY: default test check format_check format linux-source collector reporter orchestrator rdmsr msrbusy reset clean tools libs async-profiler burn calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
+.PHONY: default test check format_check format linux-source collector reporter orchestrator rdmsr msrbusy reset clean tools libs async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
 
 collector_tools: async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc msrbusy perf rdmsr spectre-meltdown-checker stress-ng sysstat turbostat
 
@@ -51,8 +51,7 @@ collector:
 	cd collector && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o collector
 	cd collector && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o collector_arm64
 
-reporter: burn
-	cp burn/burn reporter/resources/
+reporter:
 	cd reporter && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o reporter
 
 rdmsr:
@@ -68,13 +67,6 @@ ifeq ("$(wildcard async-profiler-2.9-linux-x64.tar.gz)","")
 endif
 	tar -xf async-profiler-2.9-linux-x64.tar.gz && mv async-profiler-2.9-linux-x64 async-profiler
 endif
-
-burn:
-ifeq ("$(wildcard burn)","")
-	git clone https://github.com/Granulate/burn.git
-	cd burn && git checkout v1.0.1g2
-endif
-	cd burn && GOWORK=off CGO_ENABLED=0 go build
 
 calcfreq:
 	cd calcfreq && VERSION=$(VERSION) make
@@ -261,7 +253,7 @@ collector-deps-arm64: spectre-meltdown-checker
 collector-deps: collector-deps-amd64 collector-deps-arm64
 
 clean:
-	rm -rf async-profiler burn cpuid dmidecode ethtool fio flamegraph ipmitool linux lshw lspci mlc spectre-meltdown-checker sshpass stress-ng sysstat oss_source.* linux-*.xz cpuid-*.gz glibc-*.bz2 libcrypt*.gz zlib.*.gz
+	rm -rf async-profiler cpuid dmidecode ethtool fio flamegraph ipmitool linux lshw lspci mlc spectre-meltdown-checker sshpass stress-ng sysstat oss_source.* linux-*.xz cpuid-*.gz glibc-*.bz2 libcrypt*.gz zlib.*.gz
 	rm -f calcfreq/calcfreq
 	rm -f collector/collector
 	rm -f collector/collector_arm64
@@ -282,7 +274,6 @@ clean:
 	rm -f msrbusy/msrbusy
 
 reset:
-	cd burn && git clean -fdx && git reset --hard
 	cd cpuid && make clean
 	cd dmidecode && git clean -fdx && git reset --hard
 	cd ethtool && git clean -fdx && git reset --hard
