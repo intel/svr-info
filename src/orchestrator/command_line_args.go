@@ -35,6 +35,7 @@ type CmdLineArgs struct {
 	targets          string
 	megadata         bool
 	output           string
+	targetTemp       string
 	temp             string
 	dumpConfig       bool
 	cmdTimeout       int
@@ -55,7 +56,7 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "                [-analyze SELECT] [-analyze_duration SECONDS] [-analyze_frequency N]\n")
 	fmt.Fprintf(os.Stderr, "                [-megadata]\n")
 	fmt.Fprintf(os.Stderr, "                [-ip IP] [-port PORT] [-user USER] [-key KEY] [-targets TARGETS]\n")
-	fmt.Fprintf(os.Stderr, "                [-output OUTPUT] [-temp TEMP] [-dumpconfig] [-cmd_timeout]\n")
+	fmt.Fprintf(os.Stderr, "                [-output OUTPUT] [-temp TEMP] [-targettemp TEMP] [-dumpconfig] [-cmd_timeout]\n")
 	fmt.Fprintf(os.Stderr, "                [-reporter \"args\"] [-collector \"args\"] [-debug]\n")
 
 	longHelp := `
@@ -102,7 +103,8 @@ remote target arguments:
 
 advanced arguments:
   -output DIR           path to output directory. Directory must exist. (default: $PWD/orchestrator_timestamp)
-  -temp DIR             path to temporary directory on target. Directory must exist. (default: system default)
+  -temp DIR             path to temporary directory on localhost. Directory must exist. (default: system default)
+  -targettemp DIR       path to temporary directory on target. Directory must exist. (default: system default)
   -dumpconfig           dump the collector configuration file and exit (default: False)
   -cmd_timeout          the maximum number of seconds to wait for each data collection command (default: 300)
   -reporter             run the the reporter sub-component with args
@@ -142,6 +144,7 @@ func (cmdLineArgs *CmdLineArgs) parse(name string, arguments []string) (err erro
 	flagSet.BoolVar(&cmdLineArgs.version, "v", false, "")
 	flagSet.StringVar(&cmdLineArgs.output, "output", "", "")
 	flagSet.StringVar(&cmdLineArgs.temp, "temp", "", "")
+	flagSet.StringVar(&cmdLineArgs.targetTemp, "targettemp", "", "")
 	flagSet.BoolVar(&cmdLineArgs.dumpConfig, "dumpconfig", false, "")
 	flagSet.IntVar(&cmdLineArgs.cmdTimeout, "cmd_timeout", 300, "")
 	flagSet.StringVar(&cmdLineArgs.format, "format", "html,xlsx,json", "")

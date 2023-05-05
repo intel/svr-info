@@ -81,6 +81,7 @@ func TestAllExceptTargetsFile(t *testing.T) {
 		"-profile_duration", "30",
 		"-profile_interval", "3",
 		"-temp", "/tmp", // any dir
+		"-targettemp", "/tmp", // any dir
 		"-output", "/tmp", // any dir
 		"-megadata",
 		"-debug",

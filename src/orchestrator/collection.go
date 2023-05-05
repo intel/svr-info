@@ -24,17 +24,19 @@ type Collection struct {
 	target         target.Target
 	cmdLineArgs    *CmdLineArgs
 	outputDir      string
+	tempDir        string
 	outputFilePath string
 	stdout         string
 	stderr         string
 	ok             bool
 }
 
-func newCollection(target target.Target, cmdLineArgs *CmdLineArgs, outputDir string) *Collection {
+func newCollection(target target.Target, cmdLineArgs *CmdLineArgs, outputDir string, tempDir string) *Collection {
 	c := Collection{
 		target:      target,
 		cmdLineArgs: cmdLineArgs,
 		outputDir:   outputDir,
+		tempDir:     tempDir,
 		stdout:      "",
 		stderr:      "",
 		ok:          false,
@@ -156,16 +158,11 @@ func (c *Collection) getDepsFile() (depsFile string, err error) {
 	if err != nil {
 		return
 	}
-	var binPath string
-	binPath, err = getBinPath()
-	if err != nil {
-		return
-	}
 	switch arch {
 	case "x86_64", "amd64":
-		depsFile = filepath.Join(binPath, "collector_deps_amd64.tgz")
+		depsFile = filepath.Join(c.tempDir, "collector_deps_amd64.tgz")
 	case "aarch64", "arm64":
-		depsFile = filepath.Join(binPath, "collector_deps_arm64.tgz")
+		depsFile = filepath.Join(c.tempDir, "collector_deps_arm64.tgz")
 	}
 	if depsFile == "" {
 		err = fmt.Errorf("unsupported architecture: '%s'", arch)
@@ -178,16 +175,11 @@ func (c *Collection) getCollectorFile() (collectorFile string, err error) {
 	if err != nil {
 		return
 	}
-	var binPath string
-	binPath, err = getBinPath()
-	if err != nil {
-		return
-	}
 	switch arch {
 	case "x86_64", "amd64":
-		collectorFile = filepath.Join(binPath, "collector")
+		collectorFile = filepath.Join(c.tempDir, "collector")
 	case "aarch64", "arm64":
-		collectorFile = filepath.Join(binPath, "collector_arm64")
+		collectorFile = filepath.Join(c.tempDir, "collector_arm64")
 	}
 	if collectorFile == "" {
 		err = errors.New("unsupported architecture: " + "'" + arch + "'")
@@ -289,7 +281,7 @@ func (c *Collection) Collect() (err error) {
 		log.Printf("perl not found on target: %s. Analyze system requires perl to process data.", c.target.GetName())
 	}
 
-	tempDir, err := c.target.CreateTempDirectory(c.cmdLineArgs.temp)
+	tempDir, err := c.target.CreateTempDirectory(c.cmdLineArgs.targetTemp)
 	if err != nil {
 		log.Printf("failed to create temporary directory for %s", c.target.GetName())
 		return

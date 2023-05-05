@@ -5,14 +5,15 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html"
 	"html/template"
 	"log"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -22,7 +23,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"gopkg.in/yaml.v2"
 	"intel.com/svr-info/pkg/cpu"
-	"intel.com/svr-info/pkg/target"
 )
 
 const (
@@ -981,21 +981,70 @@ type flameGraphTemplateStruct struct {
 	Data string
 }
 
-// getBurned -- converts folded code path frequency into hierarchical json
-// format for use in d3-flame-graph
-func getBurned(folded string) (burned string, err error) {
-	binPath, err := getBinPath()
-	if err != nil {
-		return
+// Folded data conversion adapted from https://github.com/spiermar/burn
+// Copyright © 2017 Martin Spier <spiermar@gmail.com>
+// Apache License, Version 2.0
+func reverse(strings []string) {
+	for i, j := 0, len(strings)-1; i < j; i, j = i+1, j-1 {
+		strings[i], strings[j] = strings[j], strings[i]
 	}
-	burnPath := filepath.Join(binPath, "burn")
-	// run burn to convert folded to hierarchical format for d3-flame-graph
-	bashCmd := fmt.Sprintf("%s convert --type folded", burnPath)
-	cmd := exec.Command("bash", "-c", bashCmd)
-	burned, _, _, err = target.RunLocalCommandWithInputWithTimeout(cmd, folded, 10)
-	if err != nil {
-		return
+}
+
+type Node struct {
+	Name     string
+	Value    int
+	Children map[string]*Node
+}
+
+func (n *Node) Add(stackPtr *[]string, index int, value int) {
+	n.Value += value
+	if index >= 0 {
+		head := (*stackPtr)[index]
+		childPtr, ok := n.Children[head]
+		if !ok {
+			childPtr = &(Node{head, 0, make(map[string]*Node)})
+			n.Children[head] = childPtr
+		}
+		childPtr.Add(stackPtr, index-1, value)
 	}
+}
+
+func (n *Node) MarshalJSON() ([]byte, error) {
+	v := make([]Node, 0, len(n.Children))
+	for _, value := range n.Children {
+		v = append(v, *value)
+	}
+
+	return json.Marshal(&struct {
+		Name     string `json:"name"`
+		Value    int    `json:"value"`
+		Children []Node `json:"children"`
+	}{
+		Name:     n.Name,
+		Value:    n.Value,
+		Children: v,
+	})
+}
+
+func convertFoldedToJson(folded string) (out string, err error) {
+	rootNode := Node{Name: "root", Value: 0, Children: make(map[string]*Node)}
+	scanner := bufio.NewScanner(strings.NewReader(folded))
+	for scanner.Scan() {
+		line := scanner.Text()
+		sep := strings.LastIndex(line, " ")
+		s := line[:sep]
+		v := line[sep+1:]
+		stack := strings.Split(s, ";")
+		reverse(stack)
+		var i int
+		i, err = strconv.Atoi(v)
+		if err != nil {
+			return
+		}
+		rootNode.Add(&stack, len(stack)-1, i)
+	}
+	outbytes, err := rootNode.MarshalJSON()
+	out = string(outbytes)
 	return
 }
 
@@ -1013,9 +1062,9 @@ func renderFlameGraph(header string, hv *HostValues, field string, hostIndex int
 		}
 		return
 	}
-	burned, err := getBurned(folded)
+	jsonStacks, err := convertFoldedToJson(folded)
 	if err != nil {
-		log.Printf("failed to burn folded data: %v", err)
+		log.Printf("failed to convert folded data: %v", err)
 		out += "Error."
 		return
 	}
@@ -1023,7 +1072,7 @@ func renderFlameGraph(header string, hv *HostValues, field string, hostIndex int
 	buf := new(bytes.Buffer)
 	err = fg.Execute(buf, flameGraphTemplateStruct{
 		ID:   fmt.Sprintf("%d%s", hostIndex, header),
-		Data: burned,
+		Data: jsonStacks,
 	})
 	if err != nil {
 		log.Printf("failed to render flame graph template: %v", err)

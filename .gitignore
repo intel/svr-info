@@ -15,7 +15,6 @@ src/msrbusy/msrbusy
 src/calcfreq/calcfreq
 # src
 async-profiler
-burn
 cpuid
 dmidecode
 ethtool
