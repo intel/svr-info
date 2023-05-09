@@ -87,9 +87,9 @@ func (t *RemoteTarget) getSSHFlags(scp bool) (flags []string) {
 		"-o",
 		"ControlPersist=1m",
 	}
-	if scp == false {
-		flags = append(flags, "-tt")
-	}
+	// if scp == false {
+	// 	flags = append(flags, "-tt")
+	// }
 	if t.key != "" {
 		keyFlags := []string{
 			"-o",
