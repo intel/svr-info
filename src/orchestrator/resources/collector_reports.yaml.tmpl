@@ -161,6 +161,11 @@ commands:
     superuser: true
     modprobe: msr
     parallel: true
+  - label: rdmsr 0xc90
+    command: rdmsr 0xc90
+    superuser: true
+    modprobe: msr
+    parallel: true
   - label: uncore cha count
     command: rdmsr 0x702
     superuser: true

@@ -353,7 +353,7 @@ func getLogfileName() string {
 }
 
 func (app *App) writeExecutableResources() (err error) {
-	toolNames := []string{"sshpass", "reporter", "collector", "collector_deps_amd64.tgz", "collector_deps_arm64.tgz"}
+	toolNames := []string{"sshpass", "reporter", "collector", "collector_arm64", "collector_deps_amd64.tgz", "collector_deps_arm64.tgz"}
 	for _, toolName := range toolNames {
 		// get the exe from our embedded resources
 		var toolBytes []byte

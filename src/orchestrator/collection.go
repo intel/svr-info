@@ -224,7 +224,7 @@ func (c *Collection) getExtraFiles() (extras []string, err error) {
 	if err != nil {
 		return
 	}
-	extrasDir := filepath.Join(exePath, "extras")
+	extrasDir := filepath.Join(filepath.Dir(exePath), "extras")
 	dir, err := os.Open(extrasDir)
 	if err != nil {
 		return
@@ -346,8 +346,11 @@ func (c *Collection) Collect() (err error) {
 		tempDir,
 	)
 	if err != nil {
-		log.Printf("failed to run collector for %s", c.target.GetName())
-		log.Printf("collector error output for %s: %s", c.target.GetName(), c.stderr)
+		log.Printf("failed to run collector on %s, stderr: [%s]. "+
+			"Override the temporary directory used by svr-info with the "+
+			"--targettemp option if the target's temporary directory does "+
+			"not support binary execution.",
+			c.target.GetName(), c.stderr)
 		return
 	}
 	c.outputFilePath, err = c.getCollectorOutputFile(tempDir)
@@ -386,8 +389,8 @@ func (c *Collection) Collect() (err error) {
 			megaPath,
 		)
 		if err != nil {
-			log.Printf("failed to run megadata collector for %s", c.target.GetName())
-			log.Printf("megadata collector error output for %s: %s", c.target.GetName(), c.stderr)
+			log.Printf("failed to run megadata collector on %s, stderr: [%s]",
+				c.target.GetName(), c.stderr)
 			return
 		}
 		megadataTarball := filepath.Join(tempDir, c.target.GetName()+"_megadata.tgz")

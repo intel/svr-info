@@ -698,6 +698,7 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 		sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
 		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
 		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
+		coresPerSocket := source.valFromRegexSubmatch("lscpu", `^Core\(s\) per socket.*:\s*(.+?)$`)
 		var microarchitecture string
 		var err error
 		if family == "6" && (model == "143" /*SPR*/ || model == "207" /*EMR*/ || model == "173" /*GNR*/) {
@@ -736,6 +737,7 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 				"L1i Cache",
 				"L2 Cache",
 				"L3 Cache",
+				"L3 per Core",
 				"Memory Channels",
 				"Prefetchers",
 				"Intel Turbo Boost",
@@ -756,17 +758,18 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 					source.valFromRegexSubmatch("lscpu", `^CPU\(.*:\s*(.+?)$`),
 					source.valFromRegexSubmatch("lscpu", `^On-line CPU.*:\s*(.+?)$`),
 					source.getHyperthreading(),
-					source.valFromRegexSubmatch("lscpu", `^Core\(s\) per socket.*:\s*(.+?)$`),
+					coresPerSocket,
 					source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`),
 					source.valFromRegexSubmatch("lscpu", `^NUMA node\(.*:\s*(.+?)$`),
 					source.getNUMACPUList(),
 					source.valFromRegexSubmatch("lscpu", `^L1d cache.*:\s*(.+?)$`),
 					source.valFromRegexSubmatch("lscpu", `^L1i cache.*:\s*(.+?)$`),
 					source.valFromRegexSubmatch("lscpu", `^L2 cache.*:\s*(.+?)$`),
-					source.valFromRegexSubmatch("lscpu", `^L3 cache.*:\s*(.+?)$`),
+					source.getL3(microarchitecture),
+					source.getL3PerCore(microarchitecture, coresPerSocket),
 					channels,
 					source.getPrefetchers(),
-					enabledIfValAndTrue(source.valFromRegexSubmatch("cpuid -1", `^Intel Turbo Boost Technology\s*= (.+?)$`)),
+					source.getTurboEnabled(family),
 					source.valFromRegexSubmatch("lscpu", `^Virtualization.*:\s*(.+?)$`),
 					source.getPPINs(),
 				},

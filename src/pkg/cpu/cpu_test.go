@@ -87,7 +87,7 @@ func TestFindCPU(t *testing.T) {
 	if uarch != "HSW" {
 		t.Fatal(fmt.Errorf("Found the wrong CPU"))
 	}
-	uarch, err = cpu.GetMicroArchitecture("0", "1", "r3p1") //
+	uarch, err = cpu.GetMicroArchitecture("", "1", "r3p1") //
 	if err != nil {
 		t.Fatal(err)
 	}
