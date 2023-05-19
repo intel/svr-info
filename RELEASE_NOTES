@@ -7,6 +7,22 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 16.04 and newer, CentOS 7 and newer
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.3.2
+Features Added
+- report L3 size from MSR, fallback to lscpu
+- new field 'L3 per core' in CPU table
+- if AMD 'frequency boost' detected, show 'enabled (AMD Frequency Boost)' in the Intel Turbo Boost field
+Bugs Fixed
+- Don't use "-tt" option with ssh commands that connect to remote sytems
+- Fix location of 'extras' directory
+- ARM collector binary now extracted for use at runtime
+- Graviton 2 CPU architecture detected
+Known Issues
+- The storage micro-benchmark may not run on CentOS due to locale settings.
+- HTML report may scroll out of view when menu is minimized and window is small.
+- CPU cache sizes are reported in aggregate on Ubuntu 20.04 and newer.
+- DRAM population may be incorrectly reported on public cloud IaaS VMs.
+
 2.3.1
 Features Added
 - override local temporary directory used by svr-info using the -temp CLI option

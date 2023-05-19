@@ -164,14 +164,14 @@
 #########
 #  AWS Graviton 2
 - architecture: Neoverse N1
-  family: 0
+  family:
   model: 1
   stepping: r3p1
   channels: 8
 
 #  AWS Graviton 3
 - architecture: Neoverse V1
-  family: 0
+  family:
   model: 1
   stepping: r1p1
   channels: 8

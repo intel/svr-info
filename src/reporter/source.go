@@ -462,6 +462,75 @@ func (s *Source) getCHACount() (val string) {
 	return
 }
 
+func (s *Source) getCacheWays(uArch string) (cacheWays []int64) {
+	var wayCount int
+	if uArch == "SKX" || uArch == "CLX" {
+		wayCount = 11
+	} else if uArch == "ICX" {
+		wayCount = 12
+	} else if uArch == "SPR_MCC" || uArch == "SPR_XCC" {
+		wayCount = 15
+	} else if uArch == "EMR" {
+		wayCount = 20
+	} else {
+		return
+	}
+	var cacheSize int64 = 0
+	// set wayCount bits in cacheSize
+	for i := 0; i < wayCount; i++ {
+		cacheSize = (cacheSize << 1) | 1
+	}
+	var shift int64 = -1
+	for i := 0; i < wayCount; i++ {
+		cacheWays = append([]int64{cacheSize}, cacheWays...)
+		shift = shift << 1
+		cacheSize = cacheSize & shift
+	}
+	return
+}
+
+func (s *Source) getL3(uArch string) (val string) {
+	l3MSRHex := s.getCommandOutputLine("rdmsr 0xc90")
+	l3MSR, err := strconv.ParseInt(l3MSRHex, 16, 64)
+	l3Lscpu := s.valFromRegexSubmatch("lscpu", `^L3 cache.*:\s*(.+?)$`)
+	if err != nil || l3MSR == 0 {
+		val = l3Lscpu
+		return
+	}
+	cpuL3SizeMB, err := strconv.ParseFloat(strings.Split(l3Lscpu, " ")[0], 64)
+	if err != nil {
+		return
+	}
+	cacheWays := s.getCacheWays(uArch)
+	if len(cacheWays) == 0 {
+		return
+	}
+	cpul3SizeGB := cpuL3SizeMB / 1024
+	GBperWay := cpul3SizeGB / float64(len(cacheWays))
+	for i, way := range cacheWays {
+		if way == l3MSR {
+			cacheMB := float64(i+1) * GBperWay * 1024
+			val = fmt.Sprintf("%s MiB (1 instance)", strconv.FormatFloat(cacheMB, 'f', -1, 64))
+			return
+		}
+	}
+	return
+}
+
+func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string) (val string) {
+	l3, err := strconv.ParseFloat(strings.Split(s.getL3(uArch), " ")[0], 64)
+	if err != nil {
+		return
+	}
+	coresPerSocket, err := strconv.Atoi(coresPerSocketStr)
+	if err != nil || coresPerSocket == 0 {
+		return
+	}
+	cacheMB := l3 / float64(coresPerSocket)
+	val = fmt.Sprintf("%s MiB", strconv.FormatFloat(cacheMB, 'f', -1, 64))
+	return
+}
+
 func (s *Source) getPrefetchers() (val string) {
 	prefetchers := s.valFromRegexSubmatch("rdmsr 0x1a4", `^([0-9a-fA-F]+)`)
 	if prefetchers != "" {
@@ -846,6 +915,19 @@ func (s *Source) getSystemFolded() (folded string) {
 	folded, err := mergeSystemFolded(fpFolded, dwarfFolded)
 	if err != nil {
 		log.Printf("error merging folded stacks: %v", err)
+	}
+	return
+}
+
+func (s *Source) getTurboEnabled(family string) (val string) {
+	if family == "6" { // Intel
+		val = enabledIfValAndTrue(s.valFromRegexSubmatch("cpuid -1", `^Intel Turbo Boost Technology\s*= (.+?)$`))
+		return val
+	} else if family == "23" || family == "25" { // AMD
+		val = s.valFromRegexSubmatch("lscpu", `^Frequency boost.*:\s*(.+?)$`)
+		if val != "" {
+			val = val + " (AMD Frequency Boost)"
+		}
 	}
 	return
 }
