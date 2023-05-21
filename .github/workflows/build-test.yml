@@ -33,6 +33,8 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: svr-info
+      - name: install jq
+        run: sudo apt-get install -y jq
       - name: run test
         run: |
           tar -xf svr-info*
@@ -44,8 +46,12 @@ jobs:
           mkdir temp
           mkdir targettemp
           ./svr-info -temp temp -targettemp targettemp -output output -benchmark all -profile all -profile_duration 5 -profile_interval 1 -analyze all -analyze_duration 5 -analyze_frequency 5 -format all -megadata -cmd_timeout 30
-          # TODO: grep for something in the output that shows that mlc (mock_mlc) ran
-          # TODO: add other checks for output here
+          # verify that mock_mlc was run by svr-info
+          if [ "$( jq --raw-output '.Performance.Summary[0]."Memory Minimum Latency"' output/*.json )" != "105.5 ns" ]; then
+            echo "FAIL -- Memory Minimum Latency != 105.5 ns"
+            exit 1
+          fi
+          # TODO: add more tests here
       - name: upload report
         if: ${{ always() }}
         uses: actions/upload-artifact@v3
