@@ -1,6 +1,6 @@
 module intel.com/svr-info/orchestrator/v2
 
-go 1.19
+go 1.20
 
 replace intel.com/svr-info/pkg/core => ../pkg/core
 

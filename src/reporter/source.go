@@ -464,7 +464,9 @@ func (s *Source) getCHACount() (val string) {
 
 func (s *Source) getCacheWays(uArch string) (cacheWays []int64) {
 	var wayCount int
-	if uArch == "SKX" || uArch == "CLX" {
+	if uArch == "BDX" {
+		wayCount = 20
+	} else if uArch == "SKX" || uArch == "CLX" {
 		wayCount = 11
 	} else if uArch == "ICX" {
 		wayCount = 12
@@ -493,8 +495,8 @@ func (s *Source) getL3(uArch string) (val string) {
 	l3MSRHex := s.getCommandOutputLine("rdmsr 0xc90")
 	l3MSR, err := strconv.ParseInt(l3MSRHex, 16, 64)
 	l3Lscpu := s.valFromRegexSubmatch("lscpu", `^L3 cache.*:\s*(.+?)$`)
+	val = l3Lscpu
 	if err != nil || l3MSR == 0 {
-		val = l3Lscpu
 		return
 	}
 	cpuL3SizeMB, err := strconv.ParseFloat(strings.Split(l3Lscpu, " ")[0], 64)
@@ -510,14 +512,14 @@ func (s *Source) getL3(uArch string) (val string) {
 	for i, way := range cacheWays {
 		if way == l3MSR {
 			cacheMB := float64(i+1) * GBperWay * 1024
-			val = fmt.Sprintf("%s MiB (1 instance)", strconv.FormatFloat(cacheMB, 'f', -1, 64))
+			val = fmt.Sprintf("%s MiB", strconv.FormatFloat(cacheMB, 'f', -1, 64))
 			return
 		}
 	}
 	return
 }
 
-func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string) (val string) {
+func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string, socketsStr string) (val string) {
 	l3, err := strconv.ParseFloat(strings.Split(s.getL3(uArch), " ")[0], 64)
 	if err != nil {
 		return
@@ -526,8 +528,12 @@ func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string) (val strin
 	if err != nil || coresPerSocket == 0 {
 		return
 	}
-	cacheMB := l3 / float64(coresPerSocket)
-	val = fmt.Sprintf("%s MiB", strconv.FormatFloat(cacheMB, 'f', -1, 64))
+	sockets, err := strconv.Atoi(socketsStr)
+	if err != nil || sockets == 0 {
+		return
+	}
+	cacheMB := l3 / float64(coresPerSocket*sockets)
+	val = fmt.Sprintf("%s MiB", strconv.FormatFloat(cacheMB, 'f', 3, 64))
 	return
 }
 

@@ -1,6 +1,6 @@
 module intel.com/svr-info/rdmsr/v2
 
-go 1.19
+go 1.20
 
 replace intel.com/svr-info/pkg/msr => ../pkg/msr
 

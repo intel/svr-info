@@ -256,8 +256,9 @@ func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, re
 	 * ...
 	 * Locator: P2-DIMMA1
 	 * ...
+	 * Note: also matches SuperMicro X11DPT-B (CLX)
 	 */
-	reLoc = regexp.MustCompile(`P([1,2])-DIMM([A-L])([1])`)
+	reLoc = regexp.MustCompile(`P([1,2])-DIMM([A-L])([1,2])`)
 	if reLoc.FindStringSubmatch(locator) != nil {
 		dimmType = DIMMType12
 		return
