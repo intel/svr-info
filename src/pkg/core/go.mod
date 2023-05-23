@@ -1,3 +1,3 @@
 module intel.com/svr-info/pkg/core/v2
 
-go 1.19
+go 1.20

@@ -1,6 +1,6 @@
 module intel.com/svr-info/reporter/v2
 
-go 1.19
+go 1.20
 
 replace intel.com/svr-info/pkg/core => ../pkg/core
 
@@ -19,7 +19,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	intel.com/svr-info/pkg/core v0.0.0-00010101000000-000000000000
 	intel.com/svr-info/pkg/cpu v0.0.0-00010101000000-000000000000
-	intel.com/svr-info/pkg/target v0.0.0-00010101000000-000000000000
 )
 
 require (

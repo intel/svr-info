@@ -7,6 +7,17 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 16.04 and newer, CentOS 7 and newer
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.4.0
+Features Added
+- add DIMM population table for SuperMicro X11DPT-B 
+Bugs Fixed
+- fix calculation of 'L3 per core' field on multi-socket systems
+Known Issues
+- The storage micro-benchmark may not run on CentOS due to locale settings.
+- HTML report may scroll out of view when menu is minimized and window is small.
+- CPU cache sizes are reported in aggregate on Ubuntu 20.04 and newer.
+- DRAM population may be incorrectly reported on public cloud IaaS VMs.
+
 2.3.2
 Features Added
 - report L3 size from MSR, fallback to lscpu
