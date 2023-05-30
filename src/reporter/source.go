@@ -922,6 +922,26 @@ func (s *Source) getDiskFwRev(device string) (fwRev string) {
 	return
 }
 
+// get the file system mount options from findmnt
+func (s *Source) getMountOptions(filesystem string, mountedOn string) (options string) {
+	reFindmnt := regexp.MustCompile(`(.*)\s(.*)\s(.*)\s(.*)`)
+	for i, line := range s.getCommandOutputLines("findmnt") {
+		if i == 0 {
+			continue
+		}
+		match := reFindmnt.FindStringSubmatch(line)
+		if match != nil {
+			target := match[1]
+			source := match[2]
+			if filesystem == source && mountedOn == target {
+				options = match[4]
+				return
+			}
+		}
+	}
+	return
+}
+
 // getJavaFolded -- retrieves folded code path frequency data for java processes
 func (s *Source) getJavaFolded() (folded string) {
 	asyncProfilerOutput := s.getCommandOutputLabeled("analyze", `async-profiler \d+`)

@@ -102,7 +102,7 @@ func (r *RulesEngineContext) GetValuesFromColumn(reportName string, tableName st
 	}
 	hv := &table.AllHostValues[r.sourceIdx]
 	if int64(len(hv.Values)) > valueIndex {
-		values = strings.Join(hv.Values[0], ",")
+		values = strings.Join(hv.Values[valueIndex], ",")
 	}
 	return
 }

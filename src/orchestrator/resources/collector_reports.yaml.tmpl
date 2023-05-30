@@ -231,6 +231,10 @@ commands:
         done
     superuser: true
     parallel: true
+  - label: findmnt
+    command: findmnt -r
+    superuser: true
+    parallel: true
   - label: nic info
     command: |-
         lshw -businfo -numeric | grep -E "^(pci|usb).*? \S+\s+network\s+\S.*?" \

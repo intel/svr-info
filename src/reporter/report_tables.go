@@ -1471,14 +1471,21 @@ func newFilesystemTable(sources []*Source, category TableCategory) (table *Table
 		}
 		for i, line := range source.getCommandOutputLines("df -h") {
 			fields := strings.Fields(line)
+			// "Mounted On" gets split into two fields, rejoin
+			if fields[len(fields)-2] == "Mounted" && fields[len(fields)-1] == "on" {
+				fields[len(fields)-2] = "Mounted on"
+				fields = fields[:len(fields)-1]
+			}
 			if i == 0 { // headers are in the first line
-				hostValues.ValueNames = fields[:len(fields)-1] // drop last header field because it is "On" from "Mounted On"
+				hostValues.ValueNames = fields
+				hostValues.ValueNames = append(hostValues.ValueNames, "Mount Options")
 				continue
 			}
-			if len(fields) != len(hostValues.ValueNames) {
+			if len(fields)+1 != len(hostValues.ValueNames) {
 				log.Printf("Warning: filesystem field count does not match header count: %s", strings.Join(fields, ","))
 				continue
 			}
+			fields = append(fields, source.getMountOptions(fields[0] /*Filesystem*/, fields[5] /*Mounted On*/))
 			hostValues.Values = append(hostValues.Values, fields)
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
