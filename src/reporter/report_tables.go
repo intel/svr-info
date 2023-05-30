@@ -699,16 +699,7 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
 		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
 		coresPerSocket := source.valFromRegexSubmatch("lscpu", `^Core\(s\) per socket.*:\s*(.+?)$`)
-		var microarchitecture string
-		var err error
-		if family == "6" && (model == "143" /*SPR*/ || model == "207" /*EMR*/ || model == "173" /*GNR*/) {
-			microarchitecture, err = getMicroArchitectureExt(model, sockets, capid4, devices)
-		} else {
-			microarchitecture, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
-		}
-		if err != nil && family == "6" {
-			microarchitecture = "Unknown Intel"
-		}
+		microarchitecture := getMicroArchitecture(cpusInfo, family, model, stepping, capid4, devices, sockets)
 		channelCount, err := cpusInfo.GetMemoryChannels(family, model, stepping)
 		channels := fmt.Sprintf("%d", channelCount)
 		if err != nil {

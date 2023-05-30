@@ -109,15 +109,9 @@ func (r *ReportGeneratorHTML) getRefLabel(hostIndex int) (refLabel string) {
 	sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
 	capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
 	devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
-	var uarch string
-	var err error
-	if family == "6" && (model == "143" /*SPR*/ || model == "207" /*EMR*/ || model == "173" /*GNR*/) {
-		uarch, err = getMicroArchitectureExt(model, sockets, capid4, devices)
-	} else {
-		uarch, err = r.cpusInfo.GetMicroArchitecture(family, model, stepping)
-	}
-	if err != nil {
-		log.Printf("Did not find a matching CPU: %v", err)
+	uarch := getMicroArchitecture(r.cpusInfo, family, model, stepping, capid4, devices, sockets)
+	if uarch == "" {
+		log.Printf("Did not find a known architecture for %s:%s:%s", family, model, stepping)
 		return
 	}
 	refLabel = fmt.Sprintf("%s_%s", uarch, sockets)
