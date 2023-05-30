@@ -491,31 +491,76 @@ func (s *Source) getCacheWays(uArch string) (cacheWays []int64) {
 	return
 }
 
-func (s *Source) getL3(uArch string) (val string) {
-	l3MSRHex := s.getCommandOutputLine("rdmsr 0xc90")
-	l3MSR, err := strconv.ParseInt(l3MSRHex, 16, 64)
+// get L3 in MB from lscpu
+// known lscpu output formats for L3 cache:
+//
+//	1.5 MBi    < Ubuntu
+//	1536KB     < CentOS
+func (s *Source) getL3LscpuMB() (val float64, err error) {
 	l3Lscpu := s.valFromRegexSubmatch("lscpu", `^L3 cache.*:\s*(.+?)$`)
-	val = l3Lscpu
-	if err != nil || l3MSR == 0 {
+	re := regexp.MustCompile(`(\d+\.?\d*)\s*(\w+).*`) // match known formats
+	match := re.FindStringSubmatch(l3Lscpu)
+	if len(match) == 0 {
+		err = fmt.Errorf("Unknown L3 format in lscpu: %s", l3Lscpu)
 		return
 	}
-	cpuL3SizeMB, err := strconv.ParseFloat(strings.Split(l3Lscpu, " ")[0], 64)
+	l3SizeNoUnit, err := strconv.ParseFloat(match[1], 64)
 	if err != nil {
+		err = fmt.Errorf("Failed to parse L3 size from lscpu: %s, %v", l3Lscpu, err)
+		return
+	}
+	if strings.ToLower(match[2][:1]) == "m" {
+		val = l3SizeNoUnit
+		return
+	}
+	if strings.ToLower(match[2][:1]) == "k" {
+		val = l3SizeNoUnit / 1024
+		return
+	}
+	err = fmt.Errorf("Unknown L3 units in lscpu: %s", l3Lscpu)
+	return
+}
+
+// get L3 in MB from MSR
+func (s *Source) getL3MSRMB(uArch string) (val float64, err error) {
+	l3LscpuMB, err := s.getL3LscpuMB()
+	if err != nil {
+		return
+	}
+	l3MSRHex := s.getCommandOutputLine("rdmsr 0xc90")
+	l3MSR, err := strconv.ParseInt(l3MSRHex, 16, 64)
+	if err != nil {
+		err = fmt.Errorf("Failed to parse MSR output: %s", l3MSRHex)
 		return
 	}
 	cacheWays := s.getCacheWays(uArch)
 	if len(cacheWays) == 0 {
+		err = fmt.Errorf("Failed to get cache ways for uArch: %s", uArch)
 		return
 	}
-	cpul3SizeGB := cpuL3SizeMB / 1024
+	cpul3SizeGB := l3LscpuMB / 1024
 	GBperWay := cpul3SizeGB / float64(len(cacheWays))
 	for i, way := range cacheWays {
 		if way == l3MSR {
-			cacheMB := float64(i+1) * GBperWay * 1024
-			val = fmt.Sprintf("%s MiB", strconv.FormatFloat(cacheMB, 'f', -1, 64))
+			val = float64(i+1) * GBperWay * 1024
 			return
 		}
 	}
+	err = fmt.Errorf("Did not find %d in cache ways.", l3MSR)
+	return
+}
+
+func (s *Source) getL3(uArch string) (val string) {
+	l3, err := s.getL3MSRMB(uArch)
+	if err != nil {
+		log.Printf("Could not get L3 size from MSR, falling back to lscpu.: %v", err)
+		l3, err = s.getL3LscpuMB()
+		if err != nil {
+			log.Printf("Could not get L3 size from lscpu.: %v", err)
+			return
+		}
+	}
+	val = fmt.Sprintf("%s MiB", strconv.FormatFloat(l3, 'f', -1, 64))
 	return
 }
 
@@ -533,7 +578,10 @@ func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string, socketsStr
 		return
 	}
 	cacheMB := l3 / float64(coresPerSocket*sockets)
-	val = fmt.Sprintf("%s MiB", strconv.FormatFloat(cacheMB, 'f', 3, 64))
+	val = fmt.Sprintf("%s", strconv.FormatFloat(cacheMB, 'f', 3, 64))
+	val = strings.TrimRight(val, "0") // trim trailing zeros
+	val = strings.TrimRight(val, ".") // trim decimal point if trailing
+	val += " MiB"
 	return
 }
 
