@@ -145,6 +145,17 @@ rule Hyperthreading {
 		Retract("Hyperthreading");
 }
 
+rule MountDiscard {
+	when
+		Report.GetValuesFromColumn("Configuration", "Filesystem", 6).Count("discard") != 0
+	then
+		Report.AddInsight(
+			"A file system is mounted with the 'discard' option. The 'discard' mount option can cause unexpected overhead for I/O operations.",
+			"Consider mounting file systems without the 'discard' option and instead configure periodic TRIM for SSDs, if used for I/O intensive workloads."
+		);
+		Retract("MountDiscard");
+}
+
 //
 // software insights
 //

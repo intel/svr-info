@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"intel.com/svr-info/pkg/cpu"
 )
 
 func enabledIfVal(val string) string {
@@ -632,12 +634,36 @@ func getInsightsRules() (rules []byte, err error) {
 	return
 }
 
-func getMicroArchitectureExt(model, sockets string, capid4 string, devices string) (uarch string, err error) {
-	capid4Int, err := strconv.ParseInt(capid4, 16, 64)
-	if err != nil {
+func getMicroArchitecture(cpusInfo *cpu.CPU, family, model, stepping, capid4, devices, sockets string) (uArch string) {
+	var err error
+	if family == "6" {
+		uArch, err = getMicroArchitectureExt(family, model, sockets, capid4, devices)
+		if err != nil {
+			uArch, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
+		}
+	} else {
+		uArch, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
+	}
+
+	if err != nil && family == "6" {
+		uArch = "Unknown Intel"
+	}
+	return
+}
+
+func getMicroArchitectureExt(family, model, sockets string, capid4 string, devices string) (uarch string, err error) {
+	if family != "6" || (model != "143" && model != "207" && model != "173") {
+		err = fmt.Errorf("No extended architecture info for %s:%s", family, model)
 		return
 	}
-	bits := (capid4Int >> 6) & 0b11
+	var capid4Int, bits int64
+	if model == "143" || model == "207" {
+		capid4Int, err = strconv.ParseInt(capid4, 16, 64)
+		if err != nil {
+			return
+		}
+		bits = (capid4Int >> 6) & 0b11
+	}
 	if model == "143" { // SPR
 		if bits == 3 {
 			uarch = "SPR_XCC"

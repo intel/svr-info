@@ -699,16 +699,7 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
 		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
 		coresPerSocket := source.valFromRegexSubmatch("lscpu", `^Core\(s\) per socket.*:\s*(.+?)$`)
-		var microarchitecture string
-		var err error
-		if family == "6" && (model == "143" /*SPR*/ || model == "207" /*EMR*/ || model == "173" /*GNR*/) {
-			microarchitecture, err = getMicroArchitectureExt(model, sockets, capid4, devices)
-		} else {
-			microarchitecture, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
-		}
-		if err != nil && family == "6" {
-			microarchitecture = "Unknown Intel"
-		}
+		microarchitecture := getMicroArchitecture(cpusInfo, family, model, stepping, capid4, devices, sockets)
 		channelCount, err := cpusInfo.GetMemoryChannels(family, model, stepping)
 		channels := fmt.Sprintf("%d", channelCount)
 		if err != nil {
@@ -1480,14 +1471,21 @@ func newFilesystemTable(sources []*Source, category TableCategory) (table *Table
 		}
 		for i, line := range source.getCommandOutputLines("df -h") {
 			fields := strings.Fields(line)
+			// "Mounted On" gets split into two fields, rejoin
+			if fields[len(fields)-2] == "Mounted" && fields[len(fields)-1] == "on" {
+				fields[len(fields)-2] = "Mounted on"
+				fields = fields[:len(fields)-1]
+			}
 			if i == 0 { // headers are in the first line
-				hostValues.ValueNames = fields[:len(fields)-1] // drop last header field because it is "On" from "Mounted On"
+				hostValues.ValueNames = fields
+				hostValues.ValueNames = append(hostValues.ValueNames, "Mount Options")
 				continue
 			}
-			if len(fields) != len(hostValues.ValueNames) {
+			if len(fields)+1 != len(hostValues.ValueNames) {
 				log.Printf("Warning: filesystem field count does not match header count: %s", strings.Join(fields, ","))
 				continue
 			}
+			fields = append(fields, source.getMountOptions(fields[0] /*Filesystem*/, fields[5] /*Mounted On*/))
 			hostValues.Values = append(hostValues.Values, fields)
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
