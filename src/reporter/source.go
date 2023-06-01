@@ -472,7 +472,7 @@ func (s *Source) getCacheWays(uArch string) (cacheWays []int64) {
 		wayCount = 12
 	} else if uArch == "SPR_MCC" || uArch == "SPR_XCC" {
 		wayCount = 15
-	} else if uArch == "EMR" {
+	} else if uArch == "EMR_MCC" || uArch == "EMR_XCC" {
 		wayCount = 20
 	} else {
 		return
@@ -564,7 +564,11 @@ func (s *Source) getL3(uArch string) (val string) {
 	return
 }
 
-func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string, socketsStr string) (val string) {
+func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string, socketsStr string, virtualization string) (val string) {
+	if virtualization == "full" {
+		log.Printf("Can't calculate L3 per Core on virtualized host.")
+		return
+	}
 	l3, err := strconv.ParseFloat(strings.Split(s.getL3(uArch), " ")[0], 64)
 	if err != nil {
 		return
