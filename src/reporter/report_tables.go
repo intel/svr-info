@@ -705,6 +705,7 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 		if err != nil {
 			channels = "Unknown"
 		}
+		virtualization := source.valFromRegexSubmatch("lscpu", `^Virtualization.*:\s*(.+?)$`)
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
@@ -757,11 +758,11 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 					source.valFromRegexSubmatch("lscpu", `^L1i cache.*:\s*(.+?)$`),
 					source.valFromRegexSubmatch("lscpu", `^L2 cache.*:\s*(.+?)$`),
 					source.getL3(microarchitecture),
-					source.getL3PerCore(microarchitecture, coresPerSocket, sockets),
+					source.getL3PerCore(microarchitecture, coresPerSocket, sockets, virtualization),
 					channels,
 					source.getPrefetchers(),
 					source.getTurboEnabled(family),
-					source.valFromRegexSubmatch("lscpu", `^Virtualization.*:\s*(.+?)$`),
+					virtualization,
 					source.getPPINs(),
 				},
 			},
