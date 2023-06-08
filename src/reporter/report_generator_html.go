@@ -138,7 +138,7 @@ func (r *ReportGen) RenderMenuItems(reportData *Report) template.HTML {
 	category := NoCategory
 	for _, table := range reportData.Tables {
 		if table.Category != category {
-			out += fmt.Sprintf(`<li class="pure-menu-item"><a href="#%s" class="pure-menu-link">%s</a></li>`, table.Name, TableCategoryLabels[table.Category])
+			out += fmt.Sprintf(`<a href="#%s">%s</a>`, table.Name, TableCategoryLabels[table.Category])
 			category = table.Category
 		}
 	}
