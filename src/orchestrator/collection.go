@@ -17,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 	"intel.com/svr-info/pkg/commandfile"
+	"intel.com/svr-info/pkg/core"
 	"intel.com/svr-info/pkg/target"
 )
 
@@ -219,19 +220,35 @@ func (c *Collection) getCollectorOutputFile(workingDirectory string) (outputFile
 	return
 }
 
-func (c *Collection) getExtraFiles() (extras []string, err error) {
+func getExtrasDir() (dir string, err error) {
 	exePath, err := os.Executable()
 	if err != nil {
 		return
 	}
-	extrasDir := filepath.Join(filepath.Dir(exePath), "extras")
+	dir = filepath.Join(filepath.Dir(exePath), "extras")
+	return
+}
+
+func (c *Collection) getExtrasFiles() (extras []string, err error) {
+	extrasDir, err := getExtrasDir()
+	if err != nil {
+		log.Printf("Failed to get path to extra files: %v", err)
+		return
+	}
+	err2 := core.DirectoryExists(extrasDir)
+	if err2 != nil {
+		log.Printf("Extra collection files dir (%s) not found.", extrasDir)
+		return
+	}
 	dir, err := os.Open(extrasDir)
 	if err != nil {
+		log.Printf("Failed to open the directory (%s) of extra files: %v", extrasDir, err)
 		return
 	}
 	defer dir.Close()
 	files, err := dir.ReadDir(-1)
 	if err != nil {
+		log.Printf("Failed to read filenames from directory (%s) of extra files: %v", extrasDir, err)
 		return
 	}
 	for _, f := range files {
@@ -329,16 +346,28 @@ func (c *Collection) Collect() (err error) {
 		log.Printf("failed to push command file to temporary directory for %s", c.target.GetName())
 		return
 	}
-	extraFilenames, err := c.getExtraFiles()
+	extrasDir, err := getExtrasDir()
 	if err != nil {
-		log.Printf("failed to get extra file names: %v", err)
+		log.Printf("Failed to get extras dir: %v", err)
+		return
 	}
-	for _, extraFile := range extraFilenames {
-		err = c.target.PushFile(extraFile, tempDir)
+	err2 := core.DirectoryExists(extrasDir)
+	if err2 == nil {
+		var extraFilenames []string
+		extraFilenames, err = c.getExtrasFiles()
 		if err != nil {
-			log.Printf("failed to push extra file %s to target at %s", extraFile, tempDir)
+			log.Printf("failed to get extra file names: %v", err)
 			return
 		}
+		for _, extraFile := range extraFilenames {
+			err = c.target.PushFile(extraFile, tempDir)
+			if err != nil {
+				log.Printf("failed to push extra file %s to target at %s", extraFile, tempDir)
+				return
+			}
+		}
+	} else {
+		log.Printf("Optional directory of extra collection files (%s) not found.", extrasDir)
 	}
 	c.stdout, c.stderr, err = c.runCollector(
 		filepath.Join(tempDir, "collector"),
