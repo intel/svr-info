@@ -1186,6 +1186,7 @@ func (r *ReportGen) renderBandwidthLatencyChart(table *Table, refData []*HostRef
 		out += "\n"
 	} else {
 		out += noDataFound
+		out += "<br>Using the OSS release of svr-info? Memory benchmarks require Intel Memory Latency Checker (MLC) be downloaded, extracted, and the Linux binary placed in the svr-info/extras directory. See the repo README for additional information."
 	}
 	return
 }
