@@ -30,12 +30,16 @@ jobs:
       uses: github/codeql-action/init@v2
       with:
         languages: ${{ matrix.language }}
-    - name: Build builder image
+    - name: Build golang
+      if: ${{ matrix.language }} == "go"
       run: |
         builder/build_docker_image
-    - name: Build svr-info
-      run: |
         builder/build
+    - name: Build c
+      if: ${{ matrix.language }} == "cpp"
+      run: |
+        cd src/calcfreq/
+        make
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
       with:
