@@ -31,12 +31,12 @@ jobs:
       with:
         languages: ${{ matrix.language }}
     - name: Build golang
-      if: ${{ matrix.language == "go" }}
+      if: matrix.language == "go"
       run: |
         builder/build_docker_image
         builder/build
     - name: Build c
-      if: ${{ matrix.language == "cpp" }}
+      if: matrix.language == "cpp"
       run: |
         cd src/calcfreq/
         make
