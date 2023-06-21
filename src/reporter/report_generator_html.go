@@ -1097,7 +1097,7 @@ func (r *ReportGen) renderCodePathFrequency(table *Table) (out string) {
 }
 
 func getColor(idx int) string {
-	// color-blind safe pallette from here: http://mkweb.bcgsc.ca/colorblind/palettes.mhtml#page-container
+	// color-blind safe palette from here: http://mkweb.bcgsc.ca/colorblind/palettes.mhtml#page-container
 	colors := []string{"#9F0162", "#009F81", "#FF5AAF", "#00FCCF", "#8400CD", "#008DF9", "#00C2F9", "#FFB2FD", "#A40122", "#E20134", "#FF6E3A", "#FFC33B"}
 	return colors[idx%len(colors)]
 }

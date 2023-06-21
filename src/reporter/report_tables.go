@@ -245,7 +245,7 @@ func newFrequencyTable(sources []*Source, category TableCategory) (table *Table)
 			spec     float64
 			measured float64
 		}
-		vals := make(map[int]freq) // map core count to spec/measured frequences
+		vals := make(map[int]freq) // map core count to spec/measured frequencies
 
 		// get measured frequencies (these are optionally collected)
 		matches := source.valsArrayFromRegexSubmatch("Measure Turbo Frequencies", `^(\d+)-core turbo\s+(\d+) MHz`)
