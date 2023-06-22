@@ -1,14 +1,17 @@
-# Intel&reg; System Health Inspector (AKA svr-info)
-Intel® System Health Inspector (aka svr-info) is a Linux OS utility for assessing the state and health of Intel Xeon computers.
-## Example Reports
-- Single server: [HTML](documentation/examples/SDP_8058.html), [JSON](documentation/examples/SDP_8058.json), [XLSX](documentation/examples/SDP_8058.xlsx)
-- Multiple Servers: [HTML](documentation/examples/all_hosts.html), [JSON](documentation/examples/all_hosts.json), [XLSX](documentation/examples/all_hosts.xlsx)
+# Intel&reg; System Health Inspector [![Build](https://github.com/intel/svr-info/actions/workflows/build-test.yml/badge.svg)](https://github.com/intel/svr-info/actions/workflows/build-test.yml)[![License](https://img.shields.io/badge/License-MIT-blue)](https://github.com/intel/svr-info/blob/master/LICENSE)
+System Health Inspector aka "svr-info" is a Linux command line tool used to assess the health of Intel® Xeon® processor-based servers.
 ## Quick Start
 ```
 wget -qO- https://github.com/intel/svr-info/releases/latest/download/svr-info.tgz | tar xvz
 cd svr-info
 ./svr-info
 ```
+![sample-reports](/docs/images/sample-reports.jpg)
+## Example HTML Report
+![example html report](https://intel.github.io/svr-info/)
+<br>
+<br>
+# Options
 ## Remote Target
 Data can be collected from a single remote target by providing the login credentials of the target on the svr-info command line.
 ```
