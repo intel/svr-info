@@ -7,10 +7,8 @@ cd svr-info
 ./svr-info
 ```
 ![sample-reports](/docs/images/sample-reports.jpg)
-## Example HTML Report
-![example html report](https://intel.github.io/svr-info/)
-<br>
-<br>
+## Example
+[HTML Report](https://intel.github.io/svr-info/)
 # Options
 ## Remote Target
 Data can be collected from a single remote target by providing the login credentials of the target on the svr-info command line.
