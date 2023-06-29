@@ -50,3 +50,19 @@ func FileExists(path string) (err error) {
 	}
 	return
 }
+
+// DirectoryExists returns error if directory does not exist or does exist but
+// is not a directory, i.e., is a file
+func DirectoryExists(path string) (err error) {
+	var fileInfo fs.FileInfo
+	fileInfo, err = os.Stat(path)
+	if err != nil {
+		return
+	} else {
+		if !fileInfo.Mode().IsDir() {
+			err = fmt.Errorf("%s not a directory", path)
+			return
+		}
+	}
+	return
+}

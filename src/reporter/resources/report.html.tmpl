@@ -62,189 +62,6 @@
             font-weight: 300;
         }
 
-        /* The "layout" div wraps the menu and main divs */
-        #layout,
-        #menu,
-        .menu-link {
-            -webkit-transition: all 0.2s ease-out;
-            -moz-transition: all 0.2s ease-out;
-            -ms-transition: all 0.2s ease-out;
-            -o-transition: all 0.2s ease-out;
-            transition: all 0.2s ease-out;
-        }
-
-        #layout {
-            position: relative;
-            left: 0;
-            padding-left: 0;
-        }
-
-        #layout.active #menu {
-            left: 140px;
-            width: 140px;
-        }
-
-        #layout.active .menu-link {
-            left: 140px;
-        }
-
-        /* The menu div contains the `.pure-menu` that appears on the left side of the page. */
-        #menu {
-            margin-left: -140px;
-            /* "#menu" width */
-            width: 140px;
-            position: fixed;
-            top: 115px;
-            bottom: 0;
-            z-index: 99;
-            /* so the menu or its navicon stays above all content */
-            background: #191818;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        /* All anchors inside the menu should be styled like this. */
-        #menu a {
-            color: #999;
-            border: none;
-            padding: 0.6em 0 0.6em 0.6em;
-        }
-
-        /* Remove all background/borders, since we are applying them to #menu. */
-        #menu .pure-menu,
-        #menu .pure-menu ul {
-            border: none;
-            background: transparent;
-        }
-
-        /* Add that light border to separate items into groups. */
-        #menu .pure-menu ul,
-        #menu .pure-menu .menu-item-divided {
-            border-top: 1px solid #333;
-        }
-
-        /* Change color of the anchor links on hover/focus. */
-        #menu .pure-menu li a:hover,
-        #menu .pure-menu li a:focus {
-            background: #333;
-        }
-
-        /* This styles the selected menu item `<li>`. */
-        #menu .pure-menu-selected,
-        #menu .pure-menu-heading {
-            background: #1f8dd6;
-        }
-
-        /* This styles a link within a selected menu item `<li>`. */
-        #menu .pure-menu-selected a {
-            color: #fff;
-        }
-
-        /* This styles the menu heading. */
-        #menu .pure-menu-heading {
-            font-size: 110%;
-            color: #fff;
-            margin: 0;
-        }
-
-        /* -- Dynamic Button For Responsive Menu -------------------------------------*/
-
-        /* The button to open/close the Menu is custom-made and not part of Pure. Here's
-              how it works: */
-
-        /* `.menu-link` represents the responsive menu toggle that shows/hides on
-               small screens. */
-        .menu-link {
-            position: fixed;
-            display: block;
-            /* show this only on small screens */
-            top: 115px;
-            left: 0;
-            /* "#menu width" */
-            background: #000;
-            background: rgba(0, 0, 0, 0.7);
-            font-size: 10px;
-            /* change this value to increase/decrease button size */
-            z-index: 10;
-            width: 2em;
-            height: auto;
-            padding: 1.5em .5em;
-        }
-
-        .menu-link:hover,
-        .menu-link:focus {
-            background: #000;
-        }
-
-        .menu-link span {
-            position: relative;
-            display: block;
-        }
-
-        .menu-link span,
-        .menu-link span:before,
-        .menu-link span:after {
-            background-color: #fff;
-            width: 100%;
-            height: 0.2em;
-        }
-
-        .menu-link span:before,
-        .menu-link span:after {
-            position: absolute;
-            margin-top: -0.6em;
-            content: " ";
-        }
-
-        .menu-link span:after {
-            margin-top: 0.6em;
-        }
-
-        /* -- Responsive Styles (Media Queries) ------------------------------------- */
-
-        /* Hides the menu at `72em`, but modify this based on your app's needs. */
-        @media (min-width: 72em) {
-
-            .header,
-            .content {
-                padding-left: 2em;
-                padding-right: 2em;
-            }
-
-            #layout {
-                padding-left: 140px;
-                /* left col width "#menu" */
-                left: 0;
-            }
-
-            #menu {
-                left: 140px;
-            }
-
-            .menu-link {
-                position: fixed;
-                left: 140px;
-                display: none;
-            }
-
-            #layout.active .menu-link {
-                left: 140px;
-            }
-        }
-
-        @media (max-width: 72em) {
-
-            /* Only apply this when the window is small. Otherwise, the following
-               case results in extra padding on the left:
-               * Make the window small.
-               * Tap the menu to trigger the active state.
-               * Make the window large again. */
-            #layout.active {
-                position: relative;
-                left: 140px;
-            }
-        }
-
         /* Style the tab */
         .tab {
             position: fixed;
@@ -298,6 +115,61 @@
         .master {
             overflow: hidden;
         }
+
+        .sidebar {
+            height: 100%;
+            width: 0;
+            position: fixed;
+            z-index: 1;
+            top: 113px;  /* at the base of the tabs */
+            left: 0;
+            background-color: #111;
+            overflow-x: hidden;
+            transition: 0.5s;
+            padding-top: 60px;
+            padding-left: 0px;
+        }
+
+        .sidebar h1 {
+            position: absolute;
+            top: 0;
+            padding: 0px 8px 8px 35px;
+            text-decoration: none;
+            color: #fff;
+            background-color: #1f8dd6;
+            display: block;
+            transition: 0.3s;
+        }
+
+        .sidebar a {
+            padding: 8px 8px 8px 35px;
+            text-decoration: none;
+            color: #818181;
+            display: block;
+            transition: 0.3s;
+        }
+
+        .sidebar a:hover {
+            color: #f1f1f1;
+        }
+
+        .sidebar .togglebtn {
+            position: absolute;
+            top: 0;
+            right: 0px;
+            font-size: 25px;
+            padding-left: 5px;
+            color: #ccc;
+            background-color: #1f8dd6;
+        }
+
+        .sidebar .togglebtn:hover {
+            color: #666;
+        }
+
+        #myConfigurationContent {
+            transition: margin-left .5s;
+        }
     </style>
     <noscript>
         <style type="text/css">
@@ -319,19 +191,13 @@
         <button class="tablinks" onclick="openTab(event, 'insights')">Insights</button>
     </nav>
     <div id="configuration" class="tabcontent tabdefault">
-        <div id="layout">
-            <!-- Menu toggle -->
-            <a href="#menu" id="menuLink" class="menu-link">
-                <!-- Hamburger icon -->
-                <span></span>
-            </a>
-            <nav id="menu" class="pure-menu">
-                <a class="pure-menu-heading" href="#">Contents</a>
-                <ul class="pure-menu-list">
-                    {{.RenderMenuItems .ConfigurationReport}}
-                </ul>
-            </nav>
-            <main id="main" class="content">
+        <main id="main" class="content">
+            <div id="mySidebar" class="sidebar">
+                <a href="#" style="position: absolute;top: 0; padding-left: 7px; padding-right: 27px; color: #fff; background-color: #1f8dd6">CONTENTS</a>
+                <a href="javascript:void(0)" class="togglebtn" onclick="toggleNav()">&lt;</a>
+                {{.RenderMenuItems .ConfigurationReport}}
+            </div>
+            <div id="myConfigurationContent">
                 <noscript>
                     <h3>JavaScript is disabled. Functionality is limited.</h3>
                 </noscript>
@@ -341,8 +207,8 @@
                     {{$reportGen.RenderDataTable . $reportGen.ConfigurationReportReferenceData}}
                 </section>
                 {{end}}
-            </main>
-        </div>
+            </div>
+        </main>
     </div>
     <div id="benchmark" class="tabcontent tabnotdefault">
         <main class="content">
@@ -393,49 +259,30 @@
             <h3>&nbsp;</h3>
         </main>
     </div>
-    <script> // set up hiding/showing menu on button press when screen is small
-        (function (window, document) {
-            var layout = document.getElementById('layout'),
-                menu = document.getElementById('menu'),
-                menuLink = document.getElementById('menuLink'),
-                content = document.getElementById('main');
+    <script>
+        const widthOpen="150px"
+        const widthClosed="30px"
+        function openNav() {
+            document.getElementById("mySidebar").style.width = widthOpen;
+            document.getElementById("myConfigurationContent").style.marginLeft = widthOpen;
+            document.querySelector(".togglebtn").innerHTML="<"
+        }
 
-            function toggleClass(element, className) {
-                var classes = element.className.split(/\s+/),
-                    length = classes.length,
-                    i = 0;
-                for (; i < length; i++) {
-                    if (classes[i] === className) {
-                        classes.splice(i, 1);
-                        break;
-                    }
-                }
-                // The className is not found
-                if (length === classes.length) {
-                    classes.push(className);
-                }
-                element.className = classes.join(' ');
+        function closeNav() {
+            document.getElementById("mySidebar").style.width = widthClosed;
+            document.getElementById("myConfigurationContent").style.marginLeft= widthClosed;
+            document.querySelector(".togglebtn").innerHTML=">"
+        }
+
+        function toggleNav() {
+            if (document.getElementById("mySidebar").style.width !== widthOpen) {
+                openNav()
+            } else {
+                closeNav()
             }
-
-            function toggleAll(e) {
-                var active = 'active';
-                e.preventDefault();
-                toggleClass(layout, active);
-                toggleClass(menu, active);
-                toggleClass(menuLink, active);
-            }
-
-            menuLink.onclick = function (e) {
-                toggleAll(e);
-            };
-
-            content.onclick = function (e) {
-                if (menu.className.indexOf('active') !== -1) {
-                    toggleAll(e);
-                }
-            };
-
-        }(this, this.document));
+        }
+        // open on startup
+        openNav()
     </script>
     <script>
         function openTab(evt, tabName) {

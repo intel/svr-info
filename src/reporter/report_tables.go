@@ -40,9 +40,9 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
-	// BASELINE: Test by Intel as of <mm/dd/yy>. 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, HT On/Off?, Turbo On/Off?, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>, <compiler version>, <workload/benchmark version>, <other sw if relevant>,  score=?<units>
-	template := "Test by <company> as of %s. 1-node, %sx %s, %s cores, HT %s, Turbo %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s, <compiler version>, <workload/benchmark version>, <other sw if relevant>,  score=?<units>"
-	var date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
+	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, HT On/Off?, Turbo On/Off?, NUMA xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>, WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW, score=?UNITS.\nTest by COMPANY as of <mm/dd/yy>.
+	template := "1-node, %sx %s, %s cores, HT %s, Turbo %s, NUMA %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s, WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW, score=?UNITS.\nTest by COMPANY as of %s."
+	var date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
 
 	for sourceIdx, source := range fullReport.Sources {
 		var hostValues = HostValues{
@@ -52,7 +52,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 			},
 			Values: [][]string{},
 		}
-		date = source.getCommandOutput("date")
+		date = strings.TrimSpace(source.getCommandOutput("date"))
 		socketCount, _ = fullReport.findTable("CPU").getValue(sourceIdx, "Sockets")
 		cpuModel, _ = fullReport.findTable("CPU").getValue(sourceIdx, "CPU Model")
 		coreCount, _ = fullReport.findTable("CPU").getValue(sourceIdx, "Cores per Socket")
@@ -70,6 +70,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		} else {
 			turboOnOff = "Off"
 		}
+		numaNodes, _ = fullReport.findTable("CPU").getValue(sourceIdx, "NUMA Nodes")
 		installedMem, _ = fullReport.findTable("Memory").getValue(sourceIdx, "Installed Memory")
 		biosVersion, _ = fullReport.findTable("BIOS").getValue(sourceIdx, "Version")
 		uCodeVersion, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "Microcode")
@@ -77,7 +78,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		disks, _ = tableDiskSummary.getValue(sourceIdx, "Disk")
 		operatingSystem, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "OS")
 		kernelVersion, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "Kernel")
-		claim := fmt.Sprintf(template, date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion)
+		claim := fmt.Sprintf(template, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion, date)
 		hostValues.Values = append(hostValues.Values, []string{claim})
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
@@ -245,7 +246,7 @@ func newFrequencyTable(sources []*Source, category TableCategory) (table *Table)
 			spec     float64
 			measured float64
 		}
-		vals := make(map[int]freq) // map core count to spec/measured frequences
+		vals := make(map[int]freq) // map core count to spec/measured frequencies
 
 		// get measured frequencies (these are optionally collected)
 		matches := source.valsArrayFromRegexSubmatch("Measure Turbo Frequencies", `^(\d+)-core turbo\s+(\d+) MHz`)
@@ -671,12 +672,16 @@ func newUncoreTable(sources []*Source, category TableCategory) (table *Table) {
 				"CHA Count",
 				"Minimum Frequency",
 				"Maximum Frequency",
+				"Active Idle Frequency",
+				"Active Idle Utilization Point",
 			},
 			Values: [][]string{
 				{
 					source.getCHACount(),
 					source.getUncoreMinFrequency(),
 					source.getUncoreMaxFrequency(),
+					source.getActiveIdleFrequency(),
+					source.getActiveIdleUtilizationPoint(),
 				},
 			},
 		}

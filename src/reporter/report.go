@@ -43,9 +43,9 @@ func NewConfigurationReport(sources []*Source, cpusInfo *cpu.CPU) (report *Repor
 			newISATable(sources, CPUCategory),
 			newAcceleratorTable(sources, CPUCategory),
 			newFeatureTable(sources, CPUCategory),
-			newUncoreTable(sources, CPUCategory),
 
 			newPowerTable(sources, Power),
+			newUncoreTable(sources, Power),
 		}...,
 	)
 

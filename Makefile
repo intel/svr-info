@@ -18,7 +18,7 @@ dist-amd64: tools
 	cp README dist/svr-info
 	cp RELEASE_NOTES dist/svr-info
 	cp THIRD_PARTY_PROGRAMS dist/svr-info
-	cp documentation/guide/SvrInfoUserGuide.pdf dist/svr-info/USER_GUIDE.pdf
+	cp docs/guide/SvrInfoUserGuide.pdf dist/svr-info/USER_GUIDE.pdf
 	cp src/orchestrator/orchestrator dist/svr-info/svr-info
 	cd dist && tar -czf $(TARBALL) svr-info
 	cd dist && md5sum $(TARBALL) > $(TARBALL).md5

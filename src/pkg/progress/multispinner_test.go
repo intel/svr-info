@@ -38,7 +38,7 @@ func TestMultiSpinner(t *testing.T) {
 		t.Fatal("failed to update spinner status")
 	}
 	if spinner.Status("C", "WOOPS") == nil {
-		t.Fatal("updated status of non-existant spinner")
+		t.Fatal("updated status of non-existent spinner")
 	}
 	spinner.Finish()
 }
