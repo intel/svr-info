@@ -425,6 +425,28 @@ func (s *Source) getNUMACPUList() (val string) {
 	return
 }
 
+func (s *Source) getActiveIdleFrequency() (val string) {
+	hex := s.getCommandOutputLine("active idle mesh frequency")
+	if hex != "" {
+		parsed, err := strconv.ParseInt(hex, 16, 64)
+		if err == nil {
+			val = fmt.Sprintf("%.1fGHz", float64(parsed)/10)
+		}
+	}
+	return
+}
+
+func (s *Source) getActiveIdleUtilizationPoint() (val string) {
+	hex := s.getCommandOutputLine("active idle utilization point")
+	if hex != "" {
+		parsed, err := strconv.ParseInt(hex, 16, 64)
+		if err == nil {
+			val = fmt.Sprintf("%d", parsed)
+		}
+	}
+	return
+}
+
 func (s *Source) getUncoreMaxFrequency() (val string) {
 	hex := s.getCommandOutputLine("uncore max frequency")
 	if hex != "" && hex != "0" {

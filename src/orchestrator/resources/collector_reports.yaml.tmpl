@@ -191,6 +191,20 @@ commands:
     superuser: true
     modprobe: msr
     parallel: true
+  - label: active idle utilization point
+    command: |-
+        wrmsr 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
+        rdmsr -f 15:8 0xb1 # ACTIVE IDLE - UTILIZATION POINT
+    superuser: true
+    modprobe: msr
+    parallel: true
+  - label: active idle mesh frequency
+    command: |-
+        wrmsr 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
+        rdmsr -f 7:0 0xb1 # ACTIVE IDLE - MESH FREQUENCY
+    superuser: true
+    modprobe: msr
+    parallel: true
   - label: ipmitool sel time get
     command: LC_ALL=C ipmitool sel time get
     superuser: true

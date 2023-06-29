@@ -672,12 +672,16 @@ func newUncoreTable(sources []*Source, category TableCategory) (table *Table) {
 				"CHA Count",
 				"Minimum Frequency",
 				"Maximum Frequency",
+				"Active Idle Frequency",
+				"Active Idle Utilization Point",
 			},
 			Values: [][]string{
 				{
 					source.getCHACount(),
 					source.getUncoreMinFrequency(),
 					source.getUncoreMaxFrequency(),
+					source.getActiveIdleFrequency(),
+					source.getActiveIdleUtilizationPoint(),
 				},
 			},
 		}

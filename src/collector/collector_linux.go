@@ -37,7 +37,7 @@ func runCommand(label string, command string, superuser bool, superuserPassword 
 	if binPath != "" {
 		path := getUserPath()
 		newPath := fmt.Sprintf("%s%c%s", binPath, os.PathListSeparator, path)
-		cmdWithPath = fmt.Sprintf("PATH=\"%s\" %s", newPath, cmdWithPath)
+		cmdWithPath = fmt.Sprintf("PATH=\"%s\"\n%s", newPath, command)
 	}
 	if superuser {
 		return runSuperUserCommand(cmdWithPath, superuserPassword, timeout)
