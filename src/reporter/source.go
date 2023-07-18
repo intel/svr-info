@@ -902,17 +902,25 @@ func (s *Source) getDiskSpeed() (val string) {
 	return
 }
 
+// reference: https://github.com/torvalds/linux/blob/4b810bf037e524b54669acbe4e0df54b15d87ea1/arch/x86/include/asm/msr-index.h#L824
 func (s *Source) getPowerPerfPolicy() (val string) {
 	msrHex := s.getCommandOutputLine("rdmsr 0x1b0")
 	msr, err := strconv.ParseInt(msrHex, 16, 0)
 	if err == nil {
-		if msr < 7 {
+		if msr < 3 {
 			val = "Performance"
-		} else if msr > 10 {
-			val = "Power"
+		} else if msr < 6 {
+			val = "Balance Performance"
+		} else if msr == 6 {
+			val = "Normal"
+		} else if msr == 7 {
+			val = "Normal Powersave"
+		} else if msr == 8 {
+			val = "Balance Powersave"
 		} else {
-			val = "Balanced"
+			val = "Powersave"
 		}
+		val = fmt.Sprintf("%s (%d)", val, msr)
 	}
 	return
 }
