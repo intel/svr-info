@@ -47,7 +47,7 @@ jobs:
           mkdir targettemp
           ./svr-info -temp temp -targettemp targettemp -output output -benchmark all -profile all -profile_duration 5 -profile_interval 1 -analyze all -analyze_duration 5 -analyze_frequency 5 -format all -megadata -cmd_timeout 30
           # verify that the megadata directory exists
-          if [ ! -d output/megadata ]; then
+          if [ ! -d output/*_megadata ]; then
             echo "FAIL -- megadata directory was not created in output"
             exit 1
           fi
