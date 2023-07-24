@@ -1014,7 +1014,7 @@ func (s *Source) getSystemFolded() (folded string) {
 	perfSections := s.getCommandOutputLabeled("analyze", `perf_`)
 	var dwarfFolded, fpFolded string
 	for header, content := range perfSections {
-		if header == "pwerf_dwarf" {
+		if header == "perf_dwarf" {
 			dwarfFolded = content
 		} else if header == "perf_fp" {
 			fpFolded = content
