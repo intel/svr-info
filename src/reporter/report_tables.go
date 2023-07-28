@@ -884,26 +884,19 @@ func newAcceleratorTable(sources []*Source, category TableCategory) (table *Tabl
 		return
 	}
 	for _, source := range sources {
-		cmdout := source.getCommandOutput("lshw")
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
 				"Name",
 				"Count",
+				"Work Queues",
 				"Full Name",
 				"Description",
 			},
 			Values: [][]string{},
 		}
 		for _, accelDef := range accelDefs {
-			regex := fmt.Sprintf("%s:%s", accelDef.MfgID, accelDef.DevID)
-			re, err := regexp.Compile(regex)
-			if err != nil {
-				log.Printf("failed to compile regex from accelerator definition: %s", regex)
-				return
-			}
-			count := fmt.Sprintf("%d", len(re.FindAllString(cmdout, -1)))
-			hostValues.Values = append(hostValues.Values, []string{accelDef.Name, count, accelDef.FullName, accelDef.Description})
+			hostValues.Values = append(hostValues.Values, []string{accelDef.Name, source.getAcceleratorCount(accelDef.MfgID, accelDef.DevID), source.getAcceleratorQueues(accelDef.Name), accelDef.FullName, accelDef.Description})
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}

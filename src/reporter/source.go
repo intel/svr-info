@@ -1039,3 +1039,32 @@ func (s *Source) getTurboEnabled(family string) (val string) {
 	}
 	return
 }
+
+func (s *Source) getAcceleratorCount(mfgID, devID string) (val string) {
+	cmdout := s.getCommandOutput("lshw")
+	if cmdout == "" {
+		return
+	}
+	regex := fmt.Sprintf("%s:%s", mfgID, devID)
+	re, err := regexp.Compile(regex)
+	if err != nil {
+		log.Printf("failed to compile regex from accelerator definition: %s", regex)
+		return
+	}
+	val = fmt.Sprintf("%d", len(re.FindAllString(cmdout, -1)))
+	return
+}
+
+func (s *Source) getAcceleratorQueues(accelName string) (val string) {
+	if accelName != "IAX" && accelName != "DSA" {
+		val = "N/A"
+		return
+	}
+	lines := s.getCommandOutputLines(fmt.Sprintf("%s devices", strings.ToLower(accelName)))
+	if len(lines) == 0 {
+		val = "None"
+		return
+	}
+	val = strings.Join(lines, ", ")
+	return
+}

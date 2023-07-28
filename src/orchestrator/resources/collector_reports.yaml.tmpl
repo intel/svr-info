@@ -276,6 +276,12 @@ commands:
   - label: lspci devices
     command: lspci -d 8086:3258 | wc -l
     parallel: true 
+  - label: iax devices
+    command: ls -1 /dev/iax
+    parallel: true
+  - label: dsa devices
+    command: ls -1 /dev/dsa
+    parallel: true
 ############
 # Profile command below
 # Note that this is one command because we want the profiling options to run in parallel with
