@@ -171,15 +171,15 @@ void Usage(const char* error)
         fprintf(stderr, "%s\n\n", error);
     }
 
-    fprintf(stderr, "   -t : number of physical cores to run this on...optional, defaults to all\n");
-    fprintf(stderr, "   -c : core count at which to start...optional, defaults to 1\n");
-    fprintf(stderr, "   -x : iterations in millions...optional, defaults to 100M\n");
-    fprintf(stderr, "   -a : set to 1 if HT threads get consecutive cpu #s...optional, defaults to 0 (alternating cpu #s)\n");
+    fprintf(stderr, "   -t : number of physical cores to scale up to. Default=0 (only give P1 freq)\n");
+    fprintf(stderr, "   -c : core count at which to start. Default=1\n");
+    fprintf(stderr, "   -x : iterations in millions. Default=100000000\n");
+    fprintf(stderr, "   -a : set to 1 if HT threads get consecutive cpu #s. Default=0 (alternating cpu #s)\n");
     fprintf(stderr, "   -h : display this usage information\n");
     fprintf(stderr, "   -v : display calcfreq version\n");
     fprintf(stderr, "\nExamples:\n");
-    fprintf(stderr, "   ./calcfreq\n");
-    fprintf(stderr, "   ./calcfreq -t4 -c2 -x10 -a1\n");
+    fprintf(stderr, "   ./calcfreq                  # only collect P1 Freq\n");
+    fprintf(stderr, "   ./calcfreq -t4 -c2 -x10 -a1 # measure freq. with 2 to 4 cores busy at 10 iter.\n");
 
     if (error) {
         exit(1);
