@@ -160,6 +160,17 @@ func (r *RulesEngineContext) GetValueFromColumnAsFloat(reportName, tableName, ro
 	return
 }
 
+// GetValueFromColumnAsInt returns an int value from a table
+// if column value doesn't contain an int, result will be 0
+func (r *RulesEngineContext) GetValueFromColumnAsInt(reportName, tableName, rowValueName, rowValue, targetValueName string) (value int64) {
+	v := r.GetValueFromColumn(reportName, tableName, rowValueName, rowValue, targetValueName)
+	value, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		log.Printf("failed to convert string to int: %s", v)
+	}
+	return
+}
+
 // CompareVersions -- compares two version strings
 // Note: both input versions need to be of the same format
 // Supported formats:

@@ -25,7 +25,9 @@ Micro-benchmarks can be executed by svr-info to assess the health of the target 
 ```
 ./svr-info -benchmark all
 ```
-Note: **Benchmarks should not be run on live/production systems.** Production workload performance may be impacted.
+Notes:
+- **Benchmarks should not be run on live/production systems.** Production workload performance may be impacted.
+- Running all benchmarks, i.e., `--benchmark all`, will take 4+ minutes to run. The frequency benchmark execution time increases with core count (approx. (# of cores + 10)s). If not all benchmarks are required, use the `--help` option to see how to choose specific benchmarks, e.g., `--benchmark cpu,disk`.
 ## System Profiling
 Subsystems on live/production system(s) can be profiled by svr-info. See the help (-h) for the complete list of subsystems. To profile all subsystems:
 ```
