@@ -181,10 +181,10 @@ spectre-meltdown-checker:
 
 sshpass:
 ifeq ("$(wildcard sshpass)","")
-	wget https://cytranet.dl.sourceforge.net/project/sshpass/sshpass/1.09/sshpass-1.09.tar.gz
-	tar -xf sshpass-1.09.tar.gz
-	mv sshpass-1.09 sshpass
-	rm sshpass-1.09.tar.gz
+	wget https://cytranet.dl.sourceforge.net/project/sshpass/sshpass/1.10/sshpass-1.10.tar.gz
+	tar -xf sshpass-1.10.tar.gz
+	mv sshpass-1.10 sshpass
+	rm sshpass-1.10.tar.gz
 	cd sshpass && ./configure
 endif
 	cd sshpass && make
