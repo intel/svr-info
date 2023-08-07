@@ -1056,7 +1056,7 @@ func (s *Source) getAcceleratorCount(mfgID, devID string) (val string) {
 }
 
 func (s *Source) getAcceleratorQueues(accelName string) (val string) {
-	if accelName != "IAX" && accelName != "DSA" {
+	if accelName != "IAA" && accelName != "DSA" {
 		val = "N/A"
 		return
 	}
