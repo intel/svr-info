@@ -34,7 +34,6 @@ const (
 )
 
 const noDataFound = "No data found."
-const perlWarning = "<br>Check if perl is installed in /usr/bin/."
 
 type ReportGeneratorHTML struct {
 	reports   []*Report
@@ -1051,9 +1050,6 @@ func renderFlameGraph(header string, hv *HostValues, field string, hostIndex int
 	folded := hv.Values[0][fieldIdx]
 	if folded == "" {
 		out += noDataFound
-		if header == "System" {
-			out += perlWarning
-		}
 		return
 	}
 	jsonStacks, err := convertFoldedToJson(folded)

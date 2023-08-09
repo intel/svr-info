@@ -237,6 +237,7 @@
     <div id="analyze" class="tabcontent tabnotdefault">
         <main class="content">
             <h3>Use the "-analyze all" option to collect all analysis data. See "-help" for finer control.</h3>
+            <h3>Note: Perl is required on the target machine to collapse the call stacks used to produce System Flame Graphs.</h3>
             Upload your Intel&reg; System Health Inspector JSON-formatted reports to <a href=https://optimizations.intel.com/gProfilerAnalyzer target="_blank" rel="noopener noreferrer">Intel&reg; Optimization Hub</a> for deeper analysis.
             {{$reportGen := .}}
             {{range .AnalyzeReport.Tables}}
