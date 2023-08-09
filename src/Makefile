@@ -155,6 +155,8 @@ else
 	cd lspci && git checkout master && git pull
 endif
 	cd lspci && make
+	cd lspci && ./update-pciids.sh
+	cd lspci && gzip -c pci.ids > pci.ids.gz
 
 mlc:
 ifeq ("$(wildcard mlc)","")
@@ -230,6 +232,7 @@ collector-deps-amd64: collector_tools
 	cp ipmitool/src/ipmitool.static $(TMPDIR)/ipmitool
 	cp lshw/src/lshw-static $(TMPDIR)/lshw
 	cp lspci/lspci $(TMPDIR)
+	cp lspci/pci.ids.gz $(TMPDIR)
 	-cp mlc/mlc $(TMPDIR)
 	cp msrbusy/msrbusy $(TMPDIR)
 	cp linux/tools/perf/perf $(TMPDIR)
