@@ -138,7 +138,7 @@ func (r *ReportGen) RenderMenuItems(reportData *Report) template.HTML {
 	category := NoCategory
 	for _, table := range reportData.Tables {
 		if table.Category != category {
-			out += fmt.Sprintf(`<li class="pure-menu-item"><a href="#%s" class="pure-menu-link">%s</a></li>`, table.Name, TableCategoryLabels[table.Category])
+			out += fmt.Sprintf(`<a href="#%s">%s</a>`, table.Name, TableCategoryLabels[table.Category])
 			category = table.Category
 		}
 	}
@@ -1097,7 +1097,7 @@ func (r *ReportGen) renderCodePathFrequency(table *Table) (out string) {
 }
 
 func getColor(idx int) string {
-	// color-blind safe pallette from here: http://mkweb.bcgsc.ca/colorblind/palettes.mhtml#page-container
+	// color-blind safe palette from here: http://mkweb.bcgsc.ca/colorblind/palettes.mhtml#page-container
 	colors := []string{"#9F0162", "#009F81", "#FF5AAF", "#00FCCF", "#8400CD", "#008DF9", "#00C2F9", "#FFB2FD", "#A40122", "#E20134", "#FF6E3A", "#FFC33B"}
 	return colors[idx%len(colors)]
 }
@@ -1186,6 +1186,7 @@ func (r *ReportGen) renderBandwidthLatencyChart(table *Table, refData []*HostRef
 		out += "\n"
 	} else {
 		out += noDataFound
+		out += "<br>Using the OSS release of svr-info? Memory benchmarks require Intel Memory Latency Checker (MLC) be downloaded, extracted, and the Linux binary placed in the svr-info/extras directory. See the repo README for additional information."
 	}
 	return
 }

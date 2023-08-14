@@ -10,9 +10,9 @@ VERSION_NUMBER := $(shell cat ${VERSION_FILE})
 VERSION := $(VERSION_NUMBER)_$(COMMIT_DATE)_$(COMMIT_ID)
 
 default: check orchestrator
-.PHONY: default test check format_check format linux-source collector reporter orchestrator rdmsr msrbusy reset clean tools libs async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
+.PHONY: default test check format_check format linux-source collector reporter orchestrator rdmsr wrmsr msrbusy reset clean tools libs async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
 
-collector_tools: async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc msrbusy perf rdmsr spectre-meltdown-checker stress-ng sysstat turbostat
+collector_tools: async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc msrbusy perf rdmsr wrmsr spectre-meltdown-checker stress-ng sysstat turbostat
 
 test:
 	cd pkg/commandfile && go test -v -vet=all .
@@ -25,6 +25,7 @@ test:
 	cd collector && go test -v -vet=all .
 	cd reporter && go test -v -vet=all .
 	cd rdmsr && go test -v -vet=all .
+	cd wrmsr && go test -v -vet=all .
 	cd msrbusy && go test -v -vet=all .
 
 format:
@@ -45,20 +46,23 @@ orchestrator: sshpass reporter collector collector-deps
 	cp reporter/reporter orchestrator/resources/
 	cp collector/collector orchestrator/resources/
 	cp collector/collector_arm64 orchestrator/resources/
-	cd orchestrator && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o orchestrator
+	cd orchestrator && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o orchestrator
 
 collector:
-	cd collector && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o collector
-	cd collector && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o collector_arm64
+	cd collector && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o collector
+	cd collector && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o collector_arm64
 
 reporter:
-	cd reporter && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o reporter
+	cd reporter && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o reporter
 
 rdmsr:
-	cd rdmsr && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o rdmsr
+	cd rdmsr && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o rdmsr
+
+wrmsr:
+	cd wrmsr && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o wrmsr
 
 msrbusy:
-	cd msrbusy && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy
+	cd msrbusy && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy
 
 async-profiler:
 ifeq ("$(wildcard async-profiler)","")
@@ -177,10 +181,10 @@ spectre-meltdown-checker:
 
 sshpass:
 ifeq ("$(wildcard sshpass)","")
-	wget https://cytranet.dl.sourceforge.net/project/sshpass/sshpass/1.09/sshpass-1.09.tar.gz
-	tar -xf sshpass-1.09.tar.gz
-	mv sshpass-1.09 sshpass
-	rm sshpass-1.09.tar.gz
+	wget https://cytranet.dl.sourceforge.net/project/sshpass/sshpass/1.10/sshpass-1.10.tar.gz
+	tar -xf sshpass-1.10.tar.gz
+	mv sshpass-1.10 sshpass
+	rm sshpass-1.10.tar.gz
 	cd sshpass && ./configure
 endif
 	cd sshpass && make
@@ -232,6 +236,7 @@ collector-deps-amd64: collector_tools
 	cp -R async-profiler $(TMPDIR)
 	cp flamegraph/stackcollapse-perf.pl $(TMPDIR)
 	cp rdmsr/rdmsr $(TMPDIR)
+	cp wrmsr/wrmsr $(TMPDIR)
 	cp spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
 	cp stress-ng/stress-ng $(TMPDIR)
 	cp sysstat/mpstat $(TMPDIR)
@@ -271,6 +276,7 @@ clean:
 	rm -f orchestrator/resources/reporter
 	rm -f orchestrator/resources/sshpass
 	rm -f rdmsr/rdmsr
+	rm -f wrmsr/wrmsr
 	rm -f msrbusy/msrbusy
 
 reset:

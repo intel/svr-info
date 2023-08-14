@@ -127,6 +127,25 @@ func (msr *MSR) read(reg uint64, fileName string, bytes int) (val uint64, err er
 	return
 }
 
+func (msr *MSR) write(reg uint64, fileName string, bytes int, val uint64) (err error) {
+	f, err := os.OpenFile(fileName, os.O_RDWR, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	buf := make([]byte, 0, 8)
+	buf = binary.LittleEndian.AppendUint64(buf, val)
+	written, err := f.WriteAt(buf, int64(reg))
+	if err != nil {
+		return
+	}
+	if written != bytes {
+		err = fmt.Errorf("didn't write intended number of bytes: %d,%d", bytes, written)
+		return
+	}
+	return
+}
+
 // SetBitRange filters bits for subsequent calls to Read* functions
 func (msr *MSR) SetBitRange(highBit int, lowBit int) (err error) {
 	if lowBit >= highBit {
@@ -160,6 +179,19 @@ func (msr *MSR) ReadAll(reg uint64) (out []uint64, err error) {
 	return
 }
 
+// WriteAll writes the given value to all cores at the given register offset
+func (msr *MSR) WriteAll(reg uint64, val uint64) (err error) {
+	fileNames := msr.getMSRFileNames(-1, false)
+	for _, fileName := range fileNames {
+		var val uint64
+		err = msr.write(reg, fileName, 8, val)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
 // ReadOne returns the register value for the specified core
 func (msr *MSR) ReadOne(reg uint64, core int) (out uint64, err error) {
 	fileNames := msr.getMSRFileNames(core, false)
@@ -168,6 +200,17 @@ func (msr *MSR) ReadOne(reg uint64, core int) (out uint64, err error) {
 		return
 	}
 	out, err = msr.read(reg, fileNames[0], 8)
+	return
+}
+
+// WriteOne writes the given value to the the specified core at the given register offset
+func (msr *MSR) WriteOne(reg uint64, core int, val uint64) (err error) {
+	fileNames := msr.getMSRFileNames(core, false)
+	if len(fileNames) != 1 {
+		err = fmt.Errorf("did not find filenames for msr,core: %d, %d", reg, core)
+		return
+	}
+	err = msr.write(reg, fileNames[0], 8, val)
 	return
 }
 

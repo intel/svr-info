@@ -1,14 +1,15 @@
-# Intel&reg; System Health Inspector (AKA svr-info)
-Intel® System Health Inspector (aka svr-info) is a Linux OS utility for assessing the state and health of Intel Xeon computers.
-## Example Reports
-- Single server: [HTML](documentation/examples/SDP_8058.html), [JSON](documentation/examples/SDP_8058.json), [XLSX](documentation/examples/SDP_8058.xlsx)
-- Multiple Servers: [HTML](documentation/examples/all_hosts.html), [JSON](documentation/examples/all_hosts.json), [XLSX](documentation/examples/all_hosts.xlsx)
+# Intel&reg; System Health Inspector [![Build](https://github.com/intel/svr-info/actions/workflows/build-test.yml/badge.svg)](https://github.com/intel/svr-info/actions/workflows/build-test.yml)[![License](https://img.shields.io/badge/License-MIT-blue)](https://github.com/intel/svr-info/blob/master/LICENSE)
+System Health Inspector aka "svr-info" is a Linux command line tool used to assess the health of Intel® Xeon® processor-based servers.
 ## Quick Start
 ```
 wget -qO- https://github.com/intel/svr-info/releases/latest/download/svr-info.tgz | tar xvz
 cd svr-info
 ./svr-info
 ```
+![sample-reports](/docs/images/sample-reports.jpg)
+## Example
+[HTML Report](https://intel.github.io/svr-info/)
+# Options
 ## Remote Target
 Data can be collected from a single remote target by providing the login credentials of the target on the svr-info command line.
 ```
@@ -24,7 +25,9 @@ Micro-benchmarks can be executed by svr-info to assess the health of the target 
 ```
 ./svr-info -benchmark all
 ```
-Note: **Benchmarks should not be run on live/production systems.** Production workload performance may be impacted.
+Notes:
+- **Benchmarks should not be run on live/production systems.** Production workload performance may be impacted.
+- Running all benchmarks, i.e., `--benchmark all`, will take 4+ minutes to run. The frequency benchmark execution time increases with core count (approx. (# of cores + 10)s). If not all benchmarks are required, use the `--help` option to see how to choose specific benchmarks, e.g., `--benchmark cpu,disk`.
 ## System Profiling
 Subsystems on live/production system(s) can be profiled by svr-info. See the help (-h) for the complete list of subsystems. To profile all subsystems:
 ```

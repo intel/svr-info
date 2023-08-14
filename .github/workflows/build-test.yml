@@ -46,6 +46,11 @@ jobs:
           mkdir temp
           mkdir targettemp
           ./svr-info -temp temp -targettemp targettemp -output output -benchmark all -profile all -profile_duration 5 -profile_interval 1 -analyze all -analyze_duration 5 -analyze_frequency 5 -format all -megadata -cmd_timeout 30
+          # verify that the megadata directory exists
+          if [ ! -d output/*_megadata ]; then
+            echo "FAIL -- megadata directory was not created in output"
+            exit 1
+          fi
           # verify that mock_mlc was run by svr-info
           if [ "$( jq --raw-output '.Performance.Summary[0]."Memory Minimum Latency"' output/*.json )" != "105.5 ns" ]; then
             echo "FAIL -- Memory Minimum Latency != 105.5 ns"

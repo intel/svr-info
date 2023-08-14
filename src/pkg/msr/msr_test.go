@@ -66,6 +66,17 @@ func TestReadOne(t *testing.T) {
 	}
 }
 
+func TestWriteOne(t *testing.T) {
+	msr, err := NewMSR()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = msr.WriteOne(0xB0, 0, 0x80000694)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestReadAll(t *testing.T) {
 	msr, err := NewMSR()
 	if err != nil {

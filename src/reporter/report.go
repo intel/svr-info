@@ -43,9 +43,9 @@ func NewConfigurationReport(sources []*Source, cpusInfo *cpu.CPU) (report *Repor
 			newISATable(sources, CPUCategory),
 			newAcceleratorTable(sources, CPUCategory),
 			newFeatureTable(sources, CPUCategory),
-			newUncoreTable(sources, CPUCategory),
 
 			newPowerTable(sources, Power),
+			newUncoreTable(sources, Power),
 		}...,
 	)
 
@@ -94,6 +94,7 @@ func NewBriefReport(sources []*Source, fullReport *Report, cpusInfo *cpu.CPU) (r
 	}
 	tableDiskSummary := newDiskSummaryTable(fullReport.findTable("Disk"), Storage)
 	tableNicSummary := newNICSummaryTable(fullReport.findTable("NIC"), Network)
+	tableAcceleratorSummary := newAcceleratorSummaryTable(fullReport.findTable("Accelerator"), CPUCategory)
 	report.Tables = append(report.Tables,
 		[]*Table{
 			fullReport.findTable("Host"),
@@ -101,7 +102,7 @@ func NewBriefReport(sources []*Source, fullReport *Report, cpusInfo *cpu.CPU) (r
 			newBaseboardSummaryTable(fullReport.findTable("Baseboard"), System),
 			newChassisSummaryTable(fullReport.findTable("Chassis"), System),
 			newCPUBriefTable(fullReport.findTable("CPU"), CPUCategory),
-			newAcceleratorSummaryTable(fullReport.findTable("Accelerator"), CPUCategory),
+			tableAcceleratorSummary,
 			newMemoryBriefTable(fullReport.findTable("Memory"), Memory),
 			tableNicSummary,
 			tableDiskSummary,
@@ -109,7 +110,7 @@ func NewBriefReport(sources []*Source, fullReport *Report, cpusInfo *cpu.CPU) (r
 			newOperatingSystemBriefTable(fullReport.findTable("Operating System"), Software),
 			fullReport.findTable("Power"),
 			newVulnerabilitySummaryTable(fullReport.findTable("Vulnerability"), Security),
-			newMarketingClaimTable(fullReport, tableNicSummary, tableDiskSummary, NoCategory),
+			newMarketingClaimTable(fullReport, tableNicSummary, tableDiskSummary, tableAcceleratorSummary, NoCategory),
 		}...,
 	)
 	// TODO: remove check when code is stable

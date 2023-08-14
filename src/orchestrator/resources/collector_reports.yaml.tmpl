@@ -191,6 +191,20 @@ commands:
     superuser: true
     modprobe: msr
     parallel: true
+  - label: active idle utilization point
+    command: |-
+        wrmsr 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
+        rdmsr -f 15:8 0xb1 # ACTIVE IDLE - UTILIZATION POINT
+    superuser: true
+    modprobe: msr
+    parallel: true
+  - label: active idle mesh frequency
+    command: |-
+        wrmsr 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
+        rdmsr -f 7:0 0xb1 # ACTIVE IDLE - MESH FREQUENCY
+    superuser: true
+    modprobe: msr
+    parallel: true
   - label: ipmitool sel time get
     command: LC_ALL=C ipmitool sel time get
     superuser: true
@@ -262,6 +276,12 @@ commands:
   - label: lspci devices
     command: lspci -d 8086:3258 | wc -l
     parallel: true 
+  - label: iax devices
+    command: ls -1 /dev/iax
+    parallel: true
+  - label: dsa devices
+    command: ls -1 /dev/dsa
+    parallel: true
 ############
 # Profile command below
 # Note that this is one command because we want the profiling options to run in parallel with
@@ -376,13 +396,25 @@ commands:
     run: false
     command: |-
         # measure memory loaded latency
+        numa_nodes=$( lscpu | grep "NUMA node(s):" | awk '{print $3}' )
+        orig_num_huge_pages=$( cat /proc/sys/vm/nr_hugepages )
+        new_num_huge_pages=$( echo "$numa_nodes * 1000" | bc )
+        echo $new_num_huge_pages > /proc/sys/vm/nr_hugepages
         mlc --loaded_latency
+        echo $orig_num_huge_pages > /proc/sys/vm/nr_hugepages
+    modprobe: msr
     superuser: true
   - label: Memory MLC Bandwidth
     run: false
     command: |-
         # measure memory bandwidth matrix
+        numa_nodes=$( lscpu | grep "NUMA node(s):" | awk '{print $3}' )
+        orig_num_huge_pages=$( cat /proc/sys/vm/nr_hugepages )
+        new_num_huge_pages=$( echo "$numa_nodes * 1000" | bc )
+        echo $new_num_huge_pages > /proc/sys/vm/nr_hugepages
         mlc --bandwidth_matrix
+        echo $orig_num_huge_pages > /proc/sys/vm/nr_hugepages
+    modprobe: msr
     superuser: true
   - label: stress-ng cpu methods
     run: false

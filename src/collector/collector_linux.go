@@ -37,7 +37,7 @@ func runCommand(label string, command string, superuser bool, superuserPassword 
 	if binPath != "" {
 		path := getUserPath()
 		newPath := fmt.Sprintf("%s%c%s", binPath, os.PathListSeparator, path)
-		cmdWithPath = fmt.Sprintf("PATH=\"%s\" %s", newPath, cmdWithPath)
+		cmdWithPath = fmt.Sprintf("PATH=\"%s\"\n%s", newPath, command)
 	}
 	if superuser {
 		return runSuperUserCommand(cmdWithPath, superuserPassword, timeout)
@@ -80,12 +80,14 @@ func installMods(mods string, sudoPassword string) (installedMods []string) {
 	if len(mods) > 0 {
 		modList := strings.Split(mods, ",")
 		for _, mod := range modList {
-			log.Printf("Attempting to install kernel module: %s", mod)
-			_, _, _, err := runSuperUserCommand(fmt.Sprintf("modprobe --first-time %s > /dev/null 2>&1", mod), sudoPassword, 0)
-			if err == nil {
-				log.Printf("Installed kernel module %s", mod)
-				installedMods = append(installedMods, mod)
+			log.Printf("Installing kernel module: %s", mod)
+			_, _, _, err := runSuperUserCommand(fmt.Sprintf("modprobe --first-time %s > /dev/null 2>&1", mod), sudoPassword, 10)
+			if err != nil {
+				log.Printf("Kernel module %s already installed or problem installing: %v", mod, err)
+				continue
 			}
+			installedMods = append(installedMods, mod)
+			log.Printf("Installed kernel module %s", mod)
 		}
 	}
 	return installedMods
@@ -94,11 +96,12 @@ func installMods(mods string, sudoPassword string) (installedMods []string) {
 func uninstallMods(modList []string, sudoPassword string) (err error) {
 	for _, mod := range modList {
 		log.Printf("Uninstalling kernel module %s", mod)
-		_, _, _, err = runSuperUserCommand(fmt.Sprintf("modprobe -r %s", mod), sudoPassword, 0)
+		_, _, _, err = runSuperUserCommand(fmt.Sprintf("modprobe -r %s", mod), sudoPassword, 10)
 		if err != nil {
-			log.Printf("Error: %v", err)
-			return
+			log.Printf("Error uninstalling kernel module %s: %v", mod, err)
+			continue
 		}
+		log.Printf("Uninstalled kernel module %s", mod)
 	}
 	return
 }

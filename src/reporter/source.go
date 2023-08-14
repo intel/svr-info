@@ -425,6 +425,28 @@ func (s *Source) getNUMACPUList() (val string) {
 	return
 }
 
+func (s *Source) getActiveIdleFrequency() (val string) {
+	hex := s.getCommandOutputLine("active idle mesh frequency")
+	if hex != "" {
+		parsed, err := strconv.ParseInt(hex, 16, 64)
+		if err == nil {
+			val = fmt.Sprintf("%.1fGHz", float64(parsed)/10)
+		}
+	}
+	return
+}
+
+func (s *Source) getActiveIdleUtilizationPoint() (val string) {
+	hex := s.getCommandOutputLine("active idle utilization point")
+	if hex != "" {
+		parsed, err := strconv.ParseInt(hex, 16, 64)
+		if err == nil {
+			val = fmt.Sprintf("%d", parsed)
+		}
+	}
+	return
+}
+
 func (s *Source) getUncoreMaxFrequency() (val string) {
 	hex := s.getCommandOutputLine("uncore max frequency")
 	if hex != "" && hex != "0" {
@@ -880,17 +902,25 @@ func (s *Source) getDiskSpeed() (val string) {
 	return
 }
 
+// reference: https://github.com/torvalds/linux/blob/4b810bf037e524b54669acbe4e0df54b15d87ea1/arch/x86/include/asm/msr-index.h#L824
 func (s *Source) getPowerPerfPolicy() (val string) {
 	msrHex := s.getCommandOutputLine("rdmsr 0x1b0")
 	msr, err := strconv.ParseInt(msrHex, 16, 0)
 	if err == nil {
-		if msr < 7 {
+		if msr < 3 {
 			val = "Performance"
-		} else if msr > 10 {
-			val = "Power"
+		} else if msr < 6 {
+			val = "Balance Performance"
+		} else if msr == 6 {
+			val = "Normal"
+		} else if msr == 7 {
+			val = "Normal Powersave"
+		} else if msr == 8 {
+			val = "Balance Powersave"
 		} else {
-			val = "Balanced"
+			val = "Powersave"
 		}
+		val = fmt.Sprintf("%s (%d)", val, msr)
 	}
 	return
 }
@@ -984,7 +1014,7 @@ func (s *Source) getSystemFolded() (folded string) {
 	perfSections := s.getCommandOutputLabeled("analyze", `perf_`)
 	var dwarfFolded, fpFolded string
 	for header, content := range perfSections {
-		if header == "pwerf_dwarf" {
+		if header == "perf_dwarf" {
 			dwarfFolded = content
 		} else if header == "perf_fp" {
 			fpFolded = content
@@ -1007,5 +1037,34 @@ func (s *Source) getTurboEnabled(family string) (val string) {
 			val = val + " (AMD Frequency Boost)"
 		}
 	}
+	return
+}
+
+func (s *Source) getAcceleratorCount(mfgID, devID string) (val string) {
+	cmdout := s.getCommandOutput("lshw")
+	if cmdout == "" {
+		return
+	}
+	regex := fmt.Sprintf("%s:%s", mfgID, devID)
+	re, err := regexp.Compile(regex)
+	if err != nil {
+		log.Printf("failed to compile regex from accelerator definition: %s", regex)
+		return
+	}
+	val = fmt.Sprintf("%d", len(re.FindAllString(cmdout, -1)))
+	return
+}
+
+func (s *Source) getAcceleratorQueues(accelName string) (val string) {
+	if accelName != "IAX" && accelName != "DSA" {
+		val = "N/A"
+		return
+	}
+	lines := s.getCommandOutputLines(fmt.Sprintf("%s devices", strings.ToLower(accelName)))
+	if len(lines) == 0 {
+		val = "None"
+		return
+	}
+	val = strings.Join(lines, ", ")
 	return
 }

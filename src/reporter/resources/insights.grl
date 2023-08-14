@@ -156,6 +156,30 @@ rule MountDiscard {
 		Retract("MountDiscard");
 }
 
+rule IAXEnabled {
+	when
+		Report.GetValueFromColumnAsInt("Configuration", "Accelerator", "Name", "IAX", "Count") != 0 &&
+		Report.GetValueFromColumn("Configuration", "Accelerator", "Name", "IAX", "Work Queues") == "None"
+	then
+		Report.AddInsight(
+			"No work queues are configured for IAX accelerator(s).",
+			"Consider configuring IAX to allow accelerated compression and decompression in IAX-enabled software."
+		);
+		Retract("IAXEnabled");
+}
+
+rule DSAEnabled {
+	when
+		Report.GetValueFromColumnAsInt("Configuration", "Accelerator", "Name", "DSA", "Count") != 0 &&
+		Report.GetValueFromColumn("Configuration", "Accelerator", "Name", "DSA", "Work Queues") == "None"
+	then
+		Report.AddInsight(
+			"No work queues are configured for DSA accelerator(s).",
+			"Consider configuring DSA to allow accelerated data copy and transformation in DSA-enabled software."
+		);
+		Retract("DSAEnabled");
+}
+
 //
 // software insights
 //

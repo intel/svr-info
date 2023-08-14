@@ -34,15 +34,15 @@ import (
  *   nicSummaryTable() - has info derived from the full table, but is presented in summary format
  */
 
-func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDiskSummary *Table, category TableCategory) (table *Table) {
+func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDiskSummary *Table, tableAcceleratorSummary *Table, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "Marketing Claim",
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
-	// BASELINE: Test by Intel as of <mm/dd/yy>. 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, HT On/Off?, Turbo On/Off?, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>, <compiler version>, <workload/benchmark version>, <other sw if relevant>,  score=?<units>
-	template := "Test by <company> as of %s. 1-node, %sx %s, %s cores, HT %s, Turbo %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s, <compiler version>, <workload/benchmark version>, <other sw if relevant>,  score=?<units>"
-	var date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
+	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, HT On/Off?, Turbo On/Off?, NUMA xxx,  Integrated Accelerators Available [used]: xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>, WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW, score=?UNITS.\nTest by COMPANY as of <mm/dd/yy>.
+	template := "1-node, %sx %s, %s cores, HT %s, Turbo %s, NUMA %s, Integrated Accelerators Available [used]: %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s, WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW, score=?UNITS.\nTest by COMPANY as of %s."
+	var date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
 
 	for sourceIdx, source := range fullReport.Sources {
 		var hostValues = HostValues{
@@ -52,7 +52,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 			},
 			Values: [][]string{},
 		}
-		date = source.getCommandOutput("date")
+		date = strings.TrimSpace(source.getCommandOutput("date"))
 		socketCount, _ = fullReport.findTable("CPU").getValue(sourceIdx, "Sockets")
 		cpuModel, _ = fullReport.findTable("CPU").getValue(sourceIdx, "CPU Model")
 		coreCount, _ = fullReport.findTable("CPU").getValue(sourceIdx, "Cores per Socket")
@@ -70,6 +70,8 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		} else {
 			turboOnOff = "Off"
 		}
+		numaNodes, _ = fullReport.findTable("CPU").getValue(sourceIdx, "NUMA Nodes")
+		accelerators, _ := tableAcceleratorSummary.getValue(sourceIdx, "Accelerators Available [used]")
 		installedMem, _ = fullReport.findTable("Memory").getValue(sourceIdx, "Installed Memory")
 		biosVersion, _ = fullReport.findTable("BIOS").getValue(sourceIdx, "Version")
 		uCodeVersion, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "Microcode")
@@ -77,7 +79,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		disks, _ = tableDiskSummary.getValue(sourceIdx, "Disk")
 		operatingSystem, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "OS")
 		kernelVersion, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "Kernel")
-		claim := fmt.Sprintf(template, date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion)
+		claim := fmt.Sprintf(template, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, accelerators, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion, date)
 		hostValues.Values = append(hostValues.Values, []string{claim})
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
@@ -245,7 +247,7 @@ func newFrequencyTable(sources []*Source, category TableCategory) (table *Table)
 			spec     float64
 			measured float64
 		}
-		vals := make(map[int]freq) // map core count to spec/measured frequences
+		vals := make(map[int]freq) // map core count to spec/measured frequencies
 
 		// get measured frequencies (these are optionally collected)
 		matches := source.valsArrayFromRegexSubmatch("Measure Turbo Frequencies", `^(\d+)-core turbo\s+(\d+) MHz`)
@@ -671,12 +673,16 @@ func newUncoreTable(sources []*Source, category TableCategory) (table *Table) {
 				"CHA Count",
 				"Minimum Frequency",
 				"Maximum Frequency",
+				"Active Idle Frequency",
+				"Active Idle Utilization Point",
 			},
 			Values: [][]string{
 				{
 					source.getCHACount(),
 					source.getUncoreMinFrequency(),
 					source.getUncoreMaxFrequency(),
+					source.getActiveIdleFrequency(),
+					source.getActiveIdleUtilizationPoint(),
 				},
 			},
 		}
@@ -878,26 +884,19 @@ func newAcceleratorTable(sources []*Source, category TableCategory) (table *Tabl
 		return
 	}
 	for _, source := range sources {
-		cmdout := source.getCommandOutput("lshw")
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
 				"Name",
 				"Count",
+				"Work Queues",
 				"Full Name",
 				"Description",
 			},
 			Values: [][]string{},
 		}
 		for _, accelDef := range accelDefs {
-			regex := fmt.Sprintf("%s:%s", accelDef.MfgID, accelDef.DevID)
-			re, err := regexp.Compile(regex)
-			if err != nil {
-				log.Printf("failed to compile regex from accelerator definition: %s", regex)
-				return
-			}
-			count := fmt.Sprintf("%d", len(re.FindAllString(cmdout, -1)))
-			hostValues.Values = append(hostValues.Values, []string{accelDef.Name, count, accelDef.FullName, accelDef.Description})
+			hostValues.Values = append(hostValues.Values, []string{accelDef.Name, source.getAcceleratorCount(accelDef.MfgID, accelDef.DevID), source.getAcceleratorQueues(accelDef.Name), accelDef.FullName, accelDef.Description})
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
@@ -913,11 +912,18 @@ func newAcceleratorSummaryTable(tableAccelerator *Table, category TableCategory)
 	for _, hv := range tableAccelerator.AllHostValues {
 		var summaryParts []string
 		for _, rowValues := range hv.Values {
-			summaryParts = append(summaryParts, fmt.Sprintf("%s:%s", rowValues[0], rowValues[1]))
+			accelName := rowValues[0]
+			accelCount := rowValues[1]
+			if strings.Contains(accelName, "chipset") { // skip "QAT (on chipset)" in this table
+				continue
+			} else if strings.Contains(accelName, "CPU") { // rename "QAT (on CPU)" to simply "QAT"
+				accelName = "QAT"
+			}
+			summaryParts = append(summaryParts, fmt.Sprintf("%s %s [0]", accelName, accelCount))
 		}
 		var summaryHv = HostValues{
 			Name:       hv.Name,
-			ValueNames: []string{"Accelerators"},
+			ValueNames: []string{"Accelerators Available [used]"},
 			Values:     [][]string{{strings.Join(summaryParts, ", ")}},
 		}
 		table.AllHostValues = append(table.AllHostValues, summaryHv)
