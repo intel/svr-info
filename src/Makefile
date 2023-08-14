@@ -175,11 +175,11 @@ perf: linux-source
 	cd linux/tools/perf && make LDFLAGS=-static
 
 spectre-meltdown-checker:
-	mkdir -p spectre-meltdown-checker
-	rm -f spectre-meltdown-checker/spectre-meltdown-checker.sh
-	# get script from this PR https://github.com/speed47/spectre-meltdown-checker/pull/418
-	cd spectre-meltdown-checker && wget https://raw.githubusercontent.com/speed47/spectre-meltdown-checker/3c4f5e4d8e0fc6fc828c5bc164f20372eb2537ac/spectre-meltdown-checker.sh
-	chmod +x spectre-meltdown-checker/spectre-meltdown-checker.sh
+ifeq ("$(wildcard spectre-meltdown-checker)","")
+	git clone https://github.com/speed47/spectre-meltdown-checker.git
+else
+	cd spectre-meltdown-checker && git checkout master && git pull
+endif
 
 sshpass:
 ifeq ("$(wildcard sshpass)","")

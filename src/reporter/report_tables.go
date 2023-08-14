@@ -1586,10 +1586,17 @@ func newVulnerabilityTable(sources []*Source, category TableCategory) (table *Ta
 			ValueNames: []string{},
 			Values:     [][]string{},
 		}
+		vulns := source.getVulnerabilities()
 		var values []string
-		for _, pair := range source.valsArrayFromRegexSubmatch("spectre-meltdown-checker", `(CVE-\d+-\d+): (.+)`) {
-			hostValues.ValueNames = append(hostValues.ValueNames, pair[0])
-			values = append(values, pair[1])
+		// sort the keys
+		var keys []string
+		for k := range vulns {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			hostValues.ValueNames = append(hostValues.ValueNames, k)
+			values = append(values, vulns[k])
 		}
 		if len(values) > 0 {
 			hostValues.Values = append(hostValues.Values, []string{})

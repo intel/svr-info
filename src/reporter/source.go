@@ -1068,3 +1068,12 @@ func (s *Source) getAcceleratorQueues(accelName string) (val string) {
 	val = strings.Join(lines, ", ")
 	return
 }
+
+func (s *Source) getVulnerabilities() (vulns map[string]string) {
+	vulns = make(map[string]string)
+	// from spectre-meltdown-checker
+	for _, pair := range s.valsArrayFromRegexSubmatch("spectre-meltdown-checker", `(CVE-\d+-\d+): (.+)`) {
+		vulns[pair[0]] = pair[1]
+	}
+	return
+}
