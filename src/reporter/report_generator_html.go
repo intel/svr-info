@@ -1019,7 +1019,7 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func convertFoldedToJson(folded string) (out string, err error) {
+func convertFoldedToJSON(folded string) (out string, err error) {
 	rootNode := Node{Name: "root", Value: 0, Children: make(map[string]*Node)}
 	scanner := bufio.NewScanner(strings.NewReader(folded))
 	for scanner.Scan() {
@@ -1052,7 +1052,7 @@ func renderFlameGraph(header string, hv *HostValues, field string, hostIndex int
 		out += noDataFound
 		return
 	}
-	jsonStacks, err := convertFoldedToJson(folded)
+	jsonStacks, err := convertFoldedToJSON(folded)
 	if err != nil {
 		log.Printf("failed to convert folded data: %v", err)
 		out += "Error."

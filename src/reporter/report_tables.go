@@ -814,7 +814,7 @@ func newISATable(sources []*Source, category TableCategory) (table *Table) {
 	type ISA struct {
 		Name     string
 		FullName string
-		CpuID    string
+		CPUID    string
 		lscpu    string
 	}
 	isas := []ISA{
@@ -841,7 +841,7 @@ func newISATable(sources []*Source, category TableCategory) (table *Table) {
 		}
 		flags := source.valFromRegexSubmatch("lscpu", `^Flags.*:\s*(.*)$`)
 		for _, isa := range isas {
-			cpuSupport := yesIfTrue(source.valFromRegexSubmatch("cpuid -1", isa.CpuID+`\s*= (.+?)$`))
+			cpuSupport := yesIfTrue(source.valFromRegexSubmatch("cpuid -1", isa.CPUID+`\s*= (.+?)$`))
 			kernelSupport := "Yes"
 			match, err := regexp.MatchString(" "+isa.lscpu+" ", flags)
 			if err != nil {
