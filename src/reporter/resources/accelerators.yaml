@@ -15,7 +15,7 @@
   full_name: Intel Data Streaming Accelerator
   description:  a high-performance data copy and transformation accelerator
 
-- name: IAX
+- name: IAA
   mfgid: 8086
   devid: CFE
   full_name: Intel Analytics Accelerator

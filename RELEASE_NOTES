@@ -7,6 +7,22 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 16.04, 18.04, 20.04, 22.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.7.1
+Features Added
+- None
+Bugs Fixed
+- CXL devices were not being detected due to lspci version incompatibility
+- Insights that rely on CPU micro-architecture names were not matching appended MCC/XCC text
+- Align power-perf policy insight to labels introduced in 2.7.0
+Minor Changes
+- Use latest (as of release build time) spectre-meltdown-checker script from public repo
+- IAX accelerator renamed to IAA
+- Fix information text regarding Perl on HTML Analysis report
+Known Issues
+- The storage micro-benchmark may not run on CentOS due to OS locale settings.
+- CPU cache sizes are reported in aggregate on Ubuntu 20.04 and newer.
+- DRAM population and CPU frequencies may not be accurate on some public cloud IaaS VMs.
+
 2.7.0
 Features Added
 - Power & Performance Setting Labels refined. Now includes "Performance", "Balance Performance", "Normal", "Normal Powersave", "Balance Powersave", and "Powersave". Report output also includes specific EPB value, e.g., "Performance (6)".

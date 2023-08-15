@@ -34,7 +34,6 @@ const (
 )
 
 const noDataFound = "No data found."
-const perlWarning = "<br>Check if perl is installed in /usr/bin/."
 
 type ReportGeneratorHTML struct {
 	reports   []*Report
@@ -1020,7 +1019,7 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func convertFoldedToJson(folded string) (out string, err error) {
+func convertFoldedToJSON(folded string) (out string, err error) {
 	rootNode := Node{Name: "root", Value: 0, Children: make(map[string]*Node)}
 	scanner := bufio.NewScanner(strings.NewReader(folded))
 	for scanner.Scan() {
@@ -1051,12 +1050,9 @@ func renderFlameGraph(header string, hv *HostValues, field string, hostIndex int
 	folded := hv.Values[0][fieldIdx]
 	if folded == "" {
 		out += noDataFound
-		if header == "System" {
-			out += perlWarning
-		}
 		return
 	}
-	jsonStacks, err := convertFoldedToJson(folded)
+	jsonStacks, err := convertFoldedToJSON(folded)
 	if err != nil {
 		log.Printf("failed to convert folded data: %v", err)
 		out += "Error."

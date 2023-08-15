@@ -234,10 +234,13 @@ func (r *RulesEngineContext) CompareMicroarchitecture(x, y string) int {
 	}
 	var xArch, yArch int
 	var ok bool
-	if xArch, ok = uArchs[x]; !ok {
+	if len(x) < 3 || len(y) < 3 {
 		return -2
 	}
-	if yArch, ok = uArchs[y]; !ok {
+	if xArch, ok = uArchs[x[0:3]]; !ok {
+		return -2
+	}
+	if yArch, ok = uArchs[y[0:3]]; !ok {
 		return -2
 	}
 	if xArch < yArch {

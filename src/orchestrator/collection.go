@@ -62,6 +62,11 @@ func customizeCommandYAML(cmdTemplate []byte, cmdLineArgs *CmdLineArgs, targetBi
 	cf.Args.Timeout = cmdLineArgs.cmdTimeout
 	for idx := range cf.Commands {
 		cmd := &cf.Commands[idx]
+		// set path to the lspci data file
+		if cmd.Label == "lspci -vmm" {
+			cmd.Command = fmt.Sprintf("lspci -i %s -vmm", filepath.Join(targetBinDir, "pci.ids.gz"))
+		}
+		// optional collection
 		if cmd.Label == "Memory MLC Bandwidth" || cmd.Label == "Memory MLC Loaded Latency Test" {
 			cmd.Run = strings.Contains(cmdLineArgs.benchmark, "memory") || strings.Contains(cmdLineArgs.benchmark, "all")
 		} else if cmd.Label == "stress-ng cpu methods" {

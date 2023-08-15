@@ -523,12 +523,12 @@ func (s *Source) getL3LscpuMB() (val float64, err error) {
 	re := regexp.MustCompile(`(\d+\.?\d*)\s*(\w+).*`) // match known formats
 	match := re.FindStringSubmatch(l3Lscpu)
 	if len(match) == 0 {
-		err = fmt.Errorf("Unknown L3 format in lscpu: %s", l3Lscpu)
+		err = fmt.Errorf("unknown L3 format in lscpu: %s", l3Lscpu)
 		return
 	}
 	l3SizeNoUnit, err := strconv.ParseFloat(match[1], 64)
 	if err != nil {
-		err = fmt.Errorf("Failed to parse L3 size from lscpu: %s, %v", l3Lscpu, err)
+		err = fmt.Errorf("failed to parse L3 size from lscpu: %s, %v", l3Lscpu, err)
 		return
 	}
 	if strings.ToLower(match[2][:1]) == "m" {
@@ -539,7 +539,7 @@ func (s *Source) getL3LscpuMB() (val float64, err error) {
 		val = l3SizeNoUnit / 1024
 		return
 	}
-	err = fmt.Errorf("Unknown L3 units in lscpu: %s", l3Lscpu)
+	err = fmt.Errorf("unknown L3 units in lscpu: %s", l3Lscpu)
 	return
 }
 
@@ -552,12 +552,12 @@ func (s *Source) getL3MSRMB(uArch string) (val float64, err error) {
 	l3MSRHex := s.getCommandOutputLine("rdmsr 0xc90")
 	l3MSR, err := strconv.ParseInt(l3MSRHex, 16, 64)
 	if err != nil {
-		err = fmt.Errorf("Failed to parse MSR output: %s", l3MSRHex)
+		err = fmt.Errorf("failed to parse MSR output: %s", l3MSRHex)
 		return
 	}
 	cacheWays := s.getCacheWays(uArch)
 	if len(cacheWays) == 0 {
-		err = fmt.Errorf("Failed to get cache ways for uArch: %s", uArch)
+		err = fmt.Errorf("failed to get cache ways for uArch: %s", uArch)
 		return
 	}
 	cpul3SizeGB := l3LscpuMB / 1024
@@ -568,7 +568,7 @@ func (s *Source) getL3MSRMB(uArch string) (val float64, err error) {
 			return
 		}
 	}
-	err = fmt.Errorf("Did not find %d in cache ways.", l3MSR)
+	err = fmt.Errorf("did not find %d in cache ways", l3MSR)
 	return
 }
 
@@ -604,7 +604,7 @@ func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string, socketsStr
 		return
 	}
 	cacheMB := l3 / float64(coresPerSocket*sockets)
-	val = fmt.Sprintf("%s", strconv.FormatFloat(cacheMB, 'f', 3, 64))
+	val = strconv.FormatFloat(cacheMB, 'f', 3, 64)
 	val = strings.TrimRight(val, "0") // trim trailing zeros
 	val = strings.TrimRight(val, ".") // trim decimal point if trailing
 	val += " MiB"
@@ -1056,7 +1056,7 @@ func (s *Source) getAcceleratorCount(mfgID, devID string) (val string) {
 }
 
 func (s *Source) getAcceleratorQueues(accelName string) (val string) {
-	if accelName != "IAX" && accelName != "DSA" {
+	if accelName != "IAA" && accelName != "DSA" {
 		val = "N/A"
 		return
 	}
@@ -1066,5 +1066,14 @@ func (s *Source) getAcceleratorQueues(accelName string) (val string) {
 		return
 	}
 	val = strings.Join(lines, ", ")
+	return
+}
+
+func (s *Source) getVulnerabilities() (vulns map[string]string) {
+	vulns = make(map[string]string)
+	// from spectre-meltdown-checker
+	for _, pair := range s.valsArrayFromRegexSubmatch("spectre-meltdown-checker", `(CVE-\d+-\d+): (.+)`) {
+		vulns[pair[0]] = pair[1]
+	}
 	return
 }

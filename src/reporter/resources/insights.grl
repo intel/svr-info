@@ -77,7 +77,7 @@ rule Vulnerabilities {
 rule PowerPerfPolicy {
 	when
 		Report.GetValue("Configuration", "Power", "Power & Perf Policy") != "" &&
-		Report.GetValue("Configuration", "Power", "Power & Perf Policy") != "Performance"
+		!Report.GetValue("Configuration", "Power", "Power & Perf Policy").Contains("Performance")
 	then
 		Report.AddInsight(
 			"Power and Performance policy is set to '" + Report.GetValue("Configuration", "Power", "Power & Perf Policy") + "'.",
@@ -156,16 +156,16 @@ rule MountDiscard {
 		Retract("MountDiscard");
 }
 
-rule IAXEnabled {
+rule IAAEnabled {
 	when
-		Report.GetValueFromColumnAsInt("Configuration", "Accelerator", "Name", "IAX", "Count") != 0 &&
-		Report.GetValueFromColumn("Configuration", "Accelerator", "Name", "IAX", "Work Queues") == "None"
+		Report.GetValueFromColumnAsInt("Configuration", "Accelerator", "Name", "IAA", "Count") != 0 &&
+		Report.GetValueFromColumn("Configuration", "Accelerator", "Name", "IAA", "Work Queues") == "None"
 	then
 		Report.AddInsight(
-			"No work queues are configured for IAX accelerator(s).",
-			"Consider configuring IAX to allow accelerated compression and decompression in IAX-enabled software."
+			"No work queues are configured for IAA accelerator(s).",
+			"Consider configuring IAA to allow accelerated compression and decompression in IAA-enabled software."
 		);
-		Retract("IAXEnabled");
+		Retract("IAAEnabled");
 }
 
 rule DSAEnabled {

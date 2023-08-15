@@ -653,7 +653,7 @@ func getMicroArchitecture(cpusInfo *cpu.CPU, family, model, stepping, capid4, de
 
 func getMicroArchitectureExt(family, model, sockets string, capid4 string, devices string) (uarch string, err error) {
 	if family != "6" || (model != "143" && model != "207" && model != "173") {
-		err = fmt.Errorf("No extended architecture info for %s:%s", family, model)
+		err = fmt.Errorf("no extended architecture info for %s:%s", family, model)
 		return
 	}
 	var capid4Int, bits int64
