@@ -7,6 +7,16 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 16.04, 18.04, 20.04, 22.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.7.2
+Features Added
+- None
+Bugs Fixed
+- Corrupt Excel reports in svr-info version 2.7.1 caused by incompatibility between Go 1.21 and Excelize package. Reverting to Go 1.20.7.
+Known Issues
+- The storage micro-benchmark may not run on CentOS due to OS locale settings.
+- CPU cache sizes are reported in aggregate on Ubuntu 20.04 and newer.
+- DRAM population and CPU frequencies may not be accurate on some public cloud IaaS VMs.
+
 2.7.1
 Features Added
 - None
