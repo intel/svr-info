@@ -2149,7 +2149,10 @@ func newInsightTable(sources []*Source, configReport, briefReport, profileReport
 				log.Printf("failed to load rules into engine, %v", err)
 			}
 		} else {
-			knowledgeBase = knowledgeLibrary.NewKnowledgeBaseInstance("Rules", "0.1")
+			knowledgeBase, err = knowledgeLibrary.NewKnowledgeBaseInstance("Rules", "0.1")
+			if err != nil {
+				log.Panicf("failed to create knowledge base instance: %v", err)
+			}
 		}
 	}
 	for sourceIdx, source := range configReport.Sources {
