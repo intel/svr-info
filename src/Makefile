@@ -64,23 +64,25 @@ wrmsr:
 msrbusy:
 	cd msrbusy && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy
 
+ASYNCPROFILER_VERSION := 2.9
 async-profiler:
 ifeq ("$(wildcard async-profiler)","")
-ifeq ("$(wildcard async-profiler-2.9-linux-x64.tar.gz)","")
-	wget https://github.com/jvm-profiling-tools/async-profiler/releases/download/v2.9/async-profiler-2.9-linux-x64.tar.gz
+ifeq ("$(wildcard async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64.tar.gz)","")
+	wget https://github.com/jvm-profiling-tools/async-profiler/releases/download/v$(ASYNCPROFILER_VERSION)/async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64.tar.gz
 endif
-	tar -xf async-profiler-2.9-linux-x64.tar.gz && mv async-profiler-2.9-linux-x64 async-profiler
+	tar -xf async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64.tar.gz && mv async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64 async-profiler
 endif
 
 calcfreq:
 	cd calcfreq && VERSION=$(VERSION) make
 
+CPUID_VERSION := 20230614
 cpuid:
 ifeq ("$(wildcard cpuid)","")
-ifeq ("$(wildcard cpuid-20221003.src.tar.gz)","")
-	wget http://www.etallen.com/cpuid/cpuid-20221003.src.tar.gz
+ifeq ("$(wildcard cpuid-$(CPUID_VERSION).src.tar.gz)","")
+	wget http://www.etallen.com/cpuid/cpuid-$(CPUID_VERSION).src.tar.gz
 endif	
-	tar -xf cpuid-20221003.src.tar.gz && mv cpuid-20221003/ cpuid/
+	tar -xf cpuid-$(CPUID_VERSION).src.tar.gz && mv cpuid-$(CPUID_VERSION)/ cpuid/
 endif	
 	# gcc 4.8 doesn't support -Wimplicit-fallthrough option
 	cd cpuid && sed -i s/"-Wimplicit-fallthrough"/""/ Makefile
@@ -92,7 +94,7 @@ ifeq ("$(wildcard dmidecode)","")
 else
 	cd dmidecode && git checkout master && git pull
 endif
-	cd dmidecode && git checkout dmidecode-3-4
+	cd dmidecode && git checkout dmidecode-3-5
 	cd dmidecode && make
 
 ethtool:
@@ -181,12 +183,13 @@ else
 	cd spectre-meltdown-checker && git checkout master && git pull
 endif
 
+SSHPASS_VERSION := 1.10
 sshpass:
 ifeq ("$(wildcard sshpass)","")
-	wget https://cytranet.dl.sourceforge.net/project/sshpass/sshpass/1.10/sshpass-1.10.tar.gz
-	tar -xf sshpass-1.10.tar.gz
-	mv sshpass-1.10 sshpass
-	rm sshpass-1.10.tar.gz
+	wget https://cytranet.dl.sourceforge.net/project/sshpass/sshpass/$(SSHPASS_VERSION)/sshpass-$(SSHPASS_VERSION).tar.gz
+	tar -xf sshpass-$(SSHPASS_VERSION).tar.gz
+	mv sshpass-$(SSHPASS_VERSION) sshpass
+	rm sshpass-$(SSHPASS_VERSION).tar.gz
 	cd sshpass && ./configure
 endif
 	cd sshpass && make
@@ -211,12 +214,13 @@ ifeq ("$(wildcard sysstat/Makefile)","")
 endif
 	cd sysstat && make
 
+LINUX_VERSION := 6.5.2
 linux-source:
 ifeq ("$(wildcard linux)","")
-ifeq ("$(wildcard linux-6.0.7.tar.xz)","")
-	wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.0.7.tar.xz
+ifeq ("$(wildcard linux-$(LINUX_VERSION).tar.xz)","")
+	wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUX_VERSION).tar.xz
 endif
-	tar -xf linux-6.0.7.tar.xz && mv linux-6.0.7/ linux/
+	tar -xf linux-$(LINUX_VERSION).tar.xz && mv linux-$(LINUX_VERSION)/ linux/
 endif
 
 turbostat: linux-source
