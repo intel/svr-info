@@ -214,7 +214,7 @@ ifeq ("$(wildcard sysstat/Makefile)","")
 endif
 	cd sysstat && make
 
-LINUX_VERSION := 6.5.2
+LINUX_VERSION := 6.1.52
 linux-source:
 ifeq ("$(wildcard linux)","")
 ifeq ("$(wildcard linux-$(LINUX_VERSION).tar.xz)","")
