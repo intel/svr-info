@@ -26,7 +26,7 @@ RUN cp /usr/local/lib/libz.a /usr/lib/x86_64-linux-gnu/libz.a
 RUN curl -s https://gitlab.com/akihe/radamsa/uploads/a2228910d0d3c68d19c09cee3943d7e5/radamsa-0.6.c.gz | gzip -d | cc -O2 -x c -o /usr/local/bin/radamsa -
 
 # Install Go
-ARG GO_VERSION="1.20.7"
+ARG GO_VERSION="1.21.1"
 RUN wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
 RUN tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
 RUN rm go${GO_VERSION}.linux-amd64.tar.gz
