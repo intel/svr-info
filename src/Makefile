@@ -56,10 +56,10 @@ reporter:
 	cd reporter && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o reporter
 
 rdmsr:
-	cd rdmsr && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o rdmsr
+	cd rdmsr && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o rdmsrx
 
 wrmsr:
-	cd wrmsr && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o wrmsr
+	cd wrmsr && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o wrmsrx
 
 msrbusy:
 	cd msrbusy && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy
@@ -242,8 +242,8 @@ collector-deps-amd64: collector_tools
 	cp linux/tools/perf/perf $(TMPDIR)
 	cp -R async-profiler $(TMPDIR)
 	cp flamegraph/stackcollapse-perf.pl $(TMPDIR)
-	cp rdmsr/rdmsr $(TMPDIR)
-	cp wrmsr/wrmsr $(TMPDIR)
+	cp rdmsr/rdmsrx $(TMPDIR)
+	cp wrmsr/wrmsrx $(TMPDIR)
 	cp spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
 	cp stress-ng/stress-ng $(TMPDIR)
 	cp sysstat/mpstat $(TMPDIR)
@@ -282,8 +282,8 @@ clean:
 	rm -f orchestrator/resources/collector_deps_arm64.tgz
 	rm -f orchestrator/resources/reporter
 	rm -f orchestrator/resources/sshpass
-	rm -f rdmsr/rdmsr
-	rm -f wrmsr/wrmsr
+	rm -f rdmsr/rdmsrx
+	rm -f wrmsr/wrmsrx
 	rm -f msrbusy/msrbusy
 
 reset:

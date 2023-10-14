@@ -7,6 +7,10 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 16.04, 18.04, 20.04, 22.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.7.4
+Bugs Fixed
+- false positive Vulnerability for CVE-2022-40982 ("Downfall") on some ICX systems
+
 2.7.3
 Sub-components Updated
 - spectre-meltdown-checker -- updated to latest HEAD commit

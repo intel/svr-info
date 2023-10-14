@@ -127,81 +127,81 @@ commands:
     superuser: true
     parallel: true
   - label: rdmsr 0x1a4
-    command: rdmsr -f 3:0 0x1a4  # MSR_MISC_FEATURE_CONTROL: L2 and DCU Prefetcher enabled/disabled
+    command: rdmsrx -f 3:0 0x1a4  # MSR_MISC_FEATURE_CONTROL: L2 and DCU Prefetcher enabled/disabled
     superuser: true
     modprobe: msr
     parallel: true
   - label: rdmsr 0x1b0
-    command: rdmsr -f 3:0 0x1b0  # IA32_ENERGY_PERF_BIAS: Performance Energy Bias Hint (0 is highest perf, 15 is highest energy saving)
+    command: rdmsrx -f 3:0 0x1b0  # IA32_ENERGY_PERF_BIAS: Performance Energy Bias Hint (0 is highest perf, 15 is highest energy saving)
     superuser: true
     modprobe: msr
     parallel: true
   - label: rdmsr 0x1ad
-    command: rdmsr 0x1ad  # MSR_TURBO_RATIO_LIMIT: Maximum Ratio Limit of Turbo Mode
+    command: rdmsrx 0x1ad  # MSR_TURBO_RATIO_LIMIT: Maximum Ratio Limit of Turbo Mode
     superuser: true
     modprobe: msr
     parallel: true
   - label: rdmsr 0x1ae
-    command: rdmsr 0x1ae  # MSR_TURBO_GROUP_CORE_CNT: Group Size of Active Cores for Turbo Mode Operation
+    command: rdmsrx 0x1ae  # MSR_TURBO_GROUP_CORE_CNT: Group Size of Active Cores for Turbo Mode Operation
     superuser: true
     modprobe: msr
     parallel: true
   - label: rdmsr 0x4f
-    command: rdmsr -a 0x4f  # MSR_PPIN: Protected Processor Inventory Number
+    command: rdmsrx -a 0x4f  # MSR_PPIN: Protected Processor Inventory Number
     superuser: true
     modprobe: msr
     parallel: true
   - label: rdmsr 0x610
-    command: rdmsr -f 14:0 0x610  # MSR_PKG_POWER_LIMIT: Package limit in bits 14:0
+    command: rdmsrx -f 14:0 0x610  # MSR_PKG_POWER_LIMIT: Package limit in bits 14:0
     superuser: true
     modprobe: msr
     parallel: true
   - label: rdmsr 0x6d
-    command: rdmsr 0x6d  # TODO: what is the name/ID of this MSR? SPR Features
+    command: rdmsrx 0x6d  # TODO: what is the name/ID of this MSR? SPR Features
     superuser: true
     modprobe: msr
     parallel: true
   - label: rdmsr 0xc90
-    command: rdmsr 0xc90
+    command: rdmsrx 0xc90
     superuser: true
     modprobe: msr
     parallel: true
   - label: uncore cha count
-    command: rdmsr 0x702
+    command: rdmsrx 0x702
     superuser: true
     modprobe: msr
     parallel: true
   - label: uncore client cha count
-    command: rdmsr 0x396
+    command: rdmsrx 0x396
     superuser: true
     modprobe: msr
     parallel: true
   - label: uncore cha count spr
-    command: rdmsr 0x2FFE
+    command: rdmsrx 0x2FFE
     superuser: true
     modprobe: msr
     parallel: true
   - label: uncore max frequency
-    command: rdmsr -f 6:0 0x620  # MSR_UNCORE_RATIO_LIMIT: MAX_RATIO in bits 6:0
+    command: rdmsrx -f 6:0 0x620  # MSR_UNCORE_RATIO_LIMIT: MAX_RATIO in bits 6:0
     superuser: true
     modprobe: msr
     parallel: true
   - label: uncore min frequency
-    command: rdmsr -f 14:8 0x620  # MSR_UNCORE_RATIO_LIMIT: MIN_RATIO in bits 14:8
+    command: rdmsrx -f 14:8 0x620  # MSR_UNCORE_RATIO_LIMIT: MIN_RATIO in bits 14:8
     superuser: true
     modprobe: msr
     parallel: true
   - label: active idle utilization point
     command: |-
-        wrmsr 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
-        rdmsr -f 15:8 0xb1 # ACTIVE IDLE - UTILIZATION POINT
+        wrmsrx 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
+        rdmsrx -f 15:8 0xb1 # ACTIVE IDLE - UTILIZATION POINT
     superuser: true
     modprobe: msr
     parallel: true
   - label: active idle mesh frequency
     command: |-
-        wrmsr 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
-        rdmsr -f 7:0 0xb1 # ACTIVE IDLE - MESH FREQUENCY
+        wrmsrx 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
+        rdmsrx -f 7:0 0xb1 # ACTIVE IDLE - MESH FREQUENCY
     superuser: true
     modprobe: msr
     parallel: true

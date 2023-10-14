@@ -10,8 +10,8 @@ src/reporter/reporter*
 src/collector/collector
 src/collector/collector.exe
 src/collector/collector_arm64
-src/rdmsr/rdmsr
-src/wrmsr/wrmsr
+src/rdmsr/rdmsrx
+src/wrmsr/wrmsrx
 src/msrbusy/msrbusy
 src/calcfreq/calcfreq
 # src
