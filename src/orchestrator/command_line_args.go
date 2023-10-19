@@ -45,7 +45,7 @@ type CmdLineArgs struct {
 }
 
 var benchmarkTypes = []string{"cpu", "frequency", "memory", "storage", "turbo", "all"}
-var profileTypes = []string{"cpu", "network", "storage", "memory", "all"}
+var profileTypes = []string{"cpu", "network", "storage", "memory", "pmu", "all"}
 var analyzeTypes = []string{"system", "java", "all"}
 
 func showUsage() {

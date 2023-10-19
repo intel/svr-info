@@ -1,6 +1,6 @@
 module intel.com/svr-info/wrmsr/v2
 
-go 1.20
+go 1.21
 
 replace intel.com/svr-info/pkg/msr => ../pkg/msr
 

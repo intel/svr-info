@@ -1,10 +1,11 @@
 module intel.com/svr-info/pkg/cpu/v2
 
-go 1.20
+go 1.21
 
 require gopkg.in/yaml.v2 v2.4.0
 
 require (
-	github.com/kr/pretty v0.1.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
+	github.com/rogpeppe/go-internal v1.11.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

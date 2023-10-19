@@ -150,6 +150,7 @@ func NewProfileReport(sources []*Source) (report *Report) {
 	driveStatsTable := newDriveStatsTable(sources, NoCategory)
 	netStatsTable := newNetworkStatsTable(sources, NoCategory)
 	memStatsTable := newMemoryStatsTable(sources, NoCategory)
+	PMUMetricAveragesTable := newPMUMetricsTable(sources, NoCategory)
 	summaryTable := newProfileSummaryTable(sources, NoCategory, averageCPUUtilizationTable, CPUUtilizationTable, IRQRateTable, driveStatsTable, netStatsTable, memStatsTable)
 	report.Tables = append(report.Tables,
 		[]*Table{
@@ -160,6 +161,7 @@ func NewProfileReport(sources []*Source) (report *Report) {
 			driveStatsTable,
 			netStatsTable,
 			memStatsTable,
+			PMUMetricAveragesTable,
 		}...,
 	)
 	// TODO: remove check when code is stable

@@ -306,6 +306,9 @@ commands:
         if {{.ProfileNetwork}}; then
           sar -n DEV "$interval" "$samples" > sar-network.out &
         fi
+        if {{.ProfilePMU}}; then
+          pmu2metrics -csv -t $duration 1>pmu2metrics.out &
+        fi
         wait
         if [ -f "iostat.out" ]; then
           echo "########## iostat ##########"
@@ -322,6 +325,10 @@ commands:
         if [ -f "mpstat.out" ]; then
           echo "########## mpstat ##########"
           cat mpstat.out
+        fi
+        if [ -f "pmu2metrics.out" ]; then
+          echo "########## pmu2metrics ##########"
+          cat pmu2metrics.out
         fi
 ############
 # Analyze command below

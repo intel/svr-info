@@ -10,9 +10,9 @@ VERSION_NUMBER := $(shell cat ${VERSION_FILE})
 VERSION := $(VERSION_NUMBER)_$(COMMIT_DATE)_$(COMMIT_ID)
 
 default: check orchestrator
-.PHONY: default test check format_check format linux-source collector reporter orchestrator rdmsr wrmsr msrbusy reset clean tools libs async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
+.PHONY: default test check format_check format linux-source collector reporter orchestrator pmu2metrics rdmsr wrmsr msrbusy reset clean tools libs async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
 
-collector_tools: async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc msrbusy perf rdmsr wrmsr spectre-meltdown-checker stress-ng sysstat turbostat
+collector_tools: async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc msrbusy perf pmu2metrics rdmsr wrmsr spectre-meltdown-checker stress-ng sysstat turbostat
 
 test:
 	cd pkg/commandfile && go test -v -vet=all .
@@ -27,16 +27,17 @@ test:
 	cd rdmsr && go test -v -vet=all .
 	cd wrmsr && go test -v -vet=all .
 	cd msrbusy && go test -v -vet=all .
+	cd pmu2metrics && go test -v -vet=all .
 
 format:
-	gofmt -l -w -s pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/
+	gofmt -l -w -s pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/ pmu2metrics/ rdmsr/ wrmsr/
 
 lint:
-	golint -set_exit_status pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/
+	golint -set_exit_status pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/ pmu2metrics/ rdmsr/ wrmsr/
 
 format_check:
 	@echo "Running gofmt -l to check for code formatting issues..."
-	@test -z $(shell gofmt -l -s pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/) || { echo "[WARN] Formatting issues detected. Resolve with 'make format'"; exit 1; }
+	@test -z $(shell gofmt -l -s pkg/commandfile/ pkg/core/ pkg/cpu/ pkg/progress/ pkg/target/ orchestrator/ collector/ reporter/ pmu2metrics/ rdmsr/ wrmsr/) || { echo "[WARN] Formatting issues detected. Resolve with 'make format'"; exit 1; }
 	@echo "gofmt detected no issues"
 
 check: format_check
@@ -63,6 +64,9 @@ wrmsr:
 
 msrbusy:
 	cd msrbusy && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy
+
+pmu2metrics:
+	cd pmu2metrics && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics
 
 ASYNCPROFILER_VERSION := 2.9
 async-profiler:
@@ -242,6 +246,7 @@ collector-deps-amd64: collector_tools
 	cp linux/tools/perf/perf $(TMPDIR)
 	cp -R async-profiler $(TMPDIR)
 	cp flamegraph/stackcollapse-perf.pl $(TMPDIR)
+	cp pmu2metrics/pmu2metrics $(TMPDIR)
 	cp rdmsr/rdmsrx $(TMPDIR)
 	cp wrmsr/wrmsrx $(TMPDIR)
 	cp spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
@@ -269,13 +274,8 @@ clean:
 	rm -f calcfreq/calcfreq
 	rm -f collector/collector
 	rm -f collector/collector_arm64
-	rm -f collector/collector.exe
 	rm -f reporter/reporter
-	rm -f reporter/reporter_arm64
-	rm -f reporter/reporter.exe
 	rm -f orchestrator/orchestrator
-	rm -f orchestrator/orchestrator_arm64
-	rm -f orchestrator/orchestrator.exe
 	rm -f orchestrator/resources/collector
 	rm -f orchestrator/resources/collector_arm64
 	rm -f orchestrator/resources/collector_deps_amd64.tgz
@@ -285,6 +285,7 @@ clean:
 	rm -f rdmsr/rdmsrx
 	rm -f wrmsr/wrmsrx
 	rm -f msrbusy/msrbusy
+	rm -f pmu2metrics/pmu2metrics
 
 reset:
 	cd cpuid && make clean

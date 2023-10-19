@@ -2198,3 +2198,42 @@ func newSvrinfoTable(sources []*Source, category TableCategory) (table *Table) {
 	}
 	return
 }
+
+func newPMUMetricsTable(sources []*Source, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "PMU Metrics",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, source := range sources {
+		var hostValues = HostValues{
+			Name: source.getHostname(),
+			ValueNames: []string{
+				"Name",
+				"Average",
+				"Min",
+				"Max",
+			},
+			Values: [][]string{},
+		}
+		metricNames, timeStamps, metrics := source.getPMUMetrics()
+		if len(metrics) > 0 {
+			var series []string
+			for _, ts := range timeStamps {
+				series = append(series, fmt.Sprintf("%ss", strconv.FormatFloat(ts, 'f', 1, 64)))
+			}
+			hostValues.ValueNames = append(hostValues.ValueNames, series...)
+			for i, name := range metricNames {
+				hostValues.Values = append(hostValues.Values, []string{})
+				var values []string
+				values = append(values, name, strconv.FormatFloat(metrics[name].average, 'f', 4, 64), strconv.FormatFloat(metrics[name].min, 'f', 4, 64), strconv.FormatFloat(metrics[name].max, 'f', 4, 64))
+				for _, val := range metrics[name].series {
+					values = append(values, strconv.FormatFloat(val, 'f', 4, 64))
+				}
+				hostValues.Values[i] = append(hostValues.Values[i], values...)
+			}
+		}
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
