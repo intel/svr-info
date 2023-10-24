@@ -65,7 +65,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 			htOnOff = "?"
 		}
 		turboEnabledDisabled, _ := fullReport.findTable("CPU").getValue(sourceIdx, "Intel Turbo Boost")
-		if turboEnabledDisabled == "Enabled" {
+		if strings.Contains(strings.ToLower(turboEnabledDisabled), "enabled") {
 			turboOnOff = "On"
 		} else {
 			turboOnOff = "Off"
