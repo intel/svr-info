@@ -45,7 +45,7 @@ type CmdLineArgs struct {
 }
 
 var benchmarkTypes = []string{"cpu", "frequency", "memory", "storage", "turbo", "all"}
-var profileTypes = []string{"cpu", "network", "storage", "memory", "pmu", "all"}
+var profileTypes = []string{"cpu", "network", "storage", "memory", "pmu", "power", "all"}
 var analyzeTypes = []string{"system", "java", "all"}
 
 func showUsage() {
@@ -60,7 +60,7 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "                [-reporter \"args\"] [-collector \"args\"] [-debug]\n")
 
 	longHelp := `
-Intel System Health Inspector. Creates configuration, benchmark, profile, and insights reports for one or more systems.
+Intel System Health Inspector. Creates configuration, benchmark, profile, analysis, and insights reports for one or more systems.
 
 general arguments:
   -h                    show this help message and exit

@@ -107,6 +107,7 @@ func customizeCommandYAML(cmdTemplate []byte, cmdLineArgs *CmdLineArgs, targetBi
 					ProfileMemory  bool
 					ProfileNetwork bool
 					ProfilePMU     bool
+					ProfilePower   bool
 				}{
 					Duration:       cmdLineArgs.profileDuration,
 					Interval:       cmdLineArgs.profileInterval,
@@ -115,6 +116,7 @@ func customizeCommandYAML(cmdTemplate []byte, cmdLineArgs *CmdLineArgs, targetBi
 					ProfileMemory:  strings.Contains(cmdLineArgs.profile, "memory") || strings.Contains(cmdLineArgs.profile, "all"),
 					ProfileNetwork: strings.Contains(cmdLineArgs.profile, "network") || strings.Contains(cmdLineArgs.profile, "all"),
 					ProfilePMU:     strings.Contains(cmdLineArgs.profile, "pmu") || strings.Contains(cmdLineArgs.profile, "all"),
+					ProfilePower:   strings.Contains(cmdLineArgs.profile, "power") || strings.Contains(cmdLineArgs.profile, "all"),
 				})
 				if err != nil {
 					return

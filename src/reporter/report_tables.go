@@ -1972,7 +1972,34 @@ func newMemoryStatsTable(sources []*Source, category TableCategory) (table *Tabl
 	return
 }
 
-func newProfileSummaryTable(sources []*Source, category TableCategory, averageCPUUtilizationTable, CPUUtilizationTable, IRQRateTable, driveStatsTable, netStatsTable, memStatsTable *Table) (table *Table) {
+func newPowerStatsTable(sources []*Source, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "Power Stats",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, source := range sources {
+		var hostValues = HostValues{
+			Name: source.getHostname(),
+			ValueNames: []string{
+				"Package",
+				"DRAM",
+			},
+			Values: [][]string{},
+		}
+		reStat := regexp.MustCompile(`^(\d+\.\d+)\s*(\d+\.\d+)$`)
+		for _, line := range source.getProfileLines("turbostat") {
+			match := reStat.FindStringSubmatch(line)
+			if len(match) == 0 {
+				continue
+			}
+			hostValues.Values = append(hostValues.Values, match[1:])
+		}
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
+func newProfileSummaryTable(sources []*Source, category TableCategory, averageCPUUtilizationTable, CPUUtilizationTable, IRQRateTable, driveStatsTable, netStatsTable, memStatsTable, PMUMetricsTable, powerStatsTable *Table) (table *Table) {
 	table = &Table{
 		Name:          "Summary",
 		Category:      category,
@@ -1983,36 +2010,26 @@ func newProfileSummaryTable(sources []*Source, category TableCategory, averageCP
 			Name: source.getHostname(),
 			ValueNames: []string{
 				"CPU Utilization (%)",
-				"Kernel Utilization (%)",
-				"User Utilization (%)",
-				"Soft IRQ Utilization (%)",
-				"IRQ Rate (IRQ/s)",
+				"CPU Frequency (GHz)",
+				"CPI",
+				"Package Power (Watts)",
 				"Drive Reads (kB/s)",
 				"Drive Writes (kB/s)",
-				"Network RX (packets/s)",
-				"Network TX (packets/s)",
 				"Network RX (kB/s)",
 				"Network TX (kB/s)",
-				"Memory Free (kB)",
 				"Memory Available (kB)",
-				"Memory Used (kB)",
 			},
 			Values: [][]string{
 				{
 					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%idle", true),
-					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%sys", false),
-					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%usr", false),
-					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%irq", false),
-					getMetricAverage(IRQRateTable, idx, []string{"HI/s", "TIMER/s", "NET_TX/s", "NET_RX/s", "BLOCK/s", "IRQ_POLL/s", "TASKLET/s", "SCHED/s", "HRTIMER/s", "RCU/s"}, "Time"),
+					getPMUMetricFromTable(PMUMetricsTable, idx, "CPU operating frequency (in GHz)"),
+					getPMUMetricFromTable(PMUMetricsTable, idx, "CPI"),
+					getMetricAverage(powerStatsTable, idx, []string{"Package"}, ""),
 					getMetricAverage(driveStatsTable, idx, []string{"kB_read/s"}, "Device"),
 					getMetricAverage(driveStatsTable, idx, []string{"kB_wrtn/s"}, "Device"),
-					getMetricAverage(netStatsTable, idx, []string{"rxpck/s"}, "Time"),
-					getMetricAverage(netStatsTable, idx, []string{"txpck/s"}, "Time"),
 					getMetricAverage(netStatsTable, idx, []string{"rxkB/s"}, "Time"),
 					getMetricAverage(netStatsTable, idx, []string{"txkB/s"}, "Time"),
-					getMetricAverage(memStatsTable, idx, []string{"free"}, "Time"),
 					getMetricAverage(memStatsTable, idx, []string{"avail"}, "Time"),
-					getMetricAverage(memStatsTable, idx, []string{"used"}, "Time"),
 				},
 			},
 		}

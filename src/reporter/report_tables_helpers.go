@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 	"intel.com/svr-info/pkg/cpu"
 )
 
@@ -564,6 +566,17 @@ func expandCPUList(cpuList string) (cpus []int) {
 	return
 }
 
+func getPMUMetricFromTable(PMUMetricsTable *Table, sourceIndex int, fieldName string) (metric string) {
+	hostValues := &PMUMetricsTable.AllHostValues[sourceIndex]
+	for _, row := range hostValues.Values {
+		if row[0] == fieldName {
+			metric = row[1]
+			break
+		}
+	}
+	return
+}
+
 func getCPUAveragePercentage(table *Table, sourceIndex int, fieldName string, inverse bool) (average string) {
 	hostValues := &table.AllHostValues[sourceIndex]
 	sum, _, err := getSumOfFields(hostValues, []string{fieldName}, "Time")
@@ -590,16 +603,20 @@ func getMetricAverage(table *Table, sourceIndex int, fieldNames []string, separa
 	}
 	if len(fieldNames) > 0 && seps > 0 {
 		averageFloat := sum / float64(seps/len(fieldNames))
-		average = fmt.Sprintf("%0.2f", averageFloat)
+		p := message.NewPrinter(language.English) // use printer to get commas at thousands, e.g., Memory Available (kB)  258,691,376.80
+		average = p.Sprintf("%0.2f", averageFloat)
 	}
 	return
 }
 
 func getSumOfFields(hostValues *HostValues, fieldNames []string, separatorFieldName string) (sum float64, numSeparators int, err error) {
 	prevSeparator := ""
-	separatorIdx, err := findValueIndex(hostValues, separatorFieldName)
-	if err != nil {
-		return
+	var separatorIdx int
+	if separatorFieldName != "" {
+		separatorIdx, err = findValueIndex(hostValues, separatorFieldName)
+		if err != nil {
+			return
+		}
 	}
 	for _, fieldName := range fieldNames {
 		var fieldIdx int
@@ -614,10 +631,14 @@ func getSumOfFields(hostValues *HostValues, fieldNames []string, separatorFieldN
 			if err != nil {
 				return
 			}
-			separator := entry[separatorIdx]
-			if separator != prevSeparator {
+			if separatorFieldName != "" {
+				separator := entry[separatorIdx]
+				if separator != prevSeparator {
+					numSeparators++
+					prevSeparator = separator
+				}
+			} else {
 				numSeparators++
-				prevSeparator = separator
 			}
 			sum += valueFloat
 		}

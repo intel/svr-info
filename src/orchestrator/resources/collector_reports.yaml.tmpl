@@ -309,6 +309,10 @@ commands:
         if {{.ProfilePMU}}; then
           pmu2metrics -csv -t $duration 1>pmu2metrics.out &
         fi
+        if {{.ProfilePower}}; then
+          turbostat -S -s PkgWatt,RAMWatt -q -i "$interval" -n "$samples" -o turbostat.out &
+        fi
+        ############
         wait
         if [ -f "iostat.out" ]; then
           echo "########## iostat ##########"
@@ -330,7 +334,10 @@ commands:
           echo "########## pmu2metrics ##########"
           cat pmu2metrics.out
         fi
-############
+        if [ -f "turbostat.out" ]; then
+          echo "########## turbostat ##########"
+          cat turbostat.out
+        fi
 # Analyze command below
 # Note that this is one command because we want the analyzing options to run in parallel with
 # each other but not with parallel commands, i.e., the configuration collection commands.
