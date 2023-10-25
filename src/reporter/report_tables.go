@@ -67,8 +67,10 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		turboEnabledDisabled, _ := fullReport.findTable("CPU").getValue(sourceIdx, "Intel Turbo Boost")
 		if strings.Contains(strings.ToLower(turboEnabledDisabled), "enabled") {
 			turboOnOff = "On"
-		} else {
+		} else if strings.Contains(strings.ToLower(turboEnabledDisabled), "disabled") {
 			turboOnOff = "Off"
+		} else {
+			turboOnOff = "?"
 		}
 		numaNodes, _ = fullReport.findTable("CPU").getValue(sourceIdx, "NUMA Nodes")
 		accelerators, _ := tableAcceleratorSummary.getValue(sourceIdx, "Accelerators Available [used]")
