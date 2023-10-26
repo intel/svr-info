@@ -184,82 +184,52 @@
         <h1>Intel&reg; System Health Inspector</h1>
     </header>
     <nav class="tab">
-        <button class="tablinks" onclick="openTab(event, 'configuration')" id="defaultOpen">Configuration</button>
-        <button class="tablinks" onclick="openTab(event, 'benchmark')">Benchmark</button>
-        <button class="tablinks" onclick="openTab(event, 'profile')">Profile</button>
-        <button class="tablinks" onclick="openTab(event, 'analyze')">Analyze</button>
-        <button class="tablinks" onclick="openTab(event, 'insights')">Insights</button>
+        {{$reportGen := .}}
+        {{range $i, $report := $reportGen.Reports}}
+        <button class="tablinks" onclick='openTab(event, {{print .Name "Content"}})' {{if eq $i 0}} id="defaultOpen" {{end}}>{{.Name}}</button>
+        {{end}}
     </nav>
-    <div id="configuration" class="tabcontent tabdefault">
-        <main id="main" class="content">
-            <div id="mySidebar" class="sidebar">
-                <a href="#" style="position: absolute;top: 0; padding-left: 7px; padding-right: 27px; color: #fff; background-color: #1f8dd6">CONTENTS</a>
-                <a href="javascript:void(0)" class="togglebtn" onclick="toggleNav()">&lt;</a>
-                {{.RenderMenuItems .ConfigurationReport}}
-            </div>
-            <div id="myConfigurationContent">
-                <noscript>
-                    <h3>JavaScript is disabled. Functionality is limited.</h3>
-                </noscript>
-                {{$reportGen := .}}
-                {{range .ConfigurationReport.Tables}}
+    {{$reportGen := .}}
+    {{range $i, $report := $reportGen.Reports}}
+        {{if eq $i 0}}
+        <div id="{{.Name}}Content" class="tabcontent tabdefault">
+            <main class="content">
+                <div id="mySidebar" class="sidebar">
+                    <a href="#" style="position: absolute;top: 0; padding-left: 7px; padding-right: 27px; color: #fff; background-color: #1f8dd6">CONTENTS</a>
+                    <a href="javascript:void(0)" class="togglebtn" onclick="toggleNav()">&lt;</a>
+                    {{$reportGen.RenderMenuItems .}}
+                </div>
+                <div id="myConfigurationContent">
+                    <noscript>
+                        <h3>JavaScript is disabled. Functionality is limited.</h3>
+                    </noscript>
+                    {{range .Notes}}
+                    <h3>{{.}}</h3>
+                    {{end}}
+                    {{range .Tables}}
+                    <section>
+                        {{$reportGen.RenderDataTable . $report.RefData}}
+                    </section>
+                    {{end}}
+                </div>
+            </main>
+        </div>
+        {{else}}
+        <div id="{{.Name}}Content" class="tabcontent tabnotdefault">
+            <main class="content">
+                {{range .Notes}}
+                <h3>{{.}}</h3>
+                {{end}}
+                {{range .Tables}}
                 <section>
-                    {{$reportGen.RenderDataTable . $reportGen.ConfigurationReportReferenceData}}
+                    {{$reportGen.RenderDataTable . $report.RefData}}
                 </section>
                 {{end}}
-            </div>
-        </main>
-    </div>
-    <div id="benchmark" class="tabcontent tabnotdefault">
-        <main class="content">
-            <h3>Use the "-benchmark all" option to collect all micro-benchmarking data. See "-help" for finer control.</h3>
-            {{$reportGen := .}}
-            {{range .BenchmarkReport.Tables}}
-            <section>
-                {{$reportGen.RenderDataTable . $reportGen.BenchmarkReportReferenceData}}
-            </section>
-            {{end}}
-            <h3>&nbsp;</h3>
-        </main>
-    </div>
-    <div id="profile" class="tabcontent tabnotdefault">
-        <main class="content">
-            <h3>Use the "-profile all" option to collect all system profiling data. See "-help" for finer control.</h3>
-            {{$reportGen := .}}
-            {{range .ProfileReport.Tables}}
-            <section>
-                {{$reportGen.RenderDataTable . $reportGen.ProfileReportReferenceData}}
-            </section>
-            {{end}}
-            <h3>&nbsp;</h3>
-        </main>
-    </div>
-    <div id="analyze" class="tabcontent tabnotdefault">
-        <main class="content">
-            <h3>Use the "-analyze all" option to collect all analysis data. See "-help" for finer control.</h3>
-            <h3>Note: Perl is required on the target machine to collapse the call stacks used to produce System Flame Graphs.</h3>
-            Upload your Intel&reg; System Health Inspector JSON-formatted reports to <a href=https://optimizations.intel.com/gProfilerAnalyzer target="_blank" rel="noopener noreferrer">Intel&reg; Optimization Hub</a> for deeper analysis.
-            {{$reportGen := .}}
-            {{range .AnalyzeReport.Tables}}
-            <section>
-                {{$reportGen.RenderDataTable . $reportGen.AnalyzeReportReferenceData}}
-            </section>
-            {{end}}
-            <h3>&nbsp;</h3>
-        </main>
-    </div>
-    <div id="insights" class="tabcontent tabnotdefault">
-        <main class="content">
-        <h3>Insights are derived from data collected by Intel&reg; System Health Inspector. They are provided for consideration but may not always be relevant.</h3>
-            {{$reportGen := .}}
-            {{range .InsightsReport.Tables}}
-            <section>
-                {{$reportGen.RenderDataTable . $reportGen.InsightsReportReferenceData}}
-            </section>
-            {{end}}
-            <h3>&nbsp;</h3>
-        </main>
-    </div>
+                <h3>&nbsp;</h3>
+            </main>
+        </div>
+        {{end}}
+    {{end}}
     <script>
         const widthOpen="150px"
         const widthClosed="30px"

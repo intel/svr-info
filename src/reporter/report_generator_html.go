@@ -50,35 +50,29 @@ func newReportGeneratorHTML(outputDir string, cpusInfo *cpu.CPU, configurationDa
 	return
 }
 
+type ReportWithMore struct {
+	Report
+	Name    string
+	Notes   []string
+	RefData []*HostReferenceData
+}
+
 // ReportGen - struct used within the HTML template
 type ReportGen struct {
-	HostIndices                      []int
-	ConfigurationReport              *Report
-	ConfigurationReportReferenceData []*HostReferenceData
-	BenchmarkReport                  *Report
-	BenchmarkReportReferenceData     []*HostReferenceData
-	ProfileReport                    *Report
-	ProfileReportReferenceData       []*HostReferenceData
-	AnalyzeReport                    *Report
-	AnalyzeReportReferenceData       []*HostReferenceData
-	InsightsReport                   *Report
-	InsightsReportReferenceData      []*HostReferenceData
-	Version                          string
+	HostIndices []int
+	Reports     []*ReportWithMore
 }
 
 func newReportGen(reportsData []*Report, hostIndices []int, hostsReferenceData []*HostReferenceData) (gen *ReportGen) {
+	namedReports := []*ReportWithMore{}
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[configurationDataIndex], Name: "Configuration", Notes: []string{""}})
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[benchmarkDataIndex], Name: "Benchmark", Notes: []string{"Use the \"-benchmark all\" option to collect all micro-benchmarking data. See \"-help\" for finer control."}, RefData: hostsReferenceData})
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[profileDataIndex], Name: "Profile", Notes: []string{"Use the \"-profile all\" option to collect all system profiling data. See \"-help\" for finer control."}})
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[analyzeDataIndex], Name: "Analyze", Notes: []string{"Use the \"-analyze all\" option to collect all analysis data. See \"-help\" for finer control.", "Note: Perl is required on the target machine to collapse the call stacks used to produce System Flame Graphs."}})
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[insightDataIndex], Name: "Insights", Notes: []string{"Insights are derived from data collected by Intel® System Health Inspector. They are provided for consideration but may not always be relevant."}})
 	gen = &ReportGen{
-		HostIndices:                      hostIndices,
-		ConfigurationReport:              reportsData[configurationDataIndex],
-		ConfigurationReportReferenceData: []*HostReferenceData{},
-		BenchmarkReport:                  reportsData[benchmarkDataIndex],
-		BenchmarkReportReferenceData:     hostsReferenceData,
-		ProfileReport:                    reportsData[profileDataIndex],
-		ProfileReportReferenceData:       []*HostReferenceData{},
-		AnalyzeReport:                    reportsData[analyzeDataIndex],
-		AnalyzeReportReferenceData:       []*HostReferenceData{},
-		InsightsReport:                   reportsData[insightDataIndex],
-		InsightsReportReferenceData:      []*HostReferenceData{},
+		HostIndices: hostIndices,
+		Reports:     namedReports,
 	}
 	return
 }
@@ -132,7 +126,7 @@ func (r *ReportGeneratorHTML) loadHostReferenceData(hostIndex int, referenceData
 	return
 }
 
-func (r *ReportGen) RenderMenuItems(reportData *Report) template.HTML {
+func (r *ReportGen) RenderMenuItems(reportData *ReportWithMore) template.HTML {
 	var out string
 	category := NoCategory
 	for _, table := range reportData.Tables {
