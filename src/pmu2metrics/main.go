@@ -21,9 +21,10 @@ import (
 
 // globals
 var (
-	gVersion string = "dev"
-	gVerbose bool   = false
-	gDebug   bool   = false
+	gVersion     string = "dev"
+	gVerbose     bool   = false
+	gVeryVerbose bool   = false
+	gDebug       bool   = false
 )
 
 const metricInterval int = 5 // the number of seconds between metric reports
@@ -52,8 +53,8 @@ func getPerfCommandArgs(eventGroups []GroupDefinition, runSeconds int, metadata 
 			events = append(events, event.Raw)
 		}
 		if len(events) == 0 {
-			if gVerbose {
-				log.Printf("No collectable events in group.")
+			if gVeryVerbose {
+				log.Printf("No collectable events in group: %v", group)
 			}
 		} else {
 			groups = append(groups, fmt.Sprintf("{%s}", strings.Join(events, ",")))
@@ -105,7 +106,7 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, runSecon
 		cmd = exec.Command("perf", args...)
 		reader, _ = cmd.StderrPipe()
 	}
-	if gVerbose {
+	if gVeryVerbose {
 		log.Print(cmd)
 	}
 	scanner := bufio.NewScanner(reader)
@@ -133,7 +134,7 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, runSecon
 	// read perf stat output
 	for scanner.Scan() { // blocks waiting for next token (line)
 		line := scanner.Text()
-		if gVerbose {
+		if gVeryVerbose {
 			log.Print(line)
 		}
 		t1.Stop()
@@ -165,7 +166,7 @@ func showUsage() {
   	Path to metric definition file.
   -t <seconds>
   	Number of seconds to run. By default, runs indefinitely.
-  -v
+  -v[v]
   	Enable verbose logging.
   -V
   	Print program version.`
@@ -193,9 +194,13 @@ func mainReturnWithCode(ctx context.Context) int {
 	flag.StringVar(&eventFilePath, "e", "", "Path to custom perf event definition file.")
 	flag.StringVar(&metricFilePath, "m", "", "Path to custom metric definition file.")
 	flag.BoolVar(&gVerbose, "v", false, "Enable verbose logging.")
+	flag.BoolVar(&gVeryVerbose, "vv", false, "Enable verbose logging.")
 	flag.BoolVar(&printCSV, "csv", false, "Print output to stdout in CSV format.")
 	flag.BoolVar(&gDebug, "devonly", false, "Temporary debug option used during development. Remove me.")
 	flag.Parse()
+	if gVeryVerbose {
+		gVerbose = true
+	}
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	if showHelp {
 		showUsage()

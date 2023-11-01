@@ -63,10 +63,9 @@ func getExpressionVariables(metric MetricDefinition, frame EventFrame, previousT
 			loadGroups = true
 		}
 		if metric.Variables[variableName] == -2 { // tried previously and failed, don't try again
-			errstr := fmt.Sprintf("metric variable group assignment previously failed, skipping: %s", variableName)
-			err = fmt.Errorf(errstr)
-			if gVerbose {
-				log.Print(errstr)
+			err = fmt.Errorf("metric variable group assignment previously failed, skipping: %s", variableName)
+			if gVeryVerbose {
+				log.Print(err.Error())
 			}
 			return
 		}
@@ -74,6 +73,9 @@ func getExpressionVariables(metric MetricDefinition, frame EventFrame, previousT
 	if loadGroups {
 		if err = loadMetricBestGroups(&metric, frame); err != nil {
 			err = fmt.Errorf("at least one of the variables couldn't be assigned to a group: %v", err)
+			if gVeryVerbose {
+				log.Print(err.Error())
+			}
 			return
 		}
 	}
@@ -81,6 +83,8 @@ func getExpressionVariables(metric MetricDefinition, frame EventFrame, previousT
 	for variableName := range metric.Variables {
 		if metric.Variables[variableName] == -2 {
 			err = fmt.Errorf("variable value set to -2 (shouldn't happen): %s", variableName)
+			log.Print(err.Error())
+			return
 		}
 		// set the variable value to the event value divided by the perf collection time to normalize the value to 1 second
 		variables[variableName] = frame.EventGroups[metric.Variables[variableName]].EventValues[variableName] / (frame.Timestamp - previousTimestamp)
@@ -140,16 +144,13 @@ func evaluateExpression(metric MetricDefinition, variables map[string]interface{
 			err = errx.(error)
 		}
 	}()
-	if metric.EvaluatorExpression == nil {
-		var evExpression *govaluate.EvaluableExpression
-		if evExpression, err = govaluate.NewEvaluableExpressionWithFunctions(metric.Expression, functions); err != nil {
-			log.Printf("%v: %s", err, metric.Expression)
-			return
-		}
-		metric.EvaluatorExpression = evExpression // save this so we don't have to create it again for the same metric
+	var evExpression *govaluate.EvaluableExpression
+	if evExpression, err = govaluate.NewEvaluableExpressionWithFunctions(metric.Expression, functions); err != nil {
+		log.Printf("%v : %s : %s", err, metric.Name, metric.Expression)
+		return
 	}
-	if result, err = metric.EvaluatorExpression.Evaluate(variables); err != nil {
-		log.Printf("%v: %s", err, metric.Expression)
+	if result, err = evExpression.Evaluate(variables); err != nil {
+		log.Printf("%v : %s : %s", err, metric.Name, metric.Expression)
 	}
 	return
 }
@@ -175,7 +176,7 @@ func processEvents(perfEvents []string, metricDefinitions []MetricDefinition, fu
 			continue
 		}
 		metrics = append(metrics, Metric{Name: metricDef.Name, Value: result.(float64)})
-		if gVerbose {
+		if gVeryVerbose {
 			var prettyVars []string
 			for variableName := range variables {
 				prettyVars = append(prettyVars, fmt.Sprintf("%s=%f", variableName, variables[variableName]))

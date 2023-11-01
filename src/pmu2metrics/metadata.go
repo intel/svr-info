@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -172,45 +174,54 @@ func getPerfSupportedEvents() (supportedEvents string, err error) {
 	return
 }
 
-func getRefCyclesSupported() (supported bool, err error) {
+func getRefCyclesSupported() (supported bool, output string, err error) {
 	cmd := exec.Command("perf", "stat", "-a", "-e", "ref-cycles", "sleep", ".1")
-	var bytes []byte
-	if bytes, err = cmd.Output(); err != nil {
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stderr = &errBuffer
+	cmd.Stdout = &outBuffer
+	if err = cmd.Run(); err != nil {
 		return
 	}
-	supported = !strings.Contains(string(bytes), "<not supported>")
+	output = errBuffer.String()
+	supported = !strings.Contains(output, "<not supported>")
 	return
 }
 
-func getTMASupported() (supported bool, err error) {
+func getTMASupported() (supported bool, output string, err error) {
 	cmd := exec.Command("perf", "stat", "-a", "-e", "'{cpu/event=0x00,umask=0x04,period=10000003,name='TOPDOWN.SLOTS'/,cpu/event=0x00,umask=0x81,period=10000003,name='PERF_METRICS.BAD_SPECULATION'/}'", "sleep", ".1")
-	var bytes []byte
-	if bytes, err = cmd.Output(); err != nil {
-		err = nil
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stderr = &errBuffer
+	cmd.Stdout = &outBuffer
+	if err = cmd.Run(); err != nil {
+		// err from perf stat is 1st indication that these events are not supported, so return a nil error
 		supported = false
+		output = fmt.Sprint(err)
+		err = nil
 		return
 	}
+	// event values being equal is 2nd indication that these events are not (properly) supported
+	output = errBuffer.String()
 	vals := make(map[string]float64)
-	lines := strings.Split(string(bytes), "\n")
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "TOPDOWN.SLOTS") || strings.Contains(line, "PERF_METRICS.BAD_SPECULATION") {
 			fields := strings.Split(strings.TrimSpace(line), " ")
 			if len(fields) >= 2 {
-				val, err := strconv.ParseFloat(fields[len(fields)-1], 64)
+				var val float64
+				val, err = strconv.ParseFloat(strings.Replace(fields[0], ",", "", -1), 64)
 				if err != nil {
-					continue
+					return
 				}
-				vals[fields[0]] = val
+				vals[fields[len(fields)-1]] = val
 			}
 		}
 	}
 	supported = !(vals["TOPDOWN.SLOTS"] == vals["PERF_METRICS.BAD_SPECULATION"])
 	return
-
 }
 
 func loadMetadata() (metadata Metadata, err error) {
-	// reduce startup time by running the two perf commands in their own threads while
+	// reduce startup time by running the three perf commands in their own threads while
 	// the rest of the metadata is being collected
 	slowFuncChannel := make(chan error)
 	// perf list
@@ -228,29 +239,38 @@ func loadMetadata() (metadata Metadata, err error) {
 	// ref_cycles
 	go func() {
 		var err error
-		if metadata.RefCyclesSupported, err = getRefCyclesSupported(); err != nil {
+		var output string
+		if metadata.RefCyclesSupported, output, err = getRefCyclesSupported(); err != nil {
 			if gDebug {
 				err = nil
 			} else {
 				err = fmt.Errorf("failed to determine if ref_cycles is supported: %v", err)
 			}
 		}
+		if !metadata.RefCyclesSupported && gVerbose {
+			log.Printf("ref-cycles not supported:\n%s\n", output)
+		}
 		slowFuncChannel <- err
 	}()
 	// TMA
 	go func() {
 		var err error
-		if metadata.TMASupported, err = getTMASupported(); err != nil {
+		var output string
+		if metadata.TMASupported, output, err = getTMASupported(); err != nil {
 			if gDebug {
 				err = nil
 			} else {
 				err = fmt.Errorf("failed to determine if TMA is supported: %v", err)
 			}
 		}
+		if !metadata.TMASupported && gVerbose {
+			log.Printf("TMA not supported:\n%s\n", output)
+		}
 		slowFuncChannel <- err
 	}()
 	defer func() {
 		var errs []error
+		errs = append(errs, <-slowFuncChannel)
 		errs = append(errs, <-slowFuncChannel)
 		errs = append(errs, <-slowFuncChannel)
 		for _, errInside := range errs {
@@ -271,7 +291,6 @@ func loadMetadata() (metadata Metadata, err error) {
 		return
 	}
 	// Core Count (per socket)
-	// TODO: does this account for off-lined cores?
 	metadata.CoresPerSocket, err = strconv.Atoi(cpuInfo[0]["cpu cores"])
 	if err != nil {
 		err = fmt.Errorf("failed to retrieve cores per socket: %v", err)
