@@ -159,6 +159,13 @@
   stepping:
   channels: 12
 
+#  Bergamo
+- architecture: Zen4C
+  family: 25
+  model: 160
+  stepping:
+  channels: 12
+
 ##########
 # ARM CPUs
 #########
