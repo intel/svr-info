@@ -820,16 +820,18 @@ func newISATable(sources []*Source, category TableCategory) (table *Table) {
 		lscpu    string
 	}
 	isas := []ISA{
-		{"AVX", "Advanced Vector Extensions", "AVX: advanced vector extensions", "avx"},
-		{"AVX2", "Advanced Vector Extensions 2", "AVX2: advanced vector extensions 2", "avx2"},
-		{"AVX512F", "AVX-512 Foundation", "AVX512F: AVX-512 foundation instructions", "avx512f"},
-		{"AVX512_VNNI", "Vector Neural Network Instructions", "AVX512_VNNI: neural network instructions", "avx512_vnni"},
-		{"AVX512_BF16", "BFLOAT16", "AVX512_BF16: bfloat16 instructions", "avx512_bf16"},
 		{"AES", "Advanced Encryption Standard New Instructions (AES-NI)", "AES instruction", "aes"},
+		{"AMX", "Advanced Matrix Extensions", "AMX-BF16: tile bfloat16 support", "amx_bf16"},
+		{"AVX512F", "AVX-512 Foundation", "AVX512F: AVX-512 foundation instructions", "avx512f"},
+		{"AVX512_BF16", "Vector Neural Network Instructions - BF16", "AVX512_BF16: bfloat16 instructions", "avx512_bf16"},
+		{"AVX512_FP16", "Advanced Vector Extensions 512 - FP16", "AVX512_FP16: fp16 support", "avx512_fp16"},
+		{"AVX512_VNNI", "Vector Neural Network Instructions", "AVX512_VNNI: neural network instructions", "avx512_vnni"},
+		{"CLDEMOTE", "Cache Line Demote", "CLDEMOTE supports cache line demote", "cldemote"},
+		{"ENQCMD", "Enqueue Command Instruction", "ENQCMD instruction", "enqcmd"},
+		{"SERIALIZE", "SERIALIZE Instruction", "SERIALIZE instruction", "serialize"},
+		{"TSXLDTRK", "Transactional Synchronization Extensions", "TSXLDTRK: TSX suspend load addr tracking", "tsxldtrk"},
 		{"VAES", "Vector AES", "VAES instructions", "vaes"},
-		{"AMX-BF16", "Advanced Matrix Extensions Tile BFLOAT16", "AMX-BF16: tile bfloat16 support", "amx_bf16"},
-		{"AMX-TILE", "Advanced Matrix Extensions Tile Architecture", "AMX-TILE: tile architecture support", "amx_tile"},
-		{"AMX-INT8", "Advanced Matrix Extensions Tile 8-bit Integer", "AMX-INT8: tile 8-bit integer support", "amx_int8"},
+		{"WAITPKG", "UMONITOR, UMWAIT, TPAUSE Instructions", "WAITPKG instructions", "waitpkg"},
 	}
 	for _, source := range sources {
 		var hostValues = HostValues{
@@ -2008,6 +2010,10 @@ func newProfileSummaryTable(sources []*Source, category TableCategory, averageCP
 		AllHostValues: []HostValues{},
 	}
 	for idx, source := range sources {
+		utilization := getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%idle", true)
+		if utilization == "" {
+			utilization = getPMUMetricFromTable(PMUMetricsTable, idx, "CPU utilization %")
+		}
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
@@ -2023,7 +2029,7 @@ func newProfileSummaryTable(sources []*Source, category TableCategory, averageCP
 			},
 			Values: [][]string{
 				{
-					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%idle", true),
+					utilization,
 					getPMUMetricFromTable(PMUMetricsTable, idx, "CPU operating frequency (in GHz)"),
 					getPMUMetricFromTable(PMUMetricsTable, idx, "CPI"),
 					getMetricAverage(powerStatsTable, idx, []string{"Package"}, ""),
