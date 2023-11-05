@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Knetic/govaluate"
 )
 
 type Variable struct {
@@ -15,9 +17,10 @@ type Variable struct {
 }
 
 type MetricDefinition struct {
-	Name       string         `json:"name"`
-	Expression string         `json:"expression"`
-	Variables  map[string]int // parsed from Expression for efficiency, int represents group index
+	Name       string                         `json:"name"`
+	Expression string                         `json:"expression"`
+	Variables  map[string]int                 // parsed from Expression for efficiency, int represents group index
+	Evaluable  *govaluate.EvaluableExpression // parse expression once, store here for use in metric evaluation
 }
 
 // transform if/else to ternary conditional (? :) so expression evaluator can handle it
@@ -99,7 +102,7 @@ func transformConditional(origIn string) (out string, err error) {
 }
 
 // load metrics from file
-func loadMetricDefinitions(metricDefinitionOverridePath string, groupDefinitions []GroupDefinition, metadata Metadata) (metrics []MetricDefinition, err error) {
+func loadMetricDefinitions(metricDefinitionOverridePath string, evaluatorFunctions map[string]govaluate.ExpressionFunction, metadata Metadata) (metrics []MetricDefinition, err error) {
 	var bytes []byte
 	if metricDefinitionOverridePath != "" {
 		if bytes, err = os.ReadFile(metricDefinitionOverridePath); err != nil {
@@ -120,7 +123,7 @@ func loadMetricDefinitions(metricDefinitionOverridePath string, groupDefinitions
 			return
 		}
 		if transformed != metrics[metricIdx].Expression {
-			if gVeryVerbose {
+			if gCmdLineArgs.veryVerbose {
 				log.Printf("transformed %s to %s", metrics[metricIdx].Name, transformed)
 			}
 			metrics[metricIdx].Expression = transformed
@@ -149,6 +152,10 @@ func loadMetricDefinitions(metricDefinitionOverridePath string, groupDefinitions
 			// add the variable name to the map, set group index to -1 to indicate it has not yet been determined
 			metrics[metricIdx].Variables[metrics[metricIdx].Expression[expressionIdx:][startVar+1:endVar]] = -1
 			expressionIdx += endVar + 1
+		}
+		if metrics[metricIdx].Evaluable, err = govaluate.NewEvaluableExpressionWithFunctions(metrics[metricIdx].Expression, evaluatorFunctions); err != nil {
+			log.Printf("%v : %s : %s", err, metrics[metricIdx].Name, metrics[metricIdx].Expression)
+			return
 		}
 	}
 	return

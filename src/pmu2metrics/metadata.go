@@ -12,21 +12,23 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 type Metadata struct {
-	CoresPerSocket      int
+	CoresPerSocket      int `yaml:"CoresPerSocket"`
 	DeviceCounts        map[string]int
 	IMCDeviceIDs        []int
-	Microarchitecture   string
+	Microarchitecture   string `yaml:"Microarchitecture"`
 	ModelName           string
 	PerfSupportedEvents string
 	RefCyclesSupported  bool
-	SocketCount         int
-	ThreadsPerCore      int
+	SocketCount         int `yaml:"SocketCount"`
+	ThreadsPerCore      int `yaml:"ThreadsPerCore"`
 	TMASupported        bool
-	TSC                 int
-	TSCFrequencyHz      int
+	TSC                 int `yaml:"TSC"`
+	TSCFrequencyHz      int `yaml:"TSCFrequencyHz"`
 }
 
 func (md Metadata) String() string {
@@ -61,12 +63,7 @@ func (md Metadata) String() string {
 func getDeviceCounts() (counts map[string]int, err error) {
 	counts = make(map[string]int)
 	var paths []string
-	var pattern string
-	if gDebug {
-		pattern = filepath.Join("sys", "devices", "uncore_*")
-	} else {
-		pattern = filepath.Join("/", "sys", "devices", "uncore_*")
-	}
+	pattern := filepath.Join("/", "sys", "devices", "uncore_*")
 	if paths, err = filepath.Glob(pattern); err != nil {
 		return
 	}
@@ -81,12 +78,7 @@ func getDeviceCounts() (counts map[string]int, err error) {
 }
 
 func getIMCDeviceIds() (ids []int, err error) {
-	var pattern string
-	if gDebug {
-		pattern = filepath.Join("sys", "devices", "uncore_imc_*")
-	} else {
-		pattern = filepath.Join("/", "sys", "devices", "uncore_imc_*")
-	}
+	pattern := filepath.Join("/", "sys", "devices", "uncore_imc_*")
 	var files []string
 	if files, err = filepath.Glob(pattern); err != nil {
 		return
@@ -228,11 +220,7 @@ func loadMetadata() (metadata Metadata, err error) {
 	go func() {
 		var err error
 		if metadata.PerfSupportedEvents, err = getPerfSupportedEvents(); err != nil {
-			if gDebug {
-				err = nil
-			} else {
-				err = fmt.Errorf("failed to load perf list: %v", err)
-			}
+			err = fmt.Errorf("failed to load perf list: %v", err)
 		}
 		slowFuncChannel <- err
 	}()
@@ -241,13 +229,9 @@ func loadMetadata() (metadata Metadata, err error) {
 		var err error
 		var output string
 		if metadata.RefCyclesSupported, output, err = getRefCyclesSupported(); err != nil {
-			if gDebug {
-				err = nil
-			} else {
-				err = fmt.Errorf("failed to determine if ref_cycles is supported: %v", err)
-			}
+			err = fmt.Errorf("failed to determine if ref_cycles is supported: %v", err)
 		}
-		if !metadata.RefCyclesSupported && gVerbose {
+		if !metadata.RefCyclesSupported && gCmdLineArgs.verbose {
 			log.Printf("ref-cycles not supported:\n%s\n", output)
 		}
 		slowFuncChannel <- err
@@ -257,13 +241,9 @@ func loadMetadata() (metadata Metadata, err error) {
 		var err error
 		var output string
 		if metadata.TMASupported, output, err = getTMASupported(); err != nil {
-			if gDebug {
-				err = nil
-			} else {
-				err = fmt.Errorf("failed to determine if TMA is supported: %v", err)
-			}
+			err = fmt.Errorf("failed to determine if TMA is supported: %v", err)
 		}
-		if !metadata.TMASupported && gVerbose {
+		if !metadata.TMASupported && gCmdLineArgs.verbose {
 			log.Printf("TMA not supported:\n%s\n", output)
 		}
 		slowFuncChannel <- err
@@ -324,16 +304,26 @@ func loadMetadata() (metadata Metadata, err error) {
 	// Model Name
 	metadata.ModelName = cpuInfo[0]["model name"]
 	// CPU microarchitecture
-	metadata.Microarchitecture, err = getMicroarchitecture(cpuInfo)
-	if err != nil {
-		// TODO: remove this override used for development/debugging
-		if gDebug {
-			err = nil
-			metadata.Microarchitecture = "spr"
-		} else {
-			err = fmt.Errorf("failed to retrieve microarchitecture: %v", err)
-			return
-		}
+	if metadata.Microarchitecture, err = getMicroarchitecture(cpuInfo); err != nil {
+		err = fmt.Errorf("failed to retrieve microarchitecture: %v", err)
+		return
 	}
+	return
+}
+
+// function used for testing and debugging
+// needed for generating metrics:
+// CoresPerSocket      int
+// Microarchitecture   string
+// SocketCount         int
+// ThreadsPerCore      int
+// TSC                 int
+// TSCFrequencyHz      int
+func loadMetadataFromFile(metadataFilePath string) (metadata Metadata, err error) {
+	var yamlData []byte
+	if yamlData, err = os.ReadFile(metadataFilePath); err != nil {
+		return
+	}
+	err = yaml.UnmarshalStrict([]byte(yamlData), &metadata)
 	return
 }

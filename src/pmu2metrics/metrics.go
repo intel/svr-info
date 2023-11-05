@@ -14,7 +14,8 @@ type Metric struct {
 	Value float64
 }
 
-func loadMetricBestGroups(metric *MetricDefinition, frame EventFrame) (err error) {
+// for each variable in a metric, set the best group from which to get its value
+func loadMetricBestGroups(metric MetricDefinition, frame EventFrame) (err error) {
 	allVariableNames := mapset.NewSetFromMapKeys(metric.Variables)
 	remainingVariableNames := allVariableNames.Clone()
 	for {
@@ -53,8 +54,8 @@ func loadMetricBestGroups(metric *MetricDefinition, frame EventFrame) (err error
 	return
 }
 
-// get the variable names & values that will be used to evaluate the metric's expression
-func getExpressionVariables(metric MetricDefinition, frame EventFrame, previousTimestamp float64, metadata Metadata) (variables map[string]interface{}, err error) {
+// get the variable values that will be used to evaluate the metric's expression
+func getExpressionVariableValues(metric MetricDefinition, frame EventFrame, previousTimestamp float64, metadata Metadata) (variables map[string]interface{}, err error) {
 	variables = make(map[string]interface{})
 	// if first frame, we'll need to determine the best groups from which to get event values for the variables
 	loadGroups := false
@@ -64,16 +65,16 @@ func getExpressionVariables(metric MetricDefinition, frame EventFrame, previousT
 		}
 		if metric.Variables[variableName] == -2 { // tried previously and failed, don't try again
 			err = fmt.Errorf("metric variable group assignment previously failed, skipping: %s", variableName)
-			if gVeryVerbose {
+			if gCmdLineArgs.veryVerbose {
 				log.Print(err.Error())
 			}
 			return
 		}
 	}
 	if loadGroups {
-		if err = loadMetricBestGroups(&metric, frame); err != nil {
+		if err = loadMetricBestGroups(metric, frame); err != nil {
 			err = fmt.Errorf("at least one of the variables couldn't be assigned to a group: %v", err)
-			if gVeryVerbose {
+			if gCmdLineArgs.veryVerbose {
 				log.Print(err.Error())
 			}
 			return
@@ -138,45 +139,41 @@ func getEvaluatorFunctions() (functions map[string]govaluate.ExpressionFunction)
 }
 
 // function to call evaluator so that we can catch panics that come from the evaluator
-func evaluateExpression(metric MetricDefinition, variables map[string]interface{}, functions map[string]govaluate.ExpressionFunction) (result interface{}, err error) {
+func evaluateExpression(metric MetricDefinition, variables map[string]interface{}) (result interface{}, err error) {
 	defer func() {
 		if errx := recover(); errx != nil {
 			err = errx.(error)
 		}
 	}()
-	var evExpression *govaluate.EvaluableExpression
-	if evExpression, err = govaluate.NewEvaluableExpressionWithFunctions(metric.Expression, functions); err != nil {
-		log.Printf("%v : %s : %s", err, metric.Name, metric.Expression)
-		return
-	}
-	if result, err = evExpression.Evaluate(variables); err != nil {
+	if result, err = metric.Evaluable.Evaluate(variables); err != nil {
 		log.Printf("%v : %s : %s", err, metric.Name, metric.Expression)
 	}
 	return
 }
 
-func processEvents(perfEvents []string, metricDefinitions []MetricDefinition, functions map[string]govaluate.ExpressionFunction, previousTimestamp float64, metadata Metadata) (metrics []Metric, timeStamp float64, err error) {
+func processEvents(perfEvents []string, metricDefinitions []MetricDefinition, previousTimestamp float64, metadata Metadata) (metrics []Metric, timeStamp float64, err error) {
 	var eventFrame EventFrame
 	if eventFrame, err = getEventFrame(perfEvents); err != nil { // arrange the events into groups
 		err = fmt.Errorf("failed to put perf events into groups: %v", err)
+		return
 	}
 	timeStamp = eventFrame.Timestamp
 	// produce metrics from event groups
 	for _, metricDef := range metricDefinitions {
 		var variables map[string]interface{}
-		if variables, err = getExpressionVariables(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
-			// Note: err is logged by getExpressionVariables
+		if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
+			// Note: err is logged by getExpressionVariableValues
 			err = nil
 			continue
 		}
 		var result interface{}
-		if result, err = evaluateExpression(metricDef, variables, functions); err != nil {
+		if result, err = evaluateExpression(metricDef, variables); err != nil {
 			// Note: err is logged by evaluateExpression
 			err = nil
 			continue
 		}
 		metrics = append(metrics, Metric{Name: metricDef.Name, Value: result.(float64)})
-		if gVeryVerbose {
+		if gCmdLineArgs.veryVerbose {
 			var prettyVars []string
 			for variableName := range variables {
 				prettyVars = append(prettyVars, fmt.Sprintf("%s=%f", variableName, variables[variableName]))

@@ -19,24 +19,34 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 )
 
+type CmdLineArgs struct {
+	showHelp          bool
+	showVersion       bool
+	duration          int // seconds
+	eventFilePath     string
+	metricFilePath    string
+	perfPrintInterval int // milliseconds
+	perfMuxInterval   int // milliseconds
+	printCSV          bool
+	verbose           bool
+	veryVerbose       bool
+	metadataFilePath  string
+	perfStatFilePath  string
+}
+
 // globals
 var (
 	gVersion     string = "dev"
-	gVerbose     bool   = false
-	gVeryVerbose bool   = false
-	gDebug       bool   = false
+	gCmdLineArgs CmdLineArgs
 )
-
-const metricInterval int = 5 // the number of seconds between metric reports
-const muxInterval int = 125  // the number of milliseconds for perf multiplexing interval
 
 //go:embed resources
 var resources embed.FS
 
 // build perf args from event groups
-func getPerfCommandArgs(eventGroups []GroupDefinition, runSeconds int, metadata Metadata) (args []string, err error) {
+func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
 	uncollectableEvents := mapset.NewSet[string]()
-	intervalMS := fmt.Sprintf("%d", metricInterval*1000) // milliseconds
+	intervalMS := fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval)
 	args = append(args, []string{"stat", "-I", intervalMS, "-x", ",", "-a", "-e"}...)
 	var groups []string
 	for _, group := range eventGroups {
@@ -53,14 +63,14 @@ func getPerfCommandArgs(eventGroups []GroupDefinition, runSeconds int, metadata 
 			events = append(events, event.Raw)
 		}
 		if len(events) == 0 {
-			if gVeryVerbose {
+			if gCmdLineArgs.veryVerbose {
 				log.Printf("No collectable events in group: %v", group)
 			}
 		} else {
 			groups = append(groups, fmt.Sprintf("{%s}", strings.Join(events, ",")))
 		}
 	}
-	if uncollectableEvents.Cardinality() != 0 && gVerbose {
+	if uncollectableEvents.Cardinality() != 0 && gCmdLineArgs.verbose {
 		log.Printf("Uncollectable events: %s", uncollectableEvents)
 	}
 	// "fixed" PMU counters are not supported on (most) IaaS VMs, so we add a separate group
@@ -79,9 +89,9 @@ func getPerfCommandArgs(eventGroups []GroupDefinition, runSeconds int, metadata 
 	}
 	groupsArg := fmt.Sprintf("'%s'", strings.Join(groups, ","))
 	args = append(args, groupsArg)
-	if runSeconds > 0 {
+	if gCmdLineArgs.duration > 0 {
 		args = append(args, "sleep")
-		args = append(args, fmt.Sprintf("%d", runSeconds))
+		args = append(args, fmt.Sprintf("%d", gCmdLineArgs.duration))
 	}
 	return
 }
@@ -91,22 +101,16 @@ func getPerfCommandArgs(eventGroups []GroupDefinition, runSeconds int, metadata 
 // timestamp to change means that the first list won't get sent until the next set
 // of events comes from perf, i.e., program output will be one collection duration
 // behind the real-time perf processing
-func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, runSeconds int, metadata Metadata, perfError context.CancelFunc) (err error) {
+func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, metadata Metadata, perfError context.CancelFunc) (err error) {
 	var cmd *exec.Cmd
 	var reader io.ReadCloser
 	var args []string
-	if args, err = getPerfCommandArgs(eventGroups, runSeconds, metadata); err != nil {
+	if args, err = getPerfCommandArgs(eventGroups, metadata); err != nil {
 		return
 	}
-	// TODO: remove this debug option that's used for development/debugging
-	if gDebug {
-		cmd = exec.Command("scripts/perfstat_sim")
-		reader, _ = cmd.StdoutPipe()
-	} else {
-		cmd = exec.Command("perf", args...)
-		reader, _ = cmd.StderrPipe()
-	}
-	if gVeryVerbose {
+	cmd = exec.Command("perf", args...)
+	reader, _ = cmd.StderrPipe()
+	if gCmdLineArgs.veryVerbose {
 		log.Print(cmd)
 	}
 	scanner := bufio.NewScanner(reader)
@@ -123,7 +127,7 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, runSecon
 	// works because perf writes the events to stderr in a burst every collection interval, e.g., 5 seconds.
 	// When the timer expires, this code assumes that perf is done writing events to stderr.
 	// The first duration needs to be longer than the time it takes for perf to print its first line of output.
-	t1 := time.NewTimer(time.Duration(2*metricInterval) * time.Second)
+	t1 := time.NewTimer(time.Duration(2 * gCmdLineArgs.perfPrintInterval))
 	go func() {
 		for {
 			<-t1.C                      // waits for timer to expire
@@ -134,7 +138,7 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, runSecon
 	// read perf stat output
 	for scanner.Scan() { // blocks waiting for next token (line)
 		line := scanner.Text()
-		if gVeryVerbose {
+		if gCmdLineArgs.veryVerbose {
 			log.Print(line)
 		}
 		t1.Stop()
@@ -153,24 +157,73 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, runSecon
 	return
 }
 
+// Function used for testing and debugging
+// Plays back events present in a file that contains perf stat output
+func playbackPerf(perfStatFilePath string, eventChannel chan []string, metadata Metadata, perfError context.CancelFunc) (err error) {
+	file, err := os.Open(perfStatFilePath)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	frameTimestamp := ""
+	var lines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		lineTimestamp := strings.Split(line, ",")[0]
+		if lineTimestamp != frameTimestamp {
+			// send lines
+			eventChannel <- lines
+			frameTimestamp = lineTimestamp
+			lines = []string{}
+		}
+		lines = append(lines, line)
+	}
+	close(eventChannel)
+	err = scanner.Err()
+	return
+}
+
 func showUsage() {
 	fmt.Printf("%s Version: %s\n", filepath.Base(os.Args[0]), gVersion)
 	fmt.Println("Options:")
 	usage := `  -csv
   	CSV formatted output.
-  -e <path>
-  	Path to perf event definition file.
   -h
   	Print this usage message.
-  -m <path>
-  	Path to metric definition file.
   -t <seconds>
   	Number of seconds to run. By default, runs indefinitely.
   -v[v]
   	Enable verbose logging.
   -V
-  	Print program version.`
+  	Print program version.
+
+Advanced Options:
+  -e <path>
+  	Path to perf event definition file.
+  -m <path>
+  	Path to metric definition file.
+
+Debug Options:
+  -p <path>
+  	Path to perf stat data file.
+  -d <path>
+  	Path to metadata file.`
 	fmt.Println(usage)
+}
+
+func validateArgs() (err error) {
+	if gCmdLineArgs.metadataFilePath != "" {
+		if gCmdLineArgs.perfStatFilePath == "" {
+			err = fmt.Errorf("-p and -d options must both be specified")
+		}
+	}
+	if gCmdLineArgs.perfStatFilePath != "" {
+		if gCmdLineArgs.metadataFilePath == "" {
+			err = fmt.Errorf("-p and -d options must both be specified")
+		}
+	}
+	return
 }
 
 const (
@@ -180,120 +233,125 @@ const (
 )
 
 func mainReturnWithCode(ctx context.Context) int {
-	var showHelp bool
-	var showVersion bool
-	var runSeconds int
-	var eventFilePath string
-	var metricFilePath string
-	var printCSV bool
-
 	flag.Usage = func() { showUsage() } // override default usage output
-	flag.BoolVar(&showHelp, "h", false, "Print this usage message.")
-	flag.BoolVar(&showVersion, "V", false, "Print program version.")
-	flag.IntVar(&runSeconds, "t", 0, "Number of seconds to run. By default, runs indefinitely.")
-	flag.StringVar(&eventFilePath, "e", "", "Path to custom perf event definition file.")
-	flag.StringVar(&metricFilePath, "m", "", "Path to custom metric definition file.")
-	flag.BoolVar(&gVerbose, "v", false, "Enable verbose logging.")
-	flag.BoolVar(&gVeryVerbose, "vv", false, "Enable verbose logging.")
-	flag.BoolVar(&printCSV, "csv", false, "Print output to stdout in CSV format.")
-	flag.BoolVar(&gDebug, "devonly", false, "Temporary debug option used during development. Remove me.")
+	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "Print this usage message.")
+	flag.BoolVar(&gCmdLineArgs.showVersion, "V", false, "Print program version.")
+	flag.IntVar(&gCmdLineArgs.duration, "t", 0, "Number of seconds to run. By default, runs indefinitely.")
+	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "i", 5000, "Event collection interval in milliseconds.")
+	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "x", 125, "Multiplexing interval in milliseconds.")
+	flag.StringVar(&gCmdLineArgs.eventFilePath, "e", "", "Path to event definition file.")
+	flag.StringVar(&gCmdLineArgs.metricFilePath, "m", "", "Path to metric definition file.")
+	flag.StringVar(&gCmdLineArgs.metadataFilePath, "d", "", "Path to metadata file.")
+	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "p", "", "Path to perf stat data file.")
+	flag.BoolVar(&gCmdLineArgs.verbose, "v", false, "Enable verbose logging.")
+	flag.BoolVar(&gCmdLineArgs.veryVerbose, "vv", false, "Enable verbose logging.")
+	flag.BoolVar(&gCmdLineArgs.printCSV, "csv", false, "Print output to stdout in CSV format.")
 	flag.Parse()
-	if gVeryVerbose {
-		gVerbose = true
+	err := validateArgs()
+	if err != nil {
+		log.Printf("Invalid argument error: %v", err)
+		showUsage()
+		return exitError
+	}
+	if gCmdLineArgs.veryVerbose {
+		gCmdLineArgs.verbose = true
 	}
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	if showHelp {
+	if gCmdLineArgs.showHelp {
 		showUsage()
 		return exitNoError
 	}
-	if showVersion {
+	if gCmdLineArgs.showVersion {
 		fmt.Println(gVersion)
 		return exitNoError
 	}
-	if !gDebug {
-		if os.Geteuid() != 0 {
-			fmt.Println("Elevated permissions required, try again as root user or with sudo.")
-			return exitError
-		}
-	}
-	if gVerbose {
+	if gCmdLineArgs.verbose {
 		log.Printf("Starting up %s, version: %s, arguments: %s",
 			filepath.Base(os.Args[0]),
 			gVersion,
 			strings.Join(os.Args[1:], " "),
 		)
 	}
-	if runSeconds != 0 {
-		// round up to next -metricInterval- second interval (the collection frequency used for perf)
-		qf := float64(runSeconds) / float64(metricInterval)
-		qi := runSeconds / metricInterval
+	if gCmdLineArgs.duration != 0 {
+		// round up to next perfPrintInterval second (the collection interval used by perf stat)
+		intervalSeconds := gCmdLineArgs.perfPrintInterval / 1000
+		qf := float64(gCmdLineArgs.duration) / float64(intervalSeconds)
+		qi := gCmdLineArgs.duration / intervalSeconds
 		if qf > float64(qi) {
-			runSeconds = (qi + 1) * metricInterval
+			gCmdLineArgs.duration = (qi + 1) * intervalSeconds
 		}
 	}
-	if !printCSV {
+	if !gCmdLineArgs.printCSV {
 		fmt.Print("Loading.")
 	}
-	var err error
 	var metadata Metadata
-	if metadata, err = loadMetadata(); err != nil {
-		log.Printf("failed to load metadata: %v", err)
-		return exitError
+	if gCmdLineArgs.metadataFilePath != "" { // testing/debugging flow
+		if metadata, err = loadMetadataFromFile(gCmdLineArgs.metadataFilePath); err != nil {
+			log.Printf("failed to load metadata from file: %v", err)
+			return exitError
+		}
+	} else {
+		if metadata, err = loadMetadata(); err != nil {
+			log.Printf("failed to load metadata: %v", err)
+			return exitError
+		}
 	}
-	if !printCSV {
+	if !gCmdLineArgs.printCSV {
 		fmt.Print(".")
 	}
-	var groupDefinitions []GroupDefinition
-	if groupDefinitions, err = loadEventDefinitions(eventFilePath, metadata); err != nil {
-		log.Printf("failed to load event definitions: %v", err)
-		return exitError
-	}
+	evaluatorFunctions := getEvaluatorFunctions()
 	var metricDefinitions []MetricDefinition
-	if metricDefinitions, err = loadMetricDefinitions(metricFilePath, groupDefinitions, metadata); err != nil {
+	if metricDefinitions, err = loadMetricDefinitions(gCmdLineArgs.metricFilePath, evaluatorFunctions, metadata); err != nil {
 		log.Printf("failed to load metric definitions: %v", err)
 		return exitError
 	}
-	if gVerbose {
-		log.Printf("%s", metadata)
-	}
-	functions := getEvaluatorFunctions()
-	var nmiWatchdog string
-	if nmiWatchdog, err = getNmiWatchdog(); err != nil {
-		if !gDebug {
-			log.Printf("failed to retrieve NMI watchdog status: %v", err)
-			return exitError
-		}
-	}
-	if nmiWatchdog != "0" {
-		if err = setNmiWatchdog("0"); err != nil {
-			if !gDebug {
-				log.Printf("failed to set NMI watchdog status: %v", err)
-				return exitError
-			}
-		}
-		defer setNmiWatchdog(nmiWatchdog)
-	}
-	var perfMuxIntervals map[string]string
-	if perfMuxIntervals, err = getMuxIntervals(); err != nil {
-		log.Printf("failed to get perf mux intervals: %v", err)
-		return exitError
-	}
-	if err = setAllMuxIntervals(muxInterval); err != nil {
-		if !gDebug {
-			log.Printf("failed to set all perf mux intervals to %d: %v", muxInterval, err)
-			return exitError
-		}
-	}
-	defer setMuxIntervals(perfMuxIntervals)
-	if !printCSV {
-		fmt.Print(".\n")
-		fmt.Printf("Reporting metrics in %d second intervals...\n", metricInterval)
-	}
-	// run perf in a goroutine, get events through eventChannel
 	eventChannel := make(chan []string)
 	perfCtx, perfError := context.WithCancel(context.Background())
 	defer perfError()
-	go runPerf(groupDefinitions, eventChannel, runSeconds, metadata, perfError)
+	if gCmdLineArgs.perfStatFilePath != "" { // testing/debugging flow
+		go playbackPerf(gCmdLineArgs.perfStatFilePath, eventChannel, metadata, perfError)
+	} else {
+		if os.Geteuid() != 0 {
+			fmt.Println("Elevated permissions required, try again as root user or with sudo.")
+			return exitError
+		}
+		var groupDefinitions []GroupDefinition
+		if groupDefinitions, err = loadEventDefinitions(gCmdLineArgs.eventFilePath, metadata); err != nil {
+			log.Printf("failed to load event definitions: %v", err)
+			return exitError
+		}
+		if gCmdLineArgs.verbose {
+			log.Printf("%s", metadata)
+		}
+		var nmiWatchdog string
+		if nmiWatchdog, err = getNmiWatchdog(); err != nil {
+			log.Printf("failed to retrieve NMI watchdog status: %v", err)
+			return exitError
+		}
+		if nmiWatchdog != "0" {
+			if err = setNmiWatchdog("0"); err != nil {
+				log.Printf("failed to set NMI watchdog status: %v", err)
+				return exitError
+			}
+			defer setNmiWatchdog(nmiWatchdog)
+		}
+		var perfMuxIntervals map[string]string
+		if perfMuxIntervals, err = getMuxIntervals(); err != nil {
+			log.Printf("failed to get perf mux intervals: %v", err)
+			return exitError
+		}
+		if err = setAllMuxIntervals(gCmdLineArgs.perfMuxInterval); err != nil {
+			log.Printf("failed to set all perf mux intervals to %d: %v", gCmdLineArgs.perfMuxInterval, err)
+			return exitError
+		}
+		defer setMuxIntervals(perfMuxIntervals)
+		if !gCmdLineArgs.printCSV {
+			fmt.Print(".\n")
+			fmt.Printf("Reporting metrics in %d millisecond intervals...\n", gCmdLineArgs.perfPrintInterval)
+		}
+		// run perf in a goroutine, get events through eventChannel
+		go runPerf(groupDefinitions, eventChannel, metadata, perfError)
+	}
 	// loop until the perf goroutine closes the eventChannel or user hits ctrl-c
 	var frameTimestamp float64
 	var metrics []Metric
@@ -309,11 +367,11 @@ func mainReturnWithCode(ctx context.Context) int {
 			var perfEvents []string
 			perfEvents, more = <-eventChannel // events from one frame of collection (all same timestamp)
 			if more && len(perfEvents) > 0 {
-				if metrics, frameTimestamp, err = processEvents(perfEvents, metricDefinitions, functions, frameTimestamp, metadata); err != nil {
+				if metrics, frameTimestamp, err = processEvents(perfEvents, metricDefinitions, frameTimestamp, metadata); err != nil {
 					log.Printf("%v", err)
 					return exitError
 				}
-				if printCSV {
+				if gCmdLineArgs.printCSV {
 					if firstFrame {
 						firstFrame = false
 						// print "timestamp,", then metric names as CSV headers

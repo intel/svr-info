@@ -139,7 +139,7 @@ func expandUncoreGroups(groups []GroupDefinition, metadata Metadata) (expandedGr
 				}
 			}
 			if len(ids) == 0 {
-				if gVerbose {
+				if gCmdLineArgs.verbose {
 					log.Printf("No uncore devices found for %s", device)
 				}
 				continue

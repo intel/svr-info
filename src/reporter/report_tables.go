@@ -2014,6 +2014,10 @@ func newProfileSummaryTable(sources []*Source, category TableCategory, averageCP
 		if utilization == "" {
 			utilization = getPMUMetricFromTable(PMUMetricsTable, idx, "CPU utilization %")
 		}
+		packagePower := getMetricAverage(powerStatsTable, idx, []string{"Package"}, "")
+		if packagePower == "" {
+			packagePower = getPMUMetricFromTable(PMUMetricsTable, idx, "package power (watts)")
+		}
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
@@ -2032,7 +2036,7 @@ func newProfileSummaryTable(sources []*Source, category TableCategory, averageCP
 					utilization,
 					getPMUMetricFromTable(PMUMetricsTable, idx, "CPU operating frequency (in GHz)"),
 					getPMUMetricFromTable(PMUMetricsTable, idx, "CPI"),
-					getMetricAverage(powerStatsTable, idx, []string{"Package"}, ""),
+					packagePower,
 					getMetricAverage(driveStatsTable, idx, []string{"kB_read/s"}, "Device"),
 					getMetricAverage(driveStatsTable, idx, []string{"kB_wrtn/s"}, "Device"),
 					getMetricAverage(netStatsTable, idx, []string{"rxkB/s"}, "Time"),
