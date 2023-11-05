@@ -13,7 +13,7 @@
 #       command - will be executed by bash
 #   Optional command attributes:
 #       superuser - bool indicates need for elevated privilege (default: false)
-#       run - bool indicates if command will be run (default: true)
+#       run - bool indicates if command will be run (default: false)
 #       modprobe - comma separated list of kernel modules required to run command
 #       parallel - bool indicates if command can be run in parallel with other commands (default: false)
 ###########
@@ -288,7 +288,6 @@ commands:
 # each other but not with parallel commands, i.e., the configuration collection commands.
 ############
   - label: profile
-    run: false
     superuser: true
     command: |-
         duration={{.Duration}}
@@ -343,7 +342,6 @@ commands:
 # each other but not with parallel commands, i.e., the configuration collection commands.
 ############
   - label: analyze
-    run: false
     superuser: true
     command: |-
         duration={{.Duration}}
@@ -407,7 +405,6 @@ commands:
 # Note that these do not run in parallel
 ############
   - label: Memory MLC Loaded Latency Test
-    run: false
     command: |-
         # measure memory loaded latency
         numa_nodes=$( lscpu | grep "NUMA node(s):" | awk '{print $3}' )
@@ -419,7 +416,6 @@ commands:
     modprobe: msr
     superuser: true
   - label: Memory MLC Bandwidth
-    run: false
     command: |-
         # measure memory bandwidth matrix
         numa_nodes=$( lscpu | grep "NUMA node(s):" | awk '{print $3}' )
@@ -431,7 +427,6 @@ commands:
     modprobe: msr
     superuser: true
   - label: stress-ng cpu methods
-    run: false
     command: |-
         # measure cpu performance
         methods=$( stress-ng --cpu 1 --cpu-method x 2>&1 | cut -d":" -f2 | cut -c 6- )
@@ -440,7 +435,6 @@ commands:
             stress-ng --cpu 0 -t 1 --cpu-method "$method" --metrics-brief 2>&1 | tail -1 | awk '{print $9}'
         done
   - label: Measure Turbo Frequencies
-    run: false
     command: |-
         # measure turbo frequencies using calcfreq utility
         num_cores_per_socket=$( lscpu | grep 'Core(s) per socket:' | head -1 | awk '{print $4}' )
@@ -454,21 +448,18 @@ commands:
     superuser: true
     modprobe: msr
   - label: CPU Turbo Test
-    run: false
     command: |-
         # measure tdp and all-core turbo frequency
         ((turbostat -i 2 2>/dev/null &) ; stress-ng --cpu 1 -t 20s 2>&1 ; stress-ng --cpu 0 -t 20s 2>&1 ; pkill -9 -f turbostat) | awk '$0~"stress" {print $0} $1=="Package" || $1=="CPU" || $1=="Core" || $1=="Node" {if(f!=1) print $0;f=1} $1=="-" {print $0}'
     superuser: true
     modprobe: msr
   - label: CPU Idle
-    run: false
     command: |-
         # measure TDP at idle using turbostat
         turbostat --show PkgWatt -n 1 | sed -n 2p
     superuser: true
     modprobe: msr
   - label: fio
-    run: false
     command: |-
         # measure storage performance
         file_dir={{.FioDir}}

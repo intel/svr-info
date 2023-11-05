@@ -59,7 +59,7 @@ func showUsage() {
       command - will be executed by bash:
   Optional command attributes:
       superuser: bool indicates need for elevated privilege (default: false)
-      run: bool indicates if command will be run (default: true)
+      run: bool indicates if command will be run (default: false)
       modprobe: comma separated list of kernel modules required to run command
       parallel: bool indicates if command can be run in parallel with other commands (default: false)`)
 	fmt.Println(

@@ -38,6 +38,7 @@ type CmdLineArgs struct {
 	targetTemp       string
 	temp             string
 	dumpConfig       bool
+	noConfig         bool
 	cmdTimeout       int
 	reporter         string
 	collector        string
@@ -106,6 +107,7 @@ advanced arguments:
   -temp DIR             path to temporary directory on localhost. Directory must exist. (default: system default)
   -targettemp DIR       path to temporary directory on target. Directory must exist. (default: system default)
   -dumpconfig           dump the collector configuration file and exit (default: False)
+  -noconfig             do not collect system configuration data. (default: False)
   -cmd_timeout          the maximum number of seconds to wait for each data collection command (default: 300)
   -reporter             run the the reporter sub-component with args
                         e.g., -reporter "-input /home/rex -output /home/rex -format html" (default: Nil)
@@ -146,6 +148,7 @@ func (cmdLineArgs *CmdLineArgs) parse(name string, arguments []string) (err erro
 	flagSet.StringVar(&cmdLineArgs.temp, "temp", "", "")
 	flagSet.StringVar(&cmdLineArgs.targetTemp, "targettemp", "", "")
 	flagSet.BoolVar(&cmdLineArgs.dumpConfig, "dumpconfig", false, "")
+	flagSet.BoolVar(&cmdLineArgs.noConfig, "noconfig", false, "")
 	flagSet.IntVar(&cmdLineArgs.cmdTimeout, "cmd_timeout", 300, "")
 	flagSet.StringVar(&cmdLineArgs.format, "format", "html,xlsx,json", "")
 	flagSet.StringVar(&cmdLineArgs.benchmark, "benchmark", "", "")

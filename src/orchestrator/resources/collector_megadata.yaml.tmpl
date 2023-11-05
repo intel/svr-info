@@ -13,7 +13,7 @@
 #       command - will be executed by bash
 #   Optional command attributes:
 #       superuser - bool indicates need for elevated privilege (default: false)
-#       run - bool indicates if command will be run (default: true)
+#       run - bool indicates if command will be run (default: false)
 #       modprobe - comma separated list of kernel modules required to run command
 #       parallel - bool indicates if command can be run in parallel with other commands (default: false)
 ###########
@@ -33,219 +33,276 @@ commands:
     command: date 2>&1 | tee date_timestamp
     parallel: true
     superuser: false
+    run: true
   - label: hdparm
     command: hdparm -I /dev/sd* 2>&1 | tee hdparm
     parallel: true
     superuser: true
+    run: true
   - label: dmidecode
     command: dmidecode 2>&1 | tee dmidecode
     parallel: true
     superuser: true
+    run: true
   - label: dmidecode_bin
     command: dmidecode --dump-bin dmidecode_bin
     parallel: true
     superuser: true
+    run: true
   - label: lspci
     command: lspci -vv 2>&1 | tee lspci
     parallel: true
     superuser: true
+    run: true
   - label: lspci_tv
     command: lspci -tv 2>&1 | tee lspci_tv
     parallel: true
     superuser: true
+    run: true
   - label: conrep
     command: hp-conrep -s -f conrep
     parallel: true
     superuser: true
+    run: true
   - label: uname
     command: uname -a 2>&1 | tee uname
     parallel: true
     superuser: false
+    run: true
   - label: numactl
     command: numactl --hardware 2>&1 | tee numactl
     parallel: true
     superuser: true 
+    run: true
   - label: hostname
     command: hostname 2>&1 | tee hostname
     parallel: true
     superuser: false
+    run: true
   - label: ifconfig
     command: ifconfig 2>&1 | tee ifconfig
     parallel: true
     superuser: false
+    run: true
   - label: dmesg
     command: dmesg 2>&1 | tee dmesg
     parallel: true
     superuser: true
+    run: true
   - label: emon_v
     command: emon -v 2>&1 | tee emon_v
     parallel: true
     superuser: true
+    run: true
   - label: emon_M
     command: emon -M 2>&1 | tee emon_M
     parallel: true
     superuser: true
+    run: true
   - label: lshal
     command: lshal 2>&1 | tee lshal
     parallel: true
     superuser: true
+    run: true
   - label: lsblk
     command: lsblk -a 2>&1 | tee lsblk
     parallel: true
     superuser: false
+    run: true
   - label: lscpu
     command: lscpu 2>&1 | tee lscpu
     parallel: true
     superuser: false
+    run: true
   - label: cpupower
     command: cpupower frequency-info 2>&1 | tee cpupower
     parallel: true
     superuser: true
+    run: true
   - label: cpupower_idle
     command: cpupower idle-info 2>&1 | tee cpupower_idl
     parallel: true
     superuser: true
+    run: true
   - label: lmi
     command: lmi 2>&1 | tee lmi
     parallel: true
     superuser: true
+    run: true
   - label: lsusb
     command: lsusb -v 2>&1 | tee lsusb
     parallel: true
     superuser: true
+    run: true
   - label: lsmod
     command: lsmod 2>&1 | tee lsmod
     parallel: true
     superuser: true
+    run: true
   - label: rpm
     command: rpm -qa 2>&1 | tee rpm
     parallel: true
     superuser: true
+    run: true
   - label: nstat
     command: nstat -az 2>&1 | tee nstat
     parallel: true
     superuser: true
+    run: true
   - label: netstat
     command: netstat -sn 2>&1 | tee netstat
     parallel: true
     superuser: true
+    run: true
   - label: dpkg
     command: dpkg -l 2>&1 | tee dpkg
     parallel: true
     superuser: true
+    run: true
   - label: iptables
     command: iptables -L 2>&1 | tee iptables
     parallel: true
     superuser: true
+    run: true
   - label: irqbalance
     command: pgrep irqbalance 2>&1 | tee irqbalance
     parallel: true
     superuser: false
+    run: true
   - label: getenforce
     command: getenforce 2>&1 | tee getenforce
     parallel: true
     superuser: true
+    run: true
   - label: sysctl
     command: sysctl -a 2>&1 | tee sysctl
     parallel: true
     superuser: false
+    run: true
   - label: smp_affinity
     command: find /proc/irq/ -iname "*smp_affinity*" -print -exec cat {} \; 2>&1 | tee smp_affinity
     parallel: true
     superuser: false
+    run: true
   - label: module_parameters
     command: find /sys/module/*/parameters/* -print -exec cat {} \; 2>&1 | tee module_parameters
     parallel: true
     superuser: false
+    run: true
   - label: systool
     command: systool 2>&1 | tee systool
     parallel: true
     superuser: true
+    run: true
   - label: ulimit
     command: ulimit -a 2>&1 | tee ulimit
     parallel: true
     superuser: false
+    run: true
   - label: boot_md5sum
     command: md5sum /boot/* 2>&1 | tee boot_md5sum
     parallel: true
     superuser: true
+    run: true
   - label: vmmctrl_v
     command: vmmctrl -v &> vmmctrl_v
     parallel: true
     superuser: true
+    run: true
   - label: vmmctrl
     command: vmmctrl sysconf get 2>&1 | tee vmmctrl
     parallel: true
     superuser: true
+    run: true
   - label: syscfg
     command: bash -c "(/usr/bin/syscfg/syscfg /s bios.ini > /dev/null; mv bios.ini syscfg)"
     parallel: true
     superuser: true
+    run: true
   - label: syscfg_dell
     command: /opt/dell/toolkit/bin/syscfg --ox syscfg_dell
     parallel: true
     superuser: true
+    run: true
   - label: mlc
     command: mlc 2>&1 | tee mlc
     parallel: false
     superuser: true
+    run: true
   - label: lsof
     command: lsof 2>&1 | tee lsof
     parallel: true
     superuser: true
+    run: true
   - label: lshw
     command: lshw 2>&1 | tee lshw
     parallel: true
     superuser: true
+    run: true
 # files
   - label: release
     command: cat /etc/*-release 2>&1 | tee release
     parallel: true
+    run: true
   - label: cmdline
     command: cat /proc/cmdline 2>&1 | tee cmdline
     parallel: true
+    run: true
   - label: cpuinfo
     command: cat /proc/cpuinfo 2>&1 | tee cpuinfo
     parallel: true
+    run: true
   - label: meminfo
     command: cat /proc/meminfo 2>&1 | tee meminfo
     parallel: true
+    run: true
   - label: partitions
     command: cat /proc/partitions 2>&1 | tee partitions
     parallel: true
+    run: true
   - label: scsi
     command: cat /proc/scsi/scsi 2>&1 | tee scsi
     parallel: true
+    run: true
   - label: version
     command: cat /proc/version 2>&1 | tee version
     parallel: true
+    run: true
   - label: modules
     command: cat /proc/modules 2>&1 | tee modules
     parallel: true
+    run: true
   - label: mounts
     command: cat /proc/mounts 2>&1 | tee mounts
     parallel: true
+    run: true
   - label: interrupts
     command: cat /proc/interrupts 2>&1 | tee interrupts
     parallel: true
+    run: true
   - label: kernel_config
     command: |-
         uname_r = $(uname -r)
         cat /boot/config-$uname_r 2>&1 | tee kernel_config
     parallel: true
+    run: true
   - label: modules_config
     command: |-
         uname_r = $(uname -r)
         cat /lib/modules/$uname_r/source/.config 2>&1 | tee modules_config
     parallel: true
+    run: true
   - label: sysctl_conf
     command: cat /etc/sysctl.conf 2>&1 | tee sysctl_conf
+    run: true
   - label: hugepage_enable
     command: cat /sys/kernel/mm/transparent_hugepage/enabled 2>&1 | tee hugepage_enable
     parallel: true
+    run: true
   - label: hugepage_defrag
     command: cat /sys/kernel/mm/transparent_hugepage/defrag 2>&1 | tee hugepage_defrag
     parallel: true
+    run: true
   - label: nic info
     command: |-
         lshw -businfo -numeric | grep -E "^(pci|usb).*? \S+\s+network\s+\S.*?" \
@@ -258,13 +315,16 @@ commands:
         done
     parallel: true
     superuser: true
+    run: true
   - label: ipmitool_QDF_12
     command: LC_ALL=C ipmitool raw 0x3e 0x52 0x40 12 0x50 19 0 | tr "\n" " " | cut -d " " -f 17- | xxd -r -p | tee qdf_12
     superuser: true
     modprobe: ipmi_devintf, ipmi_si
     parallel: true
+    run: true
   - label: ipmitool_QDF_13
     command: LC_ALL=C ipmitool raw 0x3e 0x52 0x40 13 0x50 19 0 | tr "\n" " " | cut -d " " -f 17- | xxd -r -p | tee qdf_13
     superuser: true
     modprobe: ipmi_devintf, ipmi_si
     parallel: true
+    run: true
