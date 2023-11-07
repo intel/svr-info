@@ -5,7 +5,7 @@
 #########
 - name: DLB
   mfgid: 8086
-  devid: 2710
+  devid: (2710|2714)
   full_name: Intel Dynamic Load Balancer
   description: hardware managed system of queues and arbiters connecting producers and consumers
 
@@ -23,7 +23,7 @@
 
 - name: QAT (on CPU)
   mfgid: 8086
-  devid: (4940|4942)
+  devid: (4940|4942|4944)
   full_name: Intel Quick Assist Technology
   description: accelerates data encryption and compression for applications from networking to enterprise, cloud to storage, and content delivery to database
 
