@@ -5,7 +5,7 @@ if [ "$1" = "shell" ]; then
     /bin/bash
 elif [ "$1" = "build" ]; then
     echo "Starting Build"
-    cd workdir && make clean && make dist
+    cd workdir && make dist
 elif [ "$1" = "test" ]; then
     echo "Starting Tests"
     cd workdir && make test

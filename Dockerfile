@@ -32,6 +32,9 @@ RUN tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
 RUN rm go${GO_VERSION}.linux-amd64.tar.gz
 ENV PATH="$PATH:/usr/local/go/bin"
 
+# Create directory where pre-built third party components will be built after user change
+RUN mkdir prebuilt && chmod 777 prebuilt
+
 # so that build output files have the correct owner
 # add non-root user
 ARG USERNAME
@@ -45,6 +48,10 @@ RUN if [ ! -z "${LOCALBUILD}" ] ; then \
 
 # Run container as non-root user from here onwards
 USER ${USERNAME}
+
+# Build third-party components
+COPY src/Makefile prebuilt/
+RUN cd prebuilt && make -j4 prebuilt_tools
 
 # run bash script and process the input command
 ENTRYPOINT [ "/bin/bash", "/scripts/entrypoint"]

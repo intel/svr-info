@@ -28,7 +28,7 @@ dist-amd64: tools
 	cp src/orchestrator/resources/* dist/tools
 	cd dist/tools && tar -xf collector_deps_amd64.tgz && rm collector_deps_*.tgz *.yaml.tmpl
 
-dist: dist-amd64 oss
+dist: dist-amd64
 
 oss:
 	cd src && make oss-source

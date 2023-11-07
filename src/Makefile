@@ -12,7 +12,8 @@ VERSION := $(VERSION_NUMBER)_$(COMMIT_DATE)_$(COMMIT_ID)
 default: check orchestrator
 .PHONY: default test check format_check format linux-source collector reporter orchestrator pmu2metrics rdmsr wrmsr msrbusy reset clean tools libs async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
 
-collector_tools: async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc msrbusy perf pmu2metrics rdmsr wrmsr spectre-meltdown-checker stress-ng sysstat turbostat
+prebuilt_tools: async-profiler cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat
+other_tools: calcfreq mlc msrbusy pmu2metrics rdmsr wrmsr
 
 test:
 	cd pkg/commandfile && go test -v -vet=all .
@@ -42,8 +43,8 @@ format_check:
 
 check: format_check
 
-orchestrator: sshpass reporter collector collector-deps
-	cp sshpass/sshpass orchestrator/resources/
+orchestrator: reporter collector collector-deps
+	cp ../../prebuilt/sshpass/sshpass orchestrator/resources/
 	cp reporter/reporter orchestrator/resources/
 	cp collector/collector orchestrator/resources/
 	cp collector/collector_arm64 orchestrator/resources/
@@ -230,47 +231,47 @@ endif
 turbostat: linux-source
 	cd linux/tools/power/x86/turbostat && make
 
-collector-deps-amd64: collector_tools
+collector-deps-amd64: other_tools
 	$(eval TMPDIR := $(shell mktemp -d build.XXXXXX))
 	cp calcfreq/calcfreq $(TMPDIR)
-	cp cpuid/cpuid $(TMPDIR)
-	cp dmidecode/dmidecode $(TMPDIR)
-	cp ethtool/ethtool $(TMPDIR)
-	cp fio/fio $(TMPDIR)
-	cp ipmitool/src/ipmitool.static $(TMPDIR)/ipmitool
-	cp lshw/src/lshw-static $(TMPDIR)/lshw
-	cp lspci/lspci $(TMPDIR)
-	cp lspci/pci.ids.gz $(TMPDIR)
+	cp ../../prebuilt/cpuid/cpuid $(TMPDIR)
+	cp ../../prebuilt/dmidecode/dmidecode $(TMPDIR)
+	cp ../../prebuilt/ethtool/ethtool $(TMPDIR)
+	cp ../../prebuilt/fio/fio $(TMPDIR)
+	cp ../../prebuilt/ipmitool/src/ipmitool.static $(TMPDIR)/ipmitool
+	cp ../../prebuilt/lshw/src/lshw-static $(TMPDIR)/lshw
+	cp ../../prebuilt/lspci/lspci $(TMPDIR)
+	cp ../../prebuilt/lspci/pci.ids.gz $(TMPDIR)
 	-cp mlc/mlc $(TMPDIR)
 	cp msrbusy/msrbusy $(TMPDIR)
-	cp linux/tools/perf/perf $(TMPDIR)
-	cp -R async-profiler $(TMPDIR)
-	cp flamegraph/stackcollapse-perf.pl $(TMPDIR)
+	cp ../../prebuilt/linux/tools/perf/perf $(TMPDIR)
+	cp -R ../../prebuilt/async-profiler $(TMPDIR)
+	cp ../../prebuilt/flamegraph/stackcollapse-perf.pl $(TMPDIR)
 	cp pmu2metrics/pmu2metrics $(TMPDIR)
 	cp rdmsr/rdmsrx $(TMPDIR)
 	cp wrmsr/wrmsrx $(TMPDIR)
-	cp spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
-	cp stress-ng/stress-ng $(TMPDIR)
-	cp sysstat/mpstat $(TMPDIR)
-	cp sysstat/iostat $(TMPDIR)
-	cp sysstat/sar $(TMPDIR)
-	cp sysstat/sadc $(TMPDIR)
-	cp linux/tools/power/x86/turbostat/turbostat $(TMPDIR)
+	cp ../../prebuilt/spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
+	cp ../../prebuilt/stress-ng/stress-ng $(TMPDIR)
+	cp ../../prebuilt/sysstat/mpstat $(TMPDIR)
+	cp ../../prebuilt/sysstat/iostat $(TMPDIR)
+	cp ../../prebuilt/sysstat/sar $(TMPDIR)
+	cp ../../prebuilt/sysstat/sadc $(TMPDIR)
+	cp ../../prebuilt/linux/tools/power/x86/turbostat/turbostat $(TMPDIR)
 	-cp -r ../bin/* $(TMPDIR)
 	for f in $(TMPDIR)/*; do strip -s -p --strip-unneeded $$f; done
 	cd $(TMPDIR) && tar -czf ../orchestrator/resources/collector_deps_amd64.tgz .
 	rm -rf $(TMPDIR)
 
-collector-deps-arm64: spectre-meltdown-checker
+collector-deps-arm64:
 	$(eval TMPDIR := $(shell mktemp -d build.XXXXXX))
-	cp spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
+	cp ../../prebuilt/spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
 	cd $(TMPDIR) && tar -czf ../orchestrator/resources/collector_deps_arm64.tgz .
 	rm -rf $(TMPDIR)
 
 collector-deps: collector-deps-amd64 collector-deps-arm64
 
 clean:
-	rm -rf async-profiler cpuid dmidecode ethtool fio flamegraph ipmitool linux lshw lspci mlc spectre-meltdown-checker sshpass stress-ng sysstat oss_source.* linux-*.xz cpuid-*.gz glibc-*.bz2 libcrypt*.gz zlib.*.gz
+	rm -rf mlc *.tar.*
 	rm -f calcfreq/calcfreq
 	rm -f collector/collector
 	rm -f collector/collector_arm64
@@ -288,20 +289,20 @@ clean:
 	rm -f pmu2metrics/pmu2metrics
 
 reset:
-	cd cpuid && make clean
-	cd dmidecode && git clean -fdx && git reset --hard
-	cd ethtool && git clean -fdx && git reset --hard
-	cd fio && git clean -fdx && git reset --hard
-	cd flamegraph && git clean -fdx && git reset --hard
-	cd ipmitool && git clean -fdx && git reset --hard
-	cd lshw && git clean -fdx && git reset --hard
-	cd lspci && git clean -fdx && git reset --hard
+	cd ../../prebuilt/cpuid && make clean
+	cd ../../prebuilt/dmidecode && git clean -fdx && git reset --hard
+	cd ../../prebuilt/ethtool && git clean -fdx && git reset --hard
+	cd ../../prebuilt/fio && git clean -fdx && git reset --hard
+	cd ../../prebuilt/flamegraph && git clean -fdx && git reset --hard
+	cd ../../prebuilt/ipmitool && git clean -fdx && git reset --hard
+	cd ../../prebuilt/lshw && git clean -fdx && git reset --hard
+	cd ../../prebuilt/lspci && git clean -fdx && git reset --hard
 	-cd mlc && git clean -fdx && git reset --hard
-	cd linux/tools/perf && make clean
-	cd sshpass && make clean
-	cd stress-ng && git clean -fdx && git reset --hard
-	cd sysstat && git clean -fdx && git reset --hard
-	cd linux/tools/power/x86/turbostat && make clean
+	cd ../../prebuilt/linux/tools/perf && make clean
+	cd ../../prebuilt/sshpass && make clean
+	cd ../../prebuilt/stress-ng && git clean -fdx && git reset --hard
+	cd ../../prebuilt/sysstat && git clean -fdx && git reset --hard
+	cd ../../prebuilt/linux/tools/power/x86/turbostat && make clean
 
 # not used in build but required in oss archive file because some of the tools are statically linked
 glibc-2.19.tar.bz2:
@@ -313,5 +314,5 @@ libcrypt.tar.gz:
 libs: glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 
 oss-source: reset libs
-	tar --exclude-vcs -czf oss_source.tgz async-profiler/ dmidecode/ ethtool/ fio/ flamegraph/ ipmitool/ linux/ lshw/ lspci/ spectre-meltdown-checker/ sshpass/ sysstat/ stress-ng/ glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
+	tar --exclude-vcs -czf oss_source.tgz ../../prebuilt/async-profiler/ ../../prebuilt/dmidecode/ ../../prebuilt/ethtool/ ../../prebuilt/fio/ ../../prebuilt/flamegraph/ ../../prebuilt/ipmitool/ ../../prebuilt/linux/ ../../prebuilt/lshw/ ../../prebuilt/lspci/ ../../prebuilt/spectre-meltdown-checker/ ../../prebuilt/sshpass/ ../../prebuilt/sysstat/ ../../prebuilt/stress-ng/ glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 	md5sum oss_source.tgz > oss_source.tgz.md5
