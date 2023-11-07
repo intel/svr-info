@@ -44,7 +44,7 @@ format_check:
 check: format_check
 
 orchestrator: reporter collector collector-deps
-	cp ../../prebuilt/sshpass/sshpass orchestrator/resources/
+	cp /prebuilt/sshpass/sshpass orchestrator/resources/
 	cp reporter/reporter orchestrator/resources/
 	cp collector/collector orchestrator/resources/
 	cp collector/collector_arm64 orchestrator/resources/
@@ -234,29 +234,29 @@ turbostat: linux-source
 collector-deps-amd64: other_tools
 	$(eval TMPDIR := $(shell mktemp -d build.XXXXXX))
 	cp calcfreq/calcfreq $(TMPDIR)
-	cp ../../prebuilt/cpuid/cpuid $(TMPDIR)
-	cp ../../prebuilt/dmidecode/dmidecode $(TMPDIR)
-	cp ../../prebuilt/ethtool/ethtool $(TMPDIR)
-	cp ../../prebuilt/fio/fio $(TMPDIR)
-	cp ../../prebuilt/ipmitool/src/ipmitool.static $(TMPDIR)/ipmitool
-	cp ../../prebuilt/lshw/src/lshw-static $(TMPDIR)/lshw
-	cp ../../prebuilt/lspci/lspci $(TMPDIR)
-	cp ../../prebuilt/lspci/pci.ids.gz $(TMPDIR)
+	cp /prebuilt/cpuid/cpuid $(TMPDIR)
+	cp /prebuilt/dmidecode/dmidecode $(TMPDIR)
+	cp /prebuilt/ethtool/ethtool $(TMPDIR)
+	cp /prebuilt/fio/fio $(TMPDIR)
+	cp /prebuilt/ipmitool/src/ipmitool.static $(TMPDIR)/ipmitool
+	cp /prebuilt/lshw/src/lshw-static $(TMPDIR)/lshw
+	cp /prebuilt/lspci/lspci $(TMPDIR)
+	cp /prebuilt/lspci/pci.ids.gz $(TMPDIR)
 	-cp mlc/mlc $(TMPDIR)
 	cp msrbusy/msrbusy $(TMPDIR)
-	cp ../../prebuilt/linux/tools/perf/perf $(TMPDIR)
-	cp -R ../../prebuilt/async-profiler $(TMPDIR)
-	cp ../../prebuilt/flamegraph/stackcollapse-perf.pl $(TMPDIR)
+	cp /prebuilt/linux/tools/perf/perf $(TMPDIR)
+	cp -R /prebuilt/async-profiler $(TMPDIR)
+	cp /prebuilt/flamegraph/stackcollapse-perf.pl $(TMPDIR)
 	cp pmu2metrics/pmu2metrics $(TMPDIR)
 	cp rdmsr/rdmsrx $(TMPDIR)
 	cp wrmsr/wrmsrx $(TMPDIR)
-	cp ../../prebuilt/spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
-	cp ../../prebuilt/stress-ng/stress-ng $(TMPDIR)
-	cp ../../prebuilt/sysstat/mpstat $(TMPDIR)
-	cp ../../prebuilt/sysstat/iostat $(TMPDIR)
-	cp ../../prebuilt/sysstat/sar $(TMPDIR)
-	cp ../../prebuilt/sysstat/sadc $(TMPDIR)
-	cp ../../prebuilt/linux/tools/power/x86/turbostat/turbostat $(TMPDIR)
+	cp /prebuilt/spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
+	cp /prebuilt/stress-ng/stress-ng $(TMPDIR)
+	cp /prebuilt/sysstat/mpstat $(TMPDIR)
+	cp /prebuilt/sysstat/iostat $(TMPDIR)
+	cp /prebuilt/sysstat/sar $(TMPDIR)
+	cp /prebuilt/sysstat/sadc $(TMPDIR)
+	cp /prebuilt/linux/tools/power/x86/turbostat/turbostat $(TMPDIR)
 	-cp -r ../bin/* $(TMPDIR)
 	for f in $(TMPDIR)/*; do strip -s -p --strip-unneeded $$f; done
 	cd $(TMPDIR) && tar -czf ../orchestrator/resources/collector_deps_amd64.tgz .
@@ -264,7 +264,7 @@ collector-deps-amd64: other_tools
 
 collector-deps-arm64:
 	$(eval TMPDIR := $(shell mktemp -d build.XXXXXX))
-	cp ../../prebuilt/spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
+	cp /prebuilt/spectre-meltdown-checker/spectre-meltdown-checker.sh $(TMPDIR)
 	cd $(TMPDIR) && tar -czf ../orchestrator/resources/collector_deps_arm64.tgz .
 	rm -rf $(TMPDIR)
 
@@ -289,20 +289,20 @@ clean:
 	rm -f pmu2metrics/pmu2metrics
 
 reset:
-	cd ../../prebuilt/cpuid && make clean
-	cd ../../prebuilt/dmidecode && git clean -fdx && git reset --hard
-	cd ../../prebuilt/ethtool && git clean -fdx && git reset --hard
-	cd ../../prebuilt/fio && git clean -fdx && git reset --hard
-	cd ../../prebuilt/flamegraph && git clean -fdx && git reset --hard
-	cd ../../prebuilt/ipmitool && git clean -fdx && git reset --hard
-	cd ../../prebuilt/lshw && git clean -fdx && git reset --hard
-	cd ../../prebuilt/lspci && git clean -fdx && git reset --hard
+	cd /prebuilt/cpuid && make clean
+	cd /prebuilt/dmidecode && git clean -fdx && git reset --hard
+	cd /prebuilt/ethtool && git clean -fdx && git reset --hard
+	cd /prebuilt/fio && git clean -fdx && git reset --hard
+	cd /prebuilt/flamegraph && git clean -fdx && git reset --hard
+	cd /prebuilt/ipmitool && git clean -fdx && git reset --hard
+	cd /prebuilt/lshw && git clean -fdx && git reset --hard
+	cd /prebuilt/lspci && git clean -fdx && git reset --hard
 	-cd mlc && git clean -fdx && git reset --hard
-	cd ../../prebuilt/linux/tools/perf && make clean
-	cd ../../prebuilt/sshpass && make clean
-	cd ../../prebuilt/stress-ng && git clean -fdx && git reset --hard
-	cd ../../prebuilt/sysstat && git clean -fdx && git reset --hard
-	cd ../../prebuilt/linux/tools/power/x86/turbostat && make clean
+	cd /prebuilt/linux/tools/perf && make clean
+	cd /prebuilt/sshpass && make clean
+	cd /prebuilt/stress-ng && git clean -fdx && git reset --hard
+	cd /prebuilt/sysstat && git clean -fdx && git reset --hard
+	cd /prebuilt/linux/tools/power/x86/turbostat && make clean
 
 # not used in build but required in oss archive file because some of the tools are statically linked
 glibc-2.19.tar.bz2:
@@ -314,5 +314,5 @@ libcrypt.tar.gz:
 libs: glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 
 oss-source: reset libs
-	tar --exclude-vcs -czf oss_source.tgz ../../prebuilt/async-profiler/ ../../prebuilt/dmidecode/ ../../prebuilt/ethtool/ ../../prebuilt/fio/ ../../prebuilt/flamegraph/ ../../prebuilt/ipmitool/ ../../prebuilt/linux/ ../../prebuilt/lshw/ ../../prebuilt/lspci/ ../../prebuilt/spectre-meltdown-checker/ ../../prebuilt/sshpass/ ../../prebuilt/sysstat/ ../../prebuilt/stress-ng/ glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
+	tar --exclude-vcs -czf oss_source.tgz /prebuilt/async-profiler/ /prebuilt/dmidecode/ /prebuilt/ethtool/ /prebuilt/fio/ /prebuilt/flamegraph/ /prebuilt/ipmitool/ /prebuilt/linux/ /prebuilt/lshw/ /prebuilt/lspci/ /prebuilt/spectre-meltdown-checker/ /prebuilt/sshpass/ /prebuilt/sysstat/ /prebuilt/stress-ng/ glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 	md5sum oss_source.tgz > oss_source.tgz.md5
