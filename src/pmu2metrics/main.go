@@ -32,6 +32,8 @@ type CmdLineArgs struct {
 	veryVerbose       bool
 	metadataFilePath  string
 	perfStatFilePath  string
+	printMetricNames  bool
+	metricsList       string
 }
 
 // globals
@@ -197,12 +199,20 @@ func showUsage() {
   	Enable verbose logging.
   -V
   	Print program version.
+  -o
+  	Print metric names availabe on this platform.
+  -metrics <metric names>
+  	Quoted and comma separated list of metric names to include in output.
 
 Advanced Options:
   -e <path>
   	Path to perf event definition file.
   -m <path>
   	Path to metric definition file.
+  -i <milliseconds>
+  	Event collection interval in milliseconds
+  -x <milliseconds>
+  	Multiplexing interval in milliseconds
 
 Debug Options:
   -p <path>
@@ -246,6 +256,8 @@ func mainReturnWithCode(ctx context.Context) int {
 	flag.BoolVar(&gCmdLineArgs.verbose, "v", false, "Enable verbose logging.")
 	flag.BoolVar(&gCmdLineArgs.veryVerbose, "vv", false, "Enable verbose logging.")
 	flag.BoolVar(&gCmdLineArgs.printCSV, "csv", false, "Print output to stdout in CSV format.")
+	flag.BoolVar(&gCmdLineArgs.printMetricNames, "o", false, "")
+	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
 	flag.Parse()
 	err := validateArgs()
 	if err != nil {
@@ -292,6 +304,10 @@ func mainReturnWithCode(ctx context.Context) int {
 		}
 	} else {
 		if metadata, err = loadMetadata(); err != nil {
+			if os.Geteuid() != 0 {
+				fmt.Println("\nElevated permissions required, try again as root user or with sudo.")
+				return exitError
+			}
 			log.Printf("failed to load metadata: %v", err)
 			return exitError
 		}
@@ -301,8 +317,26 @@ func mainReturnWithCode(ctx context.Context) int {
 	}
 	evaluatorFunctions := getEvaluatorFunctions()
 	var metricDefinitions []MetricDefinition
-	if metricDefinitions, err = loadMetricDefinitions(gCmdLineArgs.metricFilePath, evaluatorFunctions, metadata); err != nil {
+	var selectedMetricNames []string
+	if gCmdLineArgs.metricsList != "" {
+		selectedMetricNames = strings.Split(gCmdLineArgs.metricsList, ",")
+		for i := range selectedMetricNames {
+			selectedMetricNames[i] = strings.TrimSpace(selectedMetricNames[i])
+		}
+	}
+	if metricDefinitions, err = loadMetricDefinitions(gCmdLineArgs.metricFilePath, selectedMetricNames, metadata); err != nil {
 		log.Printf("failed to load metric definitions: %v", err)
+		return exitError
+	}
+	if gCmdLineArgs.printMetricNames {
+		fmt.Println()
+		for _, metric := range metricDefinitions {
+			fmt.Println(metric.Name[7:])
+		}
+		return exitNoError
+	}
+	if err = configureMetrics(metricDefinitions, evaluatorFunctions, metadata); err != nil {
+		log.Printf("failed to configure metrics: %v", err)
 		return exitError
 	}
 	eventChannel := make(chan []string)
@@ -312,7 +346,7 @@ func mainReturnWithCode(ctx context.Context) int {
 		go playbackPerf(gCmdLineArgs.perfStatFilePath, eventChannel, metadata, perfError)
 	} else {
 		if os.Geteuid() != 0 {
-			fmt.Println("Elevated permissions required, try again as root user or with sudo.")
+			fmt.Println("\nElevated permissions required, try again as root user or with sudo.")
 			return exitError
 		}
 		var groupDefinitions []GroupDefinition

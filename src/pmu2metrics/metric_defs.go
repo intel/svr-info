@@ -101,8 +101,18 @@ func transformConditional(origIn string) (out string, err error) {
 	return
 }
 
+// true if string is in list of strings
+func stringInList(s string, l []string) bool {
+	for _, item := range l {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
 // load metrics from file
-func loadMetricDefinitions(metricDefinitionOverridePath string, evaluatorFunctions map[string]govaluate.ExpressionFunction, metadata Metadata) (metrics []MetricDefinition, err error) {
+func loadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics []string, metadata Metadata) (metrics []MetricDefinition, err error) {
 	var bytes []byte
 	if metricDefinitionOverridePath != "" {
 		if bytes, err = os.ReadFile(metricDefinitionOverridePath); err != nil {
@@ -113,9 +123,39 @@ func loadMetricDefinitions(metricDefinitionOverridePath string, evaluatorFunctio
 			return
 		}
 	}
-	if err = json.Unmarshal(bytes, &metrics); err != nil {
+	var metricsInFile []MetricDefinition
+	if err = json.Unmarshal(bytes, &metricsInFile); err != nil {
 		return
 	}
+	if len(selectedMetrics) > 0 {
+		// confirm provided metric names are valid (included in metrics defined in file)
+		for _, metricName := range selectedMetrics {
+			found := false
+			for _, metric := range metricsInFile {
+				if "metric_"+metricName == metric.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				err = fmt.Errorf("provided metric name not found: %s", metricName)
+				return
+			}
+		}
+		// build list of metrics based on provided list of metric names
+		for _, metric := range metricsInFile {
+			if !stringInList(metric.Name[7:], selectedMetrics) {
+				continue
+			}
+			metrics = append(metrics, metric)
+		}
+	} else {
+		metrics = metricsInFile
+	}
+	return
+}
+
+func configureMetrics(metrics []MetricDefinition, evaluatorFunctions map[string]govaluate.ExpressionFunction, metadata Metadata) (err error) {
 	for metricIdx := range metrics {
 		// transform if/else to ?/:
 		var transformed string
