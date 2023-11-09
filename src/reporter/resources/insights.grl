@@ -62,13 +62,24 @@ rule MemoryChannels {
 
 rule Vulnerabilities {
 	when
-		Report.GetValuesFromColumn("Configuration", "Vulnerability", 0).Count("Vuln") != 0
+		Report.GetValuesFromRow("Configuration", "Vulnerability", 0).Count("Vuln") != 0
 	then
 		Report.AddInsight(
-			"Detected '" + Report.GetValuesFromColumn("Configuration", "Vulnerability", 0).Count("Vuln") + "' security vulnerabilities.",
+			"Detected '" + Report.GetValuesFromRow("Configuration", "Vulnerability", 0).Count("Vuln") + "' security vulnerabilities.",
 			"Consider mitigating security vulnerabilities."
 			);
 		Retract("Vulnerabilities");
+}
+
+rule Temperature {
+	when
+		Report.GetValuesFromColumn("Configuration", "System Event Log", 2).Count("Temperature") != 0
+	then
+		Report.AddInsight(
+			"Detected '" + Report.GetValuesFromColumn("Configuration", "System Event Log", 2).Count("Temperature") + "' temperature-related service action(s) in the System Event Log.",
+			"Consider reviewing the System Event Log table located on the Configuration page."
+			);
+		Retract("Temperature");
 }
 
 //
