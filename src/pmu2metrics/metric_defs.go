@@ -127,12 +127,17 @@ func loadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics 
 	if err = json.Unmarshal(bytes, &metricsInFile); err != nil {
 		return
 	}
+	// remove "metric_" prefix from metric names
+	for i := range metricsInFile {
+		metricsInFile[i].Name = strings.TrimPrefix(metricsInFile[i].Name, "metric_")
+	}
+	// if a list of metric names provided, reduce list to match
 	if len(selectedMetrics) > 0 {
 		// confirm provided metric names are valid (included in metrics defined in file)
 		for _, metricName := range selectedMetrics {
 			found := false
 			for _, metric := range metricsInFile {
-				if "metric_"+metricName == metric.Name {
+				if metricName == metric.Name {
 					found = true
 					break
 				}
@@ -144,7 +149,7 @@ func loadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics 
 		}
 		// build list of metrics based on provided list of metric names
 		for _, metric := range metricsInFile {
-			if !stringInList(metric.Name[7:], selectedMetrics) {
+			if !stringInList(metric.Name, selectedMetrics) {
 				continue
 			}
 			metrics = append(metrics, metric)

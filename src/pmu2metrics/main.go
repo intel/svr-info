@@ -34,6 +34,7 @@ type CmdLineArgs struct {
 	perfStatFilePath  string
 	printMetricNames  bool
 	metricsList       string
+	printWide         bool
 }
 
 // globals
@@ -203,6 +204,8 @@ func showUsage() {
   	Print metric names availabe on this platform.
   -metrics <metric names>
   	Quoted and comma separated list of metric names to include in output.
+  -wide
+  	Wide formatted output.
 
 Advanced Options:
   -e <path>
@@ -226,14 +229,72 @@ func validateArgs() (err error) {
 	if gCmdLineArgs.metadataFilePath != "" {
 		if gCmdLineArgs.perfStatFilePath == "" {
 			err = fmt.Errorf("-p and -d options must both be specified")
+			return
 		}
 	}
 	if gCmdLineArgs.perfStatFilePath != "" {
 		if gCmdLineArgs.metadataFilePath == "" {
 			err = fmt.Errorf("-p and -d options must both be specified")
+			return
 		}
 	}
+	if gCmdLineArgs.printCSV && gCmdLineArgs.printWide {
+		err = fmt.Errorf("-csv and -wide are mutually exclusive, choose one")
+		return
+	}
 	return
+}
+
+func printMetrics(metrics []Metric, frameCount int, frameTimestamp float64) {
+	if gCmdLineArgs.printCSV {
+		if frameCount == 1 {
+			// print "timestamp,", then metric names as CSV headers
+			fmt.Print("timestamp,")
+			var names []string
+			for _, metric := range metrics {
+				names = append(names, metric.Name)
+			}
+			fmt.Printf("%s\n", strings.Join(names, ","))
+		}
+		fmt.Printf("%0.4f,", frameTimestamp)
+		var values []string
+		for _, metric := range metrics {
+			values = append(values, strconv.FormatFloat(metric.Value, 'g', 8, 64))
+		}
+		fmt.Printf("%s\n", strings.Join(values, ","))
+	} else { // human readable output
+		if !gCmdLineArgs.printWide {
+			fmt.Println("--------------------------------------------------------------------------------------")
+			fmt.Printf("- Metrics captured at t + %0.2fs\n", frameTimestamp)
+			fmt.Println("--------------------------------------------------------------------------------------")
+			fmt.Printf("%-70s %15s\n", "metric", "value")
+			fmt.Printf("%-70s %15s\n", "------------------------", "----------")
+			for _, metric := range metrics {
+				fmt.Printf("%-70s %15s\n", metric.Name, strconv.FormatFloat(metric.Value, 'g', 4, 64))
+			}
+		} else { // metrics list reduced by user, print transposed
+			var names []string
+			var values []float64
+			names = append(names, "Timestamp")
+			values = append(values, frameTimestamp)
+			for _, metric := range metrics {
+				names = append(names, metric.Name)
+				values = append(values, metric.Value)
+			}
+			if frameCount == 1 {
+				header := strings.Join(names, "   ")
+				fmt.Printf("%s\n", header)
+			}
+			var row string
+			for i, value := range values {
+				colWidth := len(names[i])
+				colSpacing := 3
+				val := fmt.Sprintf("%.2f", value)
+				row += fmt.Sprintf("%s%*s%*s", val, colWidth-len(val), "", colSpacing, "")
+			}
+			fmt.Println(row)
+		}
+	}
 }
 
 const (
@@ -258,6 +319,7 @@ func mainReturnWithCode(ctx context.Context) int {
 	flag.BoolVar(&gCmdLineArgs.printCSV, "csv", false, "Print output to stdout in CSV format.")
 	flag.BoolVar(&gCmdLineArgs.printMetricNames, "o", false, "")
 	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
+	flag.BoolVar(&gCmdLineArgs.printWide, "wide", false, "")
 	flag.Parse()
 	err := validateArgs()
 	if err != nil {
@@ -312,6 +374,9 @@ func mainReturnWithCode(ctx context.Context) int {
 			return exitError
 		}
 	}
+	if gCmdLineArgs.verbose {
+		log.Printf("%s", metadata)
+	}
 	if !gCmdLineArgs.printCSV {
 		fmt.Print(".")
 	}
@@ -328,10 +393,13 @@ func mainReturnWithCode(ctx context.Context) int {
 		log.Printf("failed to load metric definitions: %v", err)
 		return exitError
 	}
+	if !gCmdLineArgs.printCSV {
+		fmt.Print(".")
+	}
 	if gCmdLineArgs.printMetricNames {
 		fmt.Println()
 		for _, metric := range metricDefinitions {
-			fmt.Println(metric.Name[7:])
+			fmt.Println(metric.Name)
 		}
 		return exitNoError
 	}
@@ -343,6 +411,7 @@ func mainReturnWithCode(ctx context.Context) int {
 	perfCtx, perfError := context.WithCancel(context.Background())
 	defer perfError()
 	if gCmdLineArgs.perfStatFilePath != "" { // testing/debugging flow
+		fmt.Print(".\n")
 		go playbackPerf(gCmdLineArgs.perfStatFilePath, eventChannel, metadata, perfError)
 	} else {
 		if os.Geteuid() != 0 {
@@ -354,8 +423,8 @@ func mainReturnWithCode(ctx context.Context) int {
 			log.Printf("failed to load event definitions: %v", err)
 			return exitError
 		}
-		if gCmdLineArgs.verbose {
-			log.Printf("%s", metadata)
+		if !gCmdLineArgs.printCSV {
+			fmt.Print(".")
 		}
 		var nmiWatchdog string
 		if nmiWatchdog, err = getNmiWatchdog(); err != nil {
@@ -368,6 +437,9 @@ func mainReturnWithCode(ctx context.Context) int {
 				return exitError
 			}
 			defer setNmiWatchdog(nmiWatchdog)
+		}
+		if !gCmdLineArgs.printCSV {
+			fmt.Print(".")
 		}
 		var perfMuxIntervals map[string]string
 		if perfMuxIntervals, err = getMuxIntervals(); err != nil {
@@ -388,9 +460,8 @@ func mainReturnWithCode(ctx context.Context) int {
 	}
 	// loop until the perf goroutine closes the eventChannel or user hits ctrl-c
 	var frameTimestamp float64
-	var metrics []Metric
+	frameCount := 0
 	more := true
-	firstFrame := true
 	for more {
 		select {
 		case <-perfCtx.Done(): // error from perf
@@ -401,37 +472,13 @@ func mainReturnWithCode(ctx context.Context) int {
 			var perfEvents []string
 			perfEvents, more = <-eventChannel // events from one frame of collection (all same timestamp)
 			if more && len(perfEvents) > 0 {
+				var metrics []Metric
 				if metrics, frameTimestamp, err = processEvents(perfEvents, metricDefinitions, frameTimestamp, metadata); err != nil {
 					log.Printf("%v", err)
 					return exitError
 				}
-				if gCmdLineArgs.printCSV {
-					if firstFrame {
-						firstFrame = false
-						// print "timestamp,", then metric names as CSV headers
-						fmt.Print("timestamp,")
-						var names []string
-						for _, metric := range metrics {
-							names = append(names, metric.Name[7:])
-						}
-						fmt.Printf("%s\n", strings.Join(names, ","))
-					}
-					fmt.Printf("%0.4f,", frameTimestamp)
-					var values []string
-					for _, metric := range metrics {
-						values = append(values, strconv.FormatFloat(metric.Value, 'g', 8, 64))
-					}
-					fmt.Printf("%s\n", strings.Join(values, ","))
-				} else { // human readable output
-					fmt.Println("--------------------------------------------------------------------------------------")
-					fmt.Printf("- Metrics captured at t + %0.2fs\n", frameTimestamp)
-					fmt.Println("--------------------------------------------------------------------------------------")
-					fmt.Printf("%-70s %15s\n", "metric", "value")
-					fmt.Printf("%-70s %15s\n", "------------------------", "----------")
-					for _, metric := range metrics {
-						fmt.Printf("%-70s %15s\n", metric.Name[7:], strconv.FormatFloat(metric.Value, 'g', 4, 64))
-					}
-				}
+				frameCount += 1
+				printMetrics(metrics, frameCount, frameTimestamp)
 			}
 		}
 	}
