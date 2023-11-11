@@ -133,9 +133,9 @@ func collapseUncoreGroupsInFrame(inFrame EventFrame) (outFrame EventFrame, err e
 	return
 }
 
-// parse list of raw (string) events from perf into list of Event
+// parse raw event from perf stat into Event structure
+// example: 5.005032332,170287,,OCR.READS_TO_CORE.REMOTE_CACHE.SNOOP_HIT_WITH_FWD,69661188852,6.00,,
 func parseEvent(rawEvent string) (event Event, err error) {
-	// example: 5.005032332,170287,,OCR.READS_TO_CORE.REMOTE_CACHE.SNOOP_HIT_WITH_FWD,69661188852,6.00,,
 	parts := strings.Split(rawEvent, ",")
 	if len(parts) < 6 {
 		err = fmt.Errorf("unrecognized event format: %s", rawEvent)

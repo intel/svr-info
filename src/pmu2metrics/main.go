@@ -22,7 +22,7 @@ import (
 type CmdLineArgs struct {
 	showHelp          bool
 	showVersion       bool
-	duration          int // seconds
+	timeout           int // seconds
 	eventFilePath     string
 	metricFilePath    string
 	perfPrintInterval int // milliseconds
@@ -32,15 +32,16 @@ type CmdLineArgs struct {
 	veryVerbose       bool
 	metadataFilePath  string
 	perfStatFilePath  string
-	printMetricNames  bool
+	showMetricNames   bool
 	metricsList       string
 	printWide         bool
 }
 
 // globals
 var (
-	gVersion     string = "dev"
-	gCmdLineArgs CmdLineArgs
+	gVersion             string = "dev"
+	gCmdLineArgs         CmdLineArgs
+	gCollectionStartTime time.Time
 )
 
 //go:embed resources
@@ -92,9 +93,9 @@ func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args 
 	}
 	groupsArg := fmt.Sprintf("'%s'", strings.Join(groups, ","))
 	args = append(args, groupsArg)
-	if gCmdLineArgs.duration > 0 {
+	if gCmdLineArgs.timeout > 0 {
 		args = append(args, "sleep")
-		args = append(args, fmt.Sprintf("%d", gCmdLineArgs.duration))
+		args = append(args, fmt.Sprintf("%d", gCmdLineArgs.timeout))
 	}
 	return
 }
@@ -125,6 +126,8 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, metadata
 		eventChannel <- []string{} // need to send an empy event list because caller is blocking on this channel
 		return
 	}
+	// get current time for use in setting timestamps on output
+	gCollectionStartTime = time.Now()
 	// Use a timer to determine when to send a frame of events back to the caller (over the eventChannel).
 	// The timer will expire when no lines (events) have been received from perf for more than 100ms. This
 	// works because perf writes the events to stderr in a burst every collection interval, e.g., 5 seconds.
@@ -188,40 +191,38 @@ func playbackPerf(perfStatFilePath string, eventChannel chan []string, metadata 
 }
 
 func showUsage() {
-	fmt.Printf("%s Version: %s\n", filepath.Base(os.Args[0]), gVersion)
-	fmt.Println("Options:")
-	usage := `  -csv
+	fmt.Printf("\nusage: sudo %s [OPTIONS]\n", filepath.Base(os.Args[0]))
+	fmt.Println("\ndefault: Prints all available metrics at 5 second intervals in human readable format until interrupted by user.")
+	fmt.Println("         Note: Log messages are sent to stderr. Redirect to maintain clean console output. E.g.,")
+	fmt.Printf("               $ sudo %s 2>pmu2metrics.log\n", filepath.Base(os.Args[0]))
+	fmt.Print("\noptional arguments:")
+	usage := `
+  -h, --help
+  	Print this usage message and exit.
+  --csv
   	CSV formatted output.
-  -h
-  	Print this usage message.
-  -t <seconds>
+  --list
+  	Show metric names available on this platform and exit.
+  --metrics <metric names>
+  	Metric names to include in output. (Quoted and comma separated list.)
+  --wide
+  	Wide formatted output. Best when a few selected metrics are printed.
+  -t, --timeout <seconds>
   	Number of seconds to run. By default, runs indefinitely.
   -v[v]
   	Enable verbose logging.
-  -V
-  	Print program version.
-  -o
-  	Print metric names availabe on this platform.
-  -metrics <metric names>
-  	Quoted and comma separated list of metric names to include in output.
-  -wide
-  	Wide formatted output.
+  -V, --version
+  	Show program version and exit.
 
 Advanced Options:
-  -e <path>
+  -e, --eventfile <path>
   	Path to perf event definition file.
-  -m <path>
+  -m, --metricfile <path>
   	Path to metric definition file.
-  -i <milliseconds>
+  -i, --interval <milliseconds>
   	Event collection interval in milliseconds
-  -x <milliseconds>
-  	Multiplexing interval in milliseconds
-
-Debug Options:
-  -p <path>
-  	Path to perf stat data file.
-  -d <path>
-  	Path to metadata file.`
+  -x, --muxinterval <milliseconds>
+  	Multiplexing interval in milliseconds`
 	fmt.Println(usage)
 }
 
@@ -248,15 +249,15 @@ func validateArgs() (err error) {
 func printMetrics(metrics []Metric, frameCount int, frameTimestamp float64) {
 	if gCmdLineArgs.printCSV {
 		if frameCount == 1 {
-			// print "timestamp,", then metric names as CSV headers
-			fmt.Print("timestamp,")
+			// print "Timestamp,", then metric names as CSV headers
+			fmt.Print("Timestamp,")
 			var names []string
 			for _, metric := range metrics {
 				names = append(names, metric.Name)
 			}
 			fmt.Printf("%s\n", strings.Join(names, ","))
 		}
-		fmt.Printf("%0.4f,", frameTimestamp)
+		fmt.Printf("%d,", gCollectionStartTime.Unix()+int64(frameTimestamp))
 		var values []string
 		for _, metric := range metrics {
 			values = append(values, strconv.FormatFloat(metric.Value, 'g', 8, 64))
@@ -265,31 +266,34 @@ func printMetrics(metrics []Metric, frameCount int, frameTimestamp float64) {
 	} else { // human readable output
 		if !gCmdLineArgs.printWide {
 			fmt.Println("--------------------------------------------------------------------------------------")
-			fmt.Printf("- Metrics captured at t + %0.2fs\n", frameTimestamp)
+			fmt.Printf("- Metrics captured at %s\n", gCollectionStartTime.Add(time.Second*time.Duration(int(frameTimestamp))).UTC())
 			fmt.Println("--------------------------------------------------------------------------------------")
 			fmt.Printf("%-70s %15s\n", "metric", "value")
 			fmt.Printf("%-70s %15s\n", "------------------------", "----------")
 			for _, metric := range metrics {
 				fmt.Printf("%-70s %15s\n", metric.Name, strconv.FormatFloat(metric.Value, 'g', 4, 64))
 			}
-		} else { // metrics list reduced by user, print transposed
+		} else { // wide format
 			var names []string
 			var values []float64
-			names = append(names, "Timestamp")
-			values = append(values, frameTimestamp)
 			for _, metric := range metrics {
 				names = append(names, metric.Name)
 				values = append(values, metric.Value)
 			}
-			if frameCount == 1 {
-				header := strings.Join(names, "   ")
+			if frameCount == 1 { // print headers
+				header := "Timestamp    "
+				header += strings.Join(names, "   ")
 				fmt.Printf("%s\n", header)
 			}
-			var row string
+			// handle timestamp
+			colWidth := 10
+			colSpacing := 3
+			val := fmt.Sprintf("%d", gCollectionStartTime.Unix()+int64(frameTimestamp))
+			row := fmt.Sprintf("%s%*s%*s", val, colWidth-len(val), "", colSpacing, "")
+			// handle the metric values
 			for i, value := range values {
-				colWidth := len(names[i])
-				colSpacing := 3
-				val := fmt.Sprintf("%.2f", value)
+				colWidth = len(names[i])
+				val = fmt.Sprintf("%.2f", value)
 				row += fmt.Sprintf("%s%*s%*s", val, colWidth-len(val), "", colSpacing, "")
 			}
 			fmt.Println(row)
@@ -305,21 +309,30 @@ const (
 
 func mainReturnWithCode(ctx context.Context) int {
 	flag.Usage = func() { showUsage() } // override default usage output
-	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "Print this usage message.")
-	flag.BoolVar(&gCmdLineArgs.showVersion, "V", false, "Print program version.")
-	flag.IntVar(&gCmdLineArgs.duration, "t", 0, "Number of seconds to run. By default, runs indefinitely.")
-	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "i", 5000, "Event collection interval in milliseconds.")
-	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "x", 125, "Multiplexing interval in milliseconds.")
-	flag.StringVar(&gCmdLineArgs.eventFilePath, "e", "", "Path to event definition file.")
-	flag.StringVar(&gCmdLineArgs.metricFilePath, "m", "", "Path to metric definition file.")
-	flag.StringVar(&gCmdLineArgs.metadataFilePath, "d", "", "Path to metadata file.")
-	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "p", "", "Path to perf stat data file.")
-	flag.BoolVar(&gCmdLineArgs.verbose, "v", false, "Enable verbose logging.")
-	flag.BoolVar(&gCmdLineArgs.veryVerbose, "vv", false, "Enable verbose logging.")
-	flag.BoolVar(&gCmdLineArgs.printCSV, "csv", false, "Print output to stdout in CSV format.")
-	flag.BoolVar(&gCmdLineArgs.printMetricNames, "o", false, "")
-	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
+	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "")
+	flag.BoolVar(&gCmdLineArgs.showHelp, "help", false, "")
+	flag.BoolVar(&gCmdLineArgs.showVersion, "V", false, "")
+	flag.BoolVar(&gCmdLineArgs.showVersion, "version", false, "")
+	flag.BoolVar(&gCmdLineArgs.showMetricNames, "l", false, "")
+	flag.BoolVar(&gCmdLineArgs.showMetricNames, "list", false, "")
+	flag.IntVar(&gCmdLineArgs.timeout, "t", 0, "")
+	flag.IntVar(&gCmdLineArgs.timeout, "timeout", 0, "")
+	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "i", 5000, "")
+	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "interval", 5000, "")
+	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "x", 125, "")
+	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "muxinterval", 125, "")
+	flag.StringVar(&gCmdLineArgs.eventFilePath, "e", "", "")
+	flag.StringVar(&gCmdLineArgs.eventFilePath, "eventfile", "", "")
+	flag.StringVar(&gCmdLineArgs.metricFilePath, "m", "", "")
+	flag.StringVar(&gCmdLineArgs.metricFilePath, "metricfile", "", "")
+	flag.BoolVar(&gCmdLineArgs.printCSV, "csv", false, "")
 	flag.BoolVar(&gCmdLineArgs.printWide, "wide", false, "")
+	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
+	flag.BoolVar(&gCmdLineArgs.verbose, "v", false, "")
+	flag.BoolVar(&gCmdLineArgs.veryVerbose, "vv", false, "")
+	// debugging options
+	flag.StringVar(&gCmdLineArgs.metadataFilePath, "d", "", "")
+	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "p", "", "")
 	flag.Parse()
 	err := validateArgs()
 	if err != nil {
@@ -346,13 +359,13 @@ func mainReturnWithCode(ctx context.Context) int {
 			strings.Join(os.Args[1:], " "),
 		)
 	}
-	if gCmdLineArgs.duration != 0 {
+	if gCmdLineArgs.timeout != 0 {
 		// round up to next perfPrintInterval second (the collection interval used by perf stat)
 		intervalSeconds := gCmdLineArgs.perfPrintInterval / 1000
-		qf := float64(gCmdLineArgs.duration) / float64(intervalSeconds)
-		qi := gCmdLineArgs.duration / intervalSeconds
+		qf := float64(gCmdLineArgs.timeout) / float64(intervalSeconds)
+		qi := gCmdLineArgs.timeout / intervalSeconds
 		if qf > float64(qi) {
-			gCmdLineArgs.duration = (qi + 1) * intervalSeconds
+			gCmdLineArgs.timeout = (qi + 1) * intervalSeconds
 		}
 	}
 	if !gCmdLineArgs.printCSV {
@@ -396,7 +409,7 @@ func mainReturnWithCode(ctx context.Context) int {
 	if !gCmdLineArgs.printCSV {
 		fmt.Print(".")
 	}
-	if gCmdLineArgs.printMetricNames {
+	if gCmdLineArgs.showMetricNames {
 		fmt.Println()
 		for _, metric := range metricDefinitions {
 			fmt.Println(metric.Name)
