@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"context"
 	"embed"
+	"encoding/binary"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -47,11 +47,62 @@ var (
 //go:embed resources
 var resources embed.FS
 
+// extract executables from embedded resources to temporary directory
+func extractExecutableResources(tempDir string) (err error) {
+	toolNames := []string{"perf"}
+	for _, toolName := range toolNames {
+		// get the exe from our embedded resources
+		var toolBytes []byte
+		toolBytes, err = resources.ReadFile("resources/" + toolName)
+		if err != nil {
+			return
+		}
+		toolPath := filepath.Join(tempDir, toolName)
+		var f *os.File
+		f, err = os.OpenFile(toolPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0744)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		err = binary.Write(f, binary.LittleEndian, toolBytes)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func existsExecutableResource(filename string) (exists bool) {
+	f, err := resources.Open(filepath.Join("resources", filename))
+	if err != nil {
+		exists = false
+		return
+	}
+	f.Close()
+	exists = true
+	return
+}
+
+func getPerfDir() (dir string, err error) {
+	if !existsExecutableResource("perf") {
+		return
+	}
+	if dir, err = os.MkdirTemp("", fmt.Sprintf("%s.tmp.", filepath.Base(os.Args[0]))); err != nil {
+		log.Printf("failed to create temporary directory: %v", err)
+		return
+	}
+	if err = extractExecutableResources(dir); err != nil {
+		log.Printf("failed to extract executable resources to %s: %v", "", err)
+		return
+	}
+	return
+}
+
 // build perf args from event groups
 func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
 	uncollectableEvents := mapset.NewSet[string]()
 	intervalMS := fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval)
-	args = append(args, []string{"stat", "-I", intervalMS, "-x", ",", "-a", "-e"}...)
+	args = append(args, []string{"stat", "-I", intervalMS, "-j", "-e"}...)
 	var groups []string
 	for _, group := range eventGroups {
 		var events []string
@@ -105,25 +156,37 @@ func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args 
 // timestamp to change means that the first list won't get sent until the next set
 // of events comes from perf, i.e., program output will be one collection duration
 // behind the real-time perf processing
-func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, metadata Metadata, perfError context.CancelFunc) (err error) {
-	var cmd *exec.Cmd
-	var reader io.ReadCloser
-	var args []string
-	if args, err = getPerfCommandArgs(eventGroups, metadata); err != nil {
+func runPerf(eventGroups []GroupDefinition, eventChannel chan [][]byte, metadata Metadata, perfError context.CancelFunc) (err error) {
+	var perfDir string
+	if perfDir, err = getPerfDir(); err != nil {
+		log.Printf("failed to find perf: %v", err)
+		perfError()
 		return
 	}
-	cmd = exec.Command("perf", args...)
-	reader, _ = cmd.StderrPipe()
+	if perfDir != "" {
+		defer os.RemoveAll(perfDir)
+		if gCmdLineArgs.verbose {
+			log.Printf("Using embedded perf.")
+		}
+	}
+	var args []string
+	if args, err = getPerfCommandArgs(eventGroups, metadata); err != nil {
+		log.Printf("failed to assemble perf args: %v", err)
+		perfError()
+		return
+	}
+	cmd := exec.Command(filepath.Join(perfDir, "perf"), args...)
+	reader, _ := cmd.StderrPipe()
 	if gCmdLineArgs.veryVerbose {
 		log.Print(cmd)
 	}
 	scanner := bufio.NewScanner(reader)
-	var outputLines []string
+	var outputLines [][]byte
 	// start perf stat
 	if err = cmd.Start(); err != nil {
 		log.Printf("failed to run perf: %v", err)
 		perfError()                // this informs caller that there was an error
-		eventChannel <- []string{} // need to send an empy event list because caller is blocking on this channel
+		eventChannel <- [][]byte{} // need to send an empy event list because caller is blocking on this channel
 		return
 	}
 	// get current time for use in setting timestamps on output
@@ -138,7 +201,7 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, metadata
 		for {
 			<-t1.C                      // waits for timer to expire
 			eventChannel <- outputLines // send it
-			outputLines = []string{}    // empty it
+			outputLines = [][]byte{}    // empty it
 		}
 	}()
 	// read perf stat output
@@ -149,7 +212,7 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, metadata
 		}
 		t1.Stop()
 		t1.Reset(100 * time.Millisecond) // 100ms is somewhat arbitrary, but seems to work
-		outputLines = append(outputLines, line)
+		outputLines = append(outputLines, []byte(line))
 	}
 	t1.Stop()
 	eventChannel <- outputLines // send the last set of lines
@@ -165,25 +228,28 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan []string, metadata
 
 // Function used for testing and debugging
 // Plays back events present in a file that contains perf stat output
-func playbackPerf(perfStatFilePath string, eventChannel chan []string, metadata Metadata, perfError context.CancelFunc) (err error) {
+func playbackPerf(perfStatFilePath string, eventChannel chan [][]byte, metadata Metadata, perfError context.CancelFunc) (err error) {
 	file, err := os.Open(perfStatFilePath)
 	if err != nil {
 		return
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
-	frameTimestamp := ""
-	var lines []string
+	frameTimestamp := 0.0
+	var lines [][]byte
 	for scanner.Scan() {
 		line := scanner.Text()
-		lineTimestamp := strings.Split(line, ",")[0]
-		if lineTimestamp != frameTimestamp {
+		var event Event
+		if event, err = parseEventJSON([]byte(line)); err != nil {
+			return
+		}
+		if event.Timestamp != frameTimestamp {
 			// send lines
 			eventChannel <- lines
-			frameTimestamp = lineTimestamp
-			lines = []string{}
+			frameTimestamp = event.Timestamp
+			lines = [][]byte{}
 		}
-		lines = append(lines, line)
+		lines = append(lines, []byte(line))
 	}
 	close(eventChannel)
 	err = scanner.Err()
@@ -420,11 +486,12 @@ func mainReturnWithCode(ctx context.Context) int {
 		log.Printf("failed to configure metrics: %v", err)
 		return exitError
 	}
-	eventChannel := make(chan []string)
+	eventChannel := make(chan [][]byte)
 	perfCtx, perfError := context.WithCancel(context.Background())
 	defer perfError()
 	if gCmdLineArgs.perfStatFilePath != "" { // testing/debugging flow
 		fmt.Print(".\n")
+		gCollectionStartTime = time.Now()
 		go playbackPerf(gCmdLineArgs.perfStatFilePath, eventChannel, metadata, perfError)
 	} else {
 		if os.Geteuid() != 0 {
@@ -482,7 +549,7 @@ func mainReturnWithCode(ctx context.Context) int {
 		case <-ctx.Done(): // ctrl-c
 			return exitNoError
 		default:
-			var perfEvents []string
+			var perfEvents [][]byte
 			perfEvents, more = <-eventChannel // events from one frame of collection (all same timestamp)
 			if more && len(perfEvents) > 0 {
 				var metrics []Metric

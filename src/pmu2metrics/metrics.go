@@ -151,7 +151,7 @@ func evaluateExpression(metric MetricDefinition, variables map[string]interface{
 	return
 }
 
-func processEvents(perfEvents []string, metricDefinitions []MetricDefinition, previousTimestamp float64, metadata Metadata) (metrics []Metric, timeStamp float64, err error) {
+func processEvents(perfEvents [][]byte, metricDefinitions []MetricDefinition, previousTimestamp float64, metadata Metadata) (metrics []Metric, timeStamp float64, err error) {
 	var eventFrame EventFrame
 	if eventFrame, err = getEventFrame(perfEvents); err != nil { // arrange the events into groups
 		err = fmt.Errorf("failed to put perf events into groups: %v", err)

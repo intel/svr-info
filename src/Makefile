@@ -13,7 +13,7 @@ default: check orchestrator
 .PHONY: default test check format_check format linux-source collector reporter orchestrator pmu2metrics rdmsr wrmsr msrbusy reset clean tools libs async-profiler calcfreq cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat oss-source
 
 prebuilt_tools: async-profiler cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat
-other_tools: calcfreq mlc msrbusy pmu2metrics rdmsr wrmsr
+other_tools: calcfreq mlc msrbusy pmu2metrics pmu2metrics-with-perf rdmsr wrmsr
 
 test:
 	cd pkg/commandfile && go test -v -vet=all .
@@ -67,7 +67,13 @@ msrbusy:
 	cd msrbusy && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy
 
 pmu2metrics:
+	rm -f pmu2metrics/resources/perf
 	cd pmu2metrics && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics
+
+pmu2metrics-with-perf:
+	cp /prebuilt/linux/tools/perf/perf pmu2metrics/resources
+	cd pmu2metrics && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics-with-perf
+	rm pmu2metrics/resources/perf
 
 ASYNCPROFILER_VERSION := 2.9
 async-profiler:

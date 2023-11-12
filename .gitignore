@@ -14,6 +14,8 @@ src/rdmsr/rdmsrx
 src/wrmsr/wrmsrx
 src/msrbusy/msrbusy
 src/pmu2metrics/pmu2metrics
+src/pmu2metrics/pmu2metrics-with-perf
+src/pmu2metrics/resources/perf
 src/calcfreq/calcfreq
 # src
 async-profiler
