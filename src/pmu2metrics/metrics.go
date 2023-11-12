@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"strings"
 
 	"github.com/Knetic/govaluate"
@@ -160,19 +161,15 @@ func processEvents(perfEvents [][]byte, metricDefinitions []MetricDefinition, pr
 	timeStamp = eventFrame.Timestamp
 	// produce metrics from event groups
 	for _, metricDef := range metricDefinitions {
+		metric := Metric{Name: metricDef.Name, Value: math.NaN()}
 		var variables map[string]interface{}
-		if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
-			// Note: err is logged by getExpressionVariableValues
-			err = nil
-			continue
+		if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err == nil {
+			var result interface{}
+			if result, err = evaluateExpression(metricDef, variables); err == nil {
+				metric.Value = result.(float64)
+			}
 		}
-		var result interface{}
-		if result, err = evaluateExpression(metricDef, variables); err != nil {
-			// Note: err is logged by evaluateExpression
-			err = nil
-			continue
-		}
-		metrics = append(metrics, Metric{Name: metricDef.Name, Value: result.(float64)})
+		metrics = append(metrics, metric)
 		if gCmdLineArgs.veryVerbose {
 			var prettyVars []string
 			for variableName := range variables {
