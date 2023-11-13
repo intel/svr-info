@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	mapset "github.com/deckarep/golang-set/v2"
 )
 
 type EventDefinition struct {
@@ -170,6 +172,7 @@ func loadEventDefinitions(eventDefinitionOverridePath string, metadata Metadata)
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
+	uncollectableEvents := mapset.NewSet[string]()
 	var group GroupDefinition
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -180,16 +183,46 @@ func loadEventDefinitions(eventDefinitionOverridePath string, metadata Metadata)
 		if event, err = parseEventDefinition(line[:len(line)-1]); err != nil {
 			return
 		}
-		group = append(group, event)
+		var collectable bool
+		if collectable, err = isCollectableEvent(event, metadata); err != nil {
+			return
+		}
+		if collectable {
+			group = append(group, event)
+		} else {
+			uncollectableEvents.Add(event.Name)
+		}
 		if line[len(line)-1] == ';' {
 			// end of group detected
-			groups = append(groups, group)
+			if len(group) > 0 {
+				groups = append(groups, group)
+			} else if gCmdLineArgs.verbose {
+				log.Printf("No collectable events in group ending with %s", line)
+			}
 			group = GroupDefinition{} // clear the list
 		}
 	}
 	if err = scanner.Err(); err != nil {
 		return
 	}
+	// expand uncore groups for all uncore devices
 	groups, err = expandUncoreGroups(groups, metadata)
+	// "fixed" PMU counters are not supported on (most) IaaS VMs, so we add a separate group
+	if !isUncoreSupported(metadata) {
+		group = GroupDefinition{EventDefinition{Raw: "cpu-cycles"}, EventDefinition{Raw: "instructions"}}
+		if metadata.RefCyclesSupported {
+			group = append(group, EventDefinition{Raw: "ref-cycles"})
+		}
+		groups = append(groups, group)
+		group = GroupDefinition{EventDefinition{Raw: "cpu-cycles:k"}, EventDefinition{Raw: "instructions"}}
+		if metadata.RefCyclesSupported {
+			group = append(group, EventDefinition{Raw: "ref-cycles:k"})
+		}
+		groups = append(groups, group)
+
+	}
+	if uncollectableEvents.Cardinality() != 0 && gCmdLineArgs.verbose {
+		log.Printf("Uncollectable events: %s", uncollectableEvents)
+	}
 	return
 }

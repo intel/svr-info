@@ -15,8 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	mapset "github.com/deckarep/golang-set/v2"
 )
 
 type CmdLineArgs struct {
@@ -100,50 +98,16 @@ func getPerfDir() (dir string, err error) {
 
 // build perf args from event groups
 func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
-	uncollectableEvents := mapset.NewSet[string]()
-	intervalMS := fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval)
-	args = append(args, []string{"stat", "-I", intervalMS, "-j", "-e"}...)
+	args = append(args, []string{"stat", "-I", fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval), "-j", "-e"}...)
 	var groups []string
 	for _, group := range eventGroups {
 		var events []string
 		for _, event := range group {
-			var collectable bool
-			if collectable, err = isCollectableEvent(event, metadata); err != nil {
-				return
-			}
-			if !collectable {
-				uncollectableEvents.Add(event.Name)
-				continue
-			}
 			events = append(events, event.Raw)
 		}
-		if len(events) == 0 {
-			if gCmdLineArgs.veryVerbose {
-				log.Printf("No collectable events in group: %v", group)
-			}
-		} else {
-			groups = append(groups, fmt.Sprintf("{%s}", strings.Join(events, ",")))
-		}
+		groups = append(groups, fmt.Sprintf("{%s}", strings.Join(events, ",")))
 	}
-	if uncollectableEvents.Cardinality() != 0 && gCmdLineArgs.verbose {
-		log.Printf("Uncollectable events: %s", uncollectableEvents)
-	}
-	// "fixed" PMU counters are not supported on (most) IaaS VMs, so we add a separate group
-	if !isUncoreSupported(metadata) {
-		newGroup := []string{"cpu-cycles", "instructions"}
-		if metadata.RefCyclesSupported {
-			newGroup = append(newGroup, "ref-cycles")
-		}
-		groups = append(groups, fmt.Sprintf("{%s}", strings.Join(newGroup, ",")))
-		newGroup = []string{"cpu-cycles:k", "instructions"}
-		if metadata.RefCyclesSupported {
-			newGroup = append(newGroup, "ref-cycles:k")
-		}
-		groups = append(groups, fmt.Sprintf("{%s}", strings.Join(newGroup, ",")))
-
-	}
-	groupsArg := fmt.Sprintf("'%s'", strings.Join(groups, ","))
-	args = append(args, groupsArg)
+	args = append(args, fmt.Sprintf("'%s'", strings.Join(groups, ",")))
 	if gCmdLineArgs.timeout > 0 {
 		args = append(args, "sleep")
 		args = append(args, fmt.Sprintf("%d", gCmdLineArgs.timeout))
