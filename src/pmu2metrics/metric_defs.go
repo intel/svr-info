@@ -161,6 +161,15 @@ func loadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics 
 }
 
 func configureMetrics(metrics []MetricDefinition, evaluatorFunctions map[string]govaluate.ExpressionFunction, metadata Metadata) (err error) {
+	// get constants as strings
+	tscFreq := fmt.Sprintf("%f", float64(metadata.TSCFrequencyHz))
+	tsc := fmt.Sprintf("%f", float64(metadata.TSC))
+	coresPerSocket := fmt.Sprintf("%f", float64(metadata.CoresPerSocket))
+	chasPerSocket := fmt.Sprintf("%f", float64(metadata.DeviceCounts["cha"]))
+	socketCount := fmt.Sprintf("%f", float64(metadata.SocketCount))
+	hyperThreadingOn := fmt.Sprintf("%t", metadata.ThreadsPerCore > 1)
+	threadsPerCore := fmt.Sprintf("%f", float64(metadata.ThreadsPerCore))
+	// configure each metric
 	for metricIdx := range metrics {
 		// transform if/else to ?/:
 		var transformed string
@@ -174,13 +183,13 @@ func configureMetrics(metrics []MetricDefinition, evaluatorFunctions map[string]
 			metrics[metricIdx].Expression = transformed
 		}
 		// replace constants with their values
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SYSTEM_TSC_FREQ]", fmt.Sprintf("%f", float64(metadata.TSCFrequencyHz)))
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[TSC]", fmt.Sprintf("%f", float64(metadata.TSC)))
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CORES_PER_SOCKET]", fmt.Sprintf("%f", float64(metadata.CoresPerSocket)))
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CHAS_PER_SOCKET]", fmt.Sprintf("%f", float64(metadata.DeviceCounts["cha"])))
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SOCKET_COUNT]", fmt.Sprintf("%f", float64(metadata.SocketCount)))
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[HYPERTHREADING_ON]", fmt.Sprintf("%t", metadata.ThreadsPerCore > 1))
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[const_thread_count]", fmt.Sprintf("%f", float64(metadata.ThreadsPerCore)))
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SYSTEM_TSC_FREQ]", tscFreq)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[TSC]", tsc)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CORES_PER_SOCKET]", coresPerSocket)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CHAS_PER_SOCKET]", chasPerSocket)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SOCKET_COUNT]", socketCount)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[HYPERTHREADING_ON]", hyperThreadingOn)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[const_thread_count]", threadsPerCore)
 		// get a list of the variables in the expression
 		metrics[metricIdx].Variables = make(map[string]int)
 		expressionIdx := 0
