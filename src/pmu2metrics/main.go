@@ -98,7 +98,7 @@ func getPerfDir() (dir string, err error) {
 
 // build perf args from event groups
 func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
-	args = append(args, []string{"stat", "-I", fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval), "-j", "-e"}...)
+	args = append(args, []string{"stat", "-I", fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval), "-a", "-j", "-e"}...)
 	var groups []string
 	for _, group := range eventGroups {
 		var events []string
