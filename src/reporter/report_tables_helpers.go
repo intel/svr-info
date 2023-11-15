@@ -204,6 +204,13 @@ func getDIMMSocketSlot(dimmType DIMMType, reBankLoc *regexp.Regexp, reLoc *regex
 			slot = slot - 1
 			return
 		}
+	} else if dimmType == DIMMType14 {
+		match := reLoc.FindStringSubmatch(locator)
+		if match != nil {
+			socket, _ = strconv.Atoi(match[1])
+			slot = 0
+			return
+		}
 	}
 	err = fmt.Errorf("unrecognized bank locator and/or locator in dimm info: %s %s", bankLocator, locator)
 	return
@@ -227,6 +234,7 @@ const (
 	DIMMType11
 	DIMMType12
 	DIMMType13
+	DIMMType14
 )
 
 func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, reBankLoc *regexp.Regexp, reLoc *regexp.Regexp) {
@@ -351,6 +359,20 @@ func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, re
 	reLoc = regexp.MustCompile(`CPU([\d])_DIMM_([A-H])([1-2])`)
 	if reLoc.FindStringSubmatch(locator) != nil {
 		dimmType = DIMMType13
+		return
+	}
+	/* BIRCHSTREAM GRANITE RAPIDS AP/X3
+	 * LOCATOR      BANK LOCATOR
+	 * CPU0_DIMM_A  BANK 0
+	 * CPU0_DIMM_B  BANK 1
+	 * CPU0_DIMM_C  BANK 2
+	 * CPU0_DIMM_D  BANK 3
+	 * ...
+	 * CPU0_DIMM_L  BANK 11
+	 */
+	reLoc = regexp.MustCompile(`CPU([\d])_DIMM_([A-L])`)
+	if reLoc.FindStringSubmatch(locator) != nil {
+		dimmType = DIMMType14
 		return
 	}
 	return
