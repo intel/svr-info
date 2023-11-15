@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"math"
 	"strconv"
 	"strings"
 
@@ -143,40 +145,14 @@ func parseEventJSON(rawEvent []byte) (event Event, err error) {
 		return
 	}
 	if event.Value, err = strconv.ParseFloat(event.ValueStr, 64); err != nil {
-		err = fmt.Errorf("failed to parse event value: %s", rawEvent)
-		return
+		event.Value = math.NaN()
+		err = nil
+		if gCmdLineArgs.verbose {
+			log.Printf("failed to parse event value: %s", rawEvent)
+		}
 	}
 	return
 }
-
-// parse raw event from perf stat into Event structure
-// example: 5.005032332,170287,,OCR.READS_TO_CORE.REMOTE_CACHE.SNOOP_HIT_WITH_FWD,69661188852,6.00,,
-// func parseEvent(rawEvent string) (event Event, err error) {
-// 	parts := strings.Split(rawEvent, ",")
-// 	if len(parts) < 6 {
-// 		err = fmt.Errorf("unrecognized event format: %s", rawEvent)
-// 		return
-// 	}
-// 	if event.Timestamp, err = strconv.ParseFloat(strings.TrimSpace(parts[0]), 64); err != nil {
-// 		err = fmt.Errorf("failed to parse event timestamp: %s", rawEvent)
-// 		return
-// 	}
-// 	if event.Value, err = strconv.ParseFloat(parts[1], 64); err != nil {
-// 		err = fmt.Errorf("failed to parse event value: %s", rawEvent)
-// 		return
-// 	}
-// 	event.Units = parts[2]
-// 	event.Name = parts[3]
-// 	if event.GroupID, err = strconv.Atoi(parts[4]); err != nil {
-// 		err = fmt.Errorf("failed to parse event group ID: %s", rawEvent)
-// 		return
-// 	}
-// 	if event.Percentage, err = strconv.ParseFloat(parts[5], 64); err != nil {
-// 		err = fmt.Errorf("failed to parse event percentage: %s", rawEvent)
-// 		return
-// 	}
-// 	return
-// }
 
 // organize events received from perf into groups where event values can be accessed by event name
 func getEventFrame(rawEvents [][]byte) (eventFrame EventFrame, err error) {

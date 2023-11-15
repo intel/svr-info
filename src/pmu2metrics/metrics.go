@@ -85,10 +85,13 @@ func getExpressionVariableValues(metric MetricDefinition, frame EventFrame, prev
 	for variableName := range metric.Variables {
 		if metric.Variables[variableName] == -2 {
 			err = fmt.Errorf("variable value set to -2 (shouldn't happen): %s", variableName)
-			log.Print(err.Error())
 			return
 		}
 		// set the variable value to the event value divided by the perf collection time to normalize the value to 1 second
+		if len(frame.EventGroups) <= metric.Variables[variableName] {
+			err = fmt.Errorf("event groups have changed")
+			return
+		}
 		variables[variableName] = frame.EventGroups[metric.Variables[variableName]].EventValues[variableName] / (frame.Timestamp - previousTimestamp)
 		// adjust cstate_core/c6-residency value if hyperthreading is enabled
 		// why here? so we don't have to change the perfmon metric formula
@@ -163,9 +166,17 @@ func processEvents(perfEvents [][]byte, metricDefinitions []MetricDefinition, pr
 	for _, metricDef := range metricDefinitions {
 		metric := Metric{Name: metricDef.Name, Value: math.NaN()}
 		var variables map[string]interface{}
-		if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err == nil {
+		if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
+			if gCmdLineArgs.verbose {
+				log.Printf("failed to get expression variable values: %v", err)
+			}
+		} else {
 			var result interface{}
-			if result, err = evaluateExpression(metricDef, variables); err == nil {
+			if result, err = evaluateExpression(metricDef, variables); err != nil {
+				if gCmdLineArgs.verbose {
+					log.Printf("failed to evaluate expression: %v", err)
+				}
+			} else {
 				metric.Value = result.(float64)
 			}
 		}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"embed"
 	"encoding/binary"
 	"flag"
@@ -10,7 +9,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -81,17 +79,19 @@ func existsExecutableResource(filename string) (exists bool) {
 	return
 }
 
-func getPerfDir() (dir string, err error) {
-	if !existsExecutableResource("perf") {
-		return
-	}
-	if dir, err = os.MkdirTemp("", fmt.Sprintf("%s.tmp.", filepath.Base(os.Args[0]))); err != nil {
-		log.Printf("failed to create temporary directory: %v", err)
-		return
-	}
-	if err = extractExecutableResources(dir); err != nil {
-		log.Printf("failed to extract executable resources to %s: %v", "", err)
-		return
+func getPerfPath() (path string, tempDir string, err error) {
+	if existsExecutableResource("perf") {
+		if tempDir, err = os.MkdirTemp("", fmt.Sprintf("%s.tmp.", filepath.Base(os.Args[0]))); err != nil {
+			log.Printf("failed to create temporary directory: %v", err)
+			return
+		}
+		if err = extractExecutableResources(tempDir); err != nil {
+			log.Printf("failed to extract executable resources to %s: %v", "", err)
+			return
+		}
+		path = filepath.Join(tempDir, "perf")
+	} else {
+		path, err = exec.LookPath("perf")
 	}
 	return
 }
@@ -115,31 +115,13 @@ func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args 
 	return
 }
 
-// Starts perf, reads from perf's output (stderr), sends a list of events over the
-// provided channel when the timestamp on the events changes. Note that waiting for the
-// timestamp to change means that the first list won't get sent until the next set
-// of events comes from perf, i.e., program output will be one collection duration
-// behind the real-time perf processing
-func runPerf(eventGroups []GroupDefinition, eventChannel chan [][]byte, metadata Metadata, perfError context.CancelFunc) (err error) {
-	var perfDir string
-	if perfDir, err = getPerfDir(); err != nil {
-		log.Printf("failed to find perf: %v", err)
-		perfError()
-		return
-	}
-	if perfDir != "" {
-		defer os.RemoveAll(perfDir)
-		if gCmdLineArgs.verbose {
-			log.Printf("Using embedded perf.")
-		}
-	}
+func doWork(perfPath string, eventGroups []GroupDefinition, metricDefinitions []MetricDefinition, metadata Metadata) (err error) {
 	var args []string
 	if args, err = getPerfCommandArgs(eventGroups, metadata); err != nil {
 		log.Printf("failed to assemble perf args: %v", err)
-		perfError()
 		return
 	}
-	cmd := exec.Command(filepath.Join(perfDir, "perf"), args...)
+	cmd := exec.Command(perfPath, args...)
 	reader, _ := cmd.StderrPipe()
 	if gCmdLineArgs.veryVerbose {
 		log.Print(cmd)
@@ -149,8 +131,6 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan [][]byte, metadata
 	// start perf stat
 	if err = cmd.Start(); err != nil {
 		log.Printf("failed to run perf: %v", err)
-		perfError()                // this informs caller that there was an error
-		eventChannel <- [][]byte{} // need to send an empy event list because caller is blocking on this channel
 		return
 	}
 	// get current time for use in setting timestamps on output
@@ -161,11 +141,21 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan [][]byte, metadata
 	// When the timer expires, this code assumes that perf is done writing events to stderr.
 	// The first duration needs to be longer than the time it takes for perf to print its first line of output.
 	t1 := time.NewTimer(time.Duration(2 * gCmdLineArgs.perfPrintInterval))
+	var frameTimestamp float64
+	var metrics []Metric
+	frameCount := 0
 	go func() {
 		for {
-			<-t1.C                      // waits for timer to expire
-			eventChannel <- outputLines // send it
-			outputLines = [][]byte{}    // empty it
+			<-t1.C // waits for timer to expire
+			if len(outputLines) != 0 {
+				if metrics, frameTimestamp, err = processEvents(outputLines, metricDefinitions, frameTimestamp, metadata); err != nil {
+					log.Printf("%v", err)
+					return
+				}
+				frameCount += 1
+				printMetrics(metrics, frameCount, frameTimestamp)
+				outputLines = [][]byte{} // empty it
+			}
 		}
 	}()
 	// read perf stat output
@@ -179,12 +169,21 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan [][]byte, metadata
 		outputLines = append(outputLines, []byte(line))
 	}
 	t1.Stop()
-	eventChannel <- outputLines // send the last set of lines
-	// signal to caller that we're done by closing the event channel
-	close(eventChannel)
+	if len(outputLines) != 0 {
+		if metrics, frameTimestamp, err = processEvents(outputLines, metricDefinitions, frameTimestamp, metadata); err != nil {
+			log.Printf("%v", err)
+			return
+		}
+		frameCount += 1
+		printMetrics(metrics, frameCount, frameTimestamp)
+	}
 	// wait for perf stat to exit
 	if err = cmd.Wait(); err != nil {
-		log.Printf("error from perf stat on exit: %v", err)
+		if strings.Contains(err.Error(), "signal") {
+			err = nil
+		} else {
+			log.Printf("error from perf stat on exit: %v", err)
+		}
 		return
 	}
 	return
@@ -192,30 +191,51 @@ func runPerf(eventGroups []GroupDefinition, eventChannel chan [][]byte, metadata
 
 // Function used for testing and debugging
 // Plays back events present in a file that contains perf stat output
-func playbackPerf(perfStatFilePath string, eventChannel chan [][]byte, metadata Metadata, perfError context.CancelFunc) (err error) {
+func doWorkDebug(perfStatFilePath string, metricDefinitions []MetricDefinition, metadata Metadata) (err error) {
 	file, err := os.Open(perfStatFilePath)
 	if err != nil {
 		return
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
+	var metrics []Metric
+	frameCount := 0
+	eventCount := 0
 	frameTimestamp := 0.0
-	var lines [][]byte
+	prevEventTimestamp := 0.0
+	var outputLines [][]byte
 	for scanner.Scan() {
 		line := scanner.Text()
 		var event Event
 		if event, err = parseEventJSON([]byte(line)); err != nil {
 			return
 		}
-		if event.Timestamp != frameTimestamp {
-			// send lines
-			eventChannel <- lines
-			frameTimestamp = event.Timestamp
-			lines = [][]byte{}
+		if eventCount == 0 {
+			prevEventTimestamp = event.Timestamp
 		}
-		lines = append(lines, []byte(line))
+		if event.Timestamp != prevEventTimestamp {
+			if len(outputLines) > 0 {
+				if metrics, frameTimestamp, err = processEvents(outputLines, metricDefinitions, frameTimestamp, metadata); err != nil {
+					log.Printf("%v", err)
+					return
+				}
+				frameCount++
+				printMetrics(metrics, frameCount, frameTimestamp)
+				outputLines = [][]byte{} // empty it
+			}
+		}
+		outputLines = append(outputLines, []byte(line))
+		prevEventTimestamp = event.Timestamp
+		eventCount++
 	}
-	close(eventChannel)
+	if len(outputLines) != 0 {
+		if metrics, frameTimestamp, err = processEvents(outputLines, metricDefinitions, frameTimestamp, metadata); err != nil {
+			log.Printf("%v", err)
+			return
+		}
+		frameCount += 1
+		printMetrics(metrics, frameCount, frameTimestamp)
+	}
 	err = scanner.Err()
 	return
 }
@@ -337,7 +357,7 @@ const (
 	exitInterrupt = 2
 )
 
-func mainReturnWithCode(ctx context.Context) int {
+func mainReturnWithCode() int {
 	flag.Usage = func() { showUsage() } // override default usage output
 	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "")
 	flag.BoolVar(&gCmdLineArgs.showHelp, "help", false, "")
@@ -450,17 +470,28 @@ func mainReturnWithCode(ctx context.Context) int {
 		log.Printf("failed to configure metrics: %v", err)
 		return exitError
 	}
-	eventChannel := make(chan [][]byte)
-	perfCtx, perfError := context.WithCancel(context.Background())
-	defer perfError()
 	if gCmdLineArgs.perfStatFilePath != "" { // testing/debugging flow
 		fmt.Print(".\n")
 		gCollectionStartTime = time.Now()
-		go playbackPerf(gCmdLineArgs.perfStatFilePath, eventChannel, metadata, perfError)
+		if err = doWorkDebug(gCmdLineArgs.perfStatFilePath, metricDefinitions, metadata); err != nil {
+			log.Printf("%v", err)
+			return exitError
+		}
 	} else {
 		if os.Geteuid() != 0 {
 			fmt.Println("\nElevated permissions required, try again as root user or with sudo.")
 			return exitError
+		}
+		var perfPath, tempDir string
+		if perfPath, tempDir, err = getPerfPath(); err != nil {
+			log.Printf("failed to find perf: %v", err)
+			return exitError
+		}
+		if tempDir != "" {
+			defer os.RemoveAll(tempDir)
+		}
+		if gCmdLineArgs.verbose {
+			log.Printf("Using perf at %s.", perfPath)
 		}
 		var groupDefinitions []GroupDefinition
 		if groupDefinitions, err = loadEventDefinitions(gCmdLineArgs.eventFilePath, metadata); err != nil {
@@ -499,55 +530,14 @@ func mainReturnWithCode(ctx context.Context) int {
 			fmt.Print(".\n")
 			fmt.Printf("Reporting metrics in %d millisecond intervals...\n", gCmdLineArgs.perfPrintInterval)
 		}
-		// run perf in a goroutine, get events through eventChannel
-		go runPerf(groupDefinitions, eventChannel, metadata, perfError)
-	}
-	// loop until the perf goroutine closes the eventChannel or user hits ctrl-c
-	var frameTimestamp float64
-	frameCount := 0
-	more := true
-	for more {
-		select {
-		case <-perfCtx.Done(): // error from perf
+		if err = doWork(perfPath, groupDefinitions, metricDefinitions, metadata); err != nil {
+			log.Printf("%v", err)
 			return exitError
-		case <-ctx.Done(): // ctrl-c
-			return exitNoError
-		default:
-			var perfEvents [][]byte
-			perfEvents, more = <-eventChannel // events from one frame of collection (all same timestamp)
-			if more && len(perfEvents) > 0 {
-				var metrics []Metric
-				if metrics, frameTimestamp, err = processEvents(perfEvents, metricDefinitions, frameTimestamp, metadata); err != nil {
-					log.Printf("%v", err)
-					return exitError
-				}
-				frameCount += 1
-				printMetrics(metrics, frameCount, frameTimestamp)
-			}
 		}
 	}
 	return exitNoError
 }
 
 func main() {
-	// watch for user interrupt (ctrl-c)
-	// adapted from here: https://pace.dev/blog/2020/02/17/repond-to-ctrl-c-interrupt-signals-gracefully-with-context-in-golang-by-mat-ryer.html
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	defer func() {
-		signal.Stop(signalChan)
-		cancel()
-	}()
-	go func() {
-		select {
-		case <-signalChan: // first signal, cancel context
-			cancel()
-		case <-ctx.Done():
-		}
-		<-signalChan // second signal, hard exit
-		os.Exit(exitInterrupt)
-	}()
-	os.Exit(mainReturnWithCode(ctx))
+	os.Exit(mainReturnWithCode())
 }
