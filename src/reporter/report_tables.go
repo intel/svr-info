@@ -708,7 +708,7 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
 		coresPerSocket := source.valFromRegexSubmatch("lscpu", `^Core\(s\) per socket.*:\s*(.+?)$`)
 		microarchitecture := getMicroArchitecture(cpusInfo, family, model, stepping, capid4, devices, sockets)
-		channelCount, err := cpusInfo.GetMemoryChannels(family, model, stepping)
+		channelCount, err := cpusInfo.GetMemoryChannels(microarchitecture)
 		channels := fmt.Sprintf("%d", channelCount)
 		if err != nil {
 			channels = "Unknown"
@@ -1306,7 +1306,11 @@ func newDIMMPopulationTable(sources []*Source, dimmTable *Table, cpusInfo *cpu.C
 		family := source.valFromRegexSubmatch("lscpu", `^CPU family.*:\s*([0-9]+)$`)
 		model := source.valFromRegexSubmatch("lscpu", `^Model.*:\s*([0-9]+)$`)
 		stepping := source.valFromRegexSubmatch("lscpu", `^Stepping.*:\s*(.+)$`)
-		channels, err := cpusInfo.GetMemoryChannels(family, model, stepping)
+		sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
+		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
+		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
+		uarch := getMicroArchitecture(cpusInfo, family, model, stepping, capid4, devices, sockets)
+		channels, err := cpusInfo.GetMemoryChannels(uarch)
 		if err != nil {
 			log.Printf("Failed to find CPU info: %v", err)
 		} else {

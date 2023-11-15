@@ -656,72 +656,9 @@ func getInsightsRules() (rules []byte, err error) {
 }
 
 func getMicroArchitecture(cpusInfo *cpu.CPU, family, model, stepping, capid4, devices, sockets string) (uArch string) {
-	var err error
-	if family == "6" {
-		uArch, err = getMicroArchitectureExt(family, model, sockets, capid4, devices)
-		if err != nil {
-			uArch, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
-		}
-	} else {
-		uArch, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
-	}
-
+	uArch, err := cpusInfo.GetMicroArchitecture(family, model, stepping, sockets, capid4, devices)
 	if err != nil && family == "6" {
 		uArch = "Unknown Intel"
-	}
-	return
-}
-
-func getMicroArchitectureExt(family, model, sockets string, capid4 string, devices string) (uarch string, err error) {
-	if family != "6" || (model != "143" && model != "207" && model != "173") {
-		err = fmt.Errorf("no extended architecture info for %s:%s", family, model)
-		return
-	}
-	var capid4Int, bits int64
-	if model == "143" || model == "207" {
-		capid4Int, err = strconv.ParseInt(capid4, 16, 64)
-		if err != nil {
-			return
-		}
-		bits = (capid4Int >> 6) & 0b11
-	}
-	if model == "143" { // SPR
-		if bits == 3 {
-			uarch = "SPR_XCC"
-		} else if bits == 1 {
-			uarch = "SPR_MCC"
-		} else {
-			uarch = "SPR_Unknown"
-		}
-	} else if model == "207" { /*EMR*/
-		if bits == 3 {
-			uarch = "EMR_XCC"
-		} else if bits == 1 {
-			uarch = "EMR_MCC"
-		} else {
-			uarch = "EMR_Unknown"
-		}
-	} else if model == "173" { /*GNR*/
-		var devCount int
-		devCount, err = strconv.Atoi(devices)
-		if err != nil {
-			return
-		}
-		var socketsCount int
-		socketsCount, err = strconv.Atoi(sockets)
-		if socketsCount == 0 || err != nil {
-			return
-		}
-		ratio := devCount / socketsCount
-		if ratio == 3 {
-			uarch = "GNR_X1"
-		} else if ratio == 4 {
-			uarch = "GNR_X2"
-		} else if ratio == 5 {
-			uarch = "GNR_X3"
-		} else {
-			uarch = "GNR_Unknown"
-		}
 	}
 	return
 }

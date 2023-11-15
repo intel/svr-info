@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 
 	"gopkg.in/yaml.v2"
 )
@@ -80,17 +81,92 @@ func (c *CPU) getCPU(family, model, stepping string) (cpu CPUInfo, err error) {
 	return
 }
 
-func (c *CPU) GetMicroArchitecture(family, model, stepping string) (uarch string, err error) {
-	cpu, err := c.getCPU(family, model, stepping)
-	if err != nil {
-		return
+func (c *CPU) GetMicroArchitecture(family, model, stepping, sockets, capid4, devices string) (uarch string, err error) {
+	if family != "6" || (model != "143" && model != "207" && model != "173") {
+		var cpu CPUInfo
+		cpu, err = c.getCPU(family, model, stepping)
+		if err != nil {
+			return
+		}
+		uarch = cpu.Architecture
+	} else { // SPR, EMR, GNR are special
+		uarch, err = c.getMicroArchitectureExt(family, model, sockets, capid4, devices)
 	}
-	uarch = cpu.Architecture
 	return
 }
 
-func (c *CPU) GetMemoryChannels(family, model, stepping string) (channels int, err error) {
-	cpu, err := c.getCPU(family, model, stepping)
+func (c *CPU) getMicroArchitectureExt(family, model, sockets string, capid4 string, devices string) (uarch string, err error) {
+	if family != "6" || (model != "143" && model != "207" && model != "173") {
+		err = fmt.Errorf("no extended architecture info for %s:%s", family, model)
+		return
+	}
+	var capid4Int, bits int64
+	if model == "143" || model == "207" { // SPR and EMR
+		capid4Int, err = strconv.ParseInt(capid4, 16, 64)
+		if err != nil {
+			return
+		}
+		bits = (capid4Int >> 6) & 0b11
+	}
+	if model == "143" { // SPR
+		if bits == 3 {
+			uarch = "SPR_XCC"
+		} else if bits == 1 {
+			uarch = "SPR_MCC"
+		} else {
+			uarch = "SPR_Unknown"
+		}
+	} else if model == "207" { // EMR
+		if bits == 3 {
+			uarch = "EMR_XCC"
+		} else if bits == 1 {
+			uarch = "EMR_MCC"
+		} else {
+			uarch = "EMR_Unknown"
+		}
+	} else if model == "173" { // GNR
+		var devCount int
+		devCount, err = strconv.Atoi(devices)
+		if err != nil {
+			return
+		}
+		var socketsCount int
+		socketsCount, err = strconv.Atoi(sockets)
+		if socketsCount == 0 || err != nil {
+			return
+		}
+		ratio := devCount / socketsCount
+		if ratio == 3 {
+			uarch = "GNR_X1" // 1 die, GNR-SP HCC/LCC
+		} else if ratio == 4 {
+			uarch = "GNR_X2" // 2 dies, GNR-SP XCC
+		} else if ratio == 5 {
+			uarch = "GNR_X3" // 3 dies, GNR-AP UCC
+		} else {
+			uarch = "GNR_Unknown"
+		}
+	}
+	return
+}
+
+func (c *CPU) getCPUByUarch(uarch string) (cpu CPUInfo, err error) {
+	for _, info := range c.cpusInfo {
+		var re *regexp.Regexp
+		re, err = regexp.Compile(info.Architecture)
+		if err != nil {
+			return
+		}
+		if re.FindString(uarch) == "" {
+			continue
+		}
+		cpu = info
+		return
+	}
+	return
+}
+
+func (c *CPU) GetMemoryChannels(microarchitecture string) (channels int, err error) {
+	cpu, err := c.getCPUByUarch(microarchitecture)
 	if err != nil {
 		return
 	}

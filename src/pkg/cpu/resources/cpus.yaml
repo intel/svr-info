@@ -114,7 +114,7 @@
   stepping:
   channels: 8
 
-#  Emerald Rapids
+#  Emerald Rapids MCC/XCC
 - architecture: EMR
   family: 6
   model: 207
@@ -128,8 +128,15 @@
   stepping:
   channels: 8
 
-#  Granite Rapids
-- architecture: GNR
+#  Granite Rapids - AP (UCC)
+- architecture: GNR_X3
+  family: 6
+  model: 173
+  stepping:
+  channels: 12
+
+#  Granite Rapids - SP (XCC/MCC/LCC)
+- architecture: GNR_X(1|2)
   family: 6
   model: 173
   stepping:
