@@ -114,7 +114,7 @@ ifeq ("$(wildcard ethtool)","")
 else
 	cd ethtool && git checkout master && git pull
 endif
-	cd ethtool && git checkout v5.15
+	cd ethtool && git checkout v6.5
 ifeq ("$(wildcard ethtool/Makefile)","")
 	cd ethtool && ./autogen.sh && ./configure enable_netlink=no
 endif
@@ -126,7 +126,7 @@ ifeq ("$(wildcard fio)","")
 else
 	cd fio && git checkout master && git pull
 endif
-	cd fio && git checkout fio-3.28
+	cd fio && git checkout fio-3.36
 ifeq ("$(wildcard fio/config.log)","")
 	cd fio && ./configure --build-static --disable-native
 endif
@@ -181,7 +181,7 @@ ifeq ("$(wildcard mlc)","")
 else
 	cd mlc && git checkout master && git pull
 endif
-	-cd mlc && git checkout v3.10
+	-cd mlc && git checkout v3.11
 	-cd mlc && make version && STATIC="-static" make
 
 perf: linux-source

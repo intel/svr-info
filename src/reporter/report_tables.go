@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hyperjumptech/grule-rule-engine/ast"
 	"github.com/hyperjumptech/grule-rule-engine/builder"
@@ -2256,7 +2257,8 @@ func newPMUMetricsTable(sources []*Source, category TableCategory) (table *Table
 		if len(metrics) > 0 {
 			var series []string
 			for _, ts := range timeStamps {
-				series = append(series, fmt.Sprintf("%ss", strconv.FormatFloat(ts, 'f', 1, 64)))
+				t := time.Unix(int64(ts), 0)
+				series = append(series, t.Format("15:04:05"))
 			}
 			hostValues.ValueNames = append(hostValues.ValueNames, series...)
 			for i, name := range metricNames {

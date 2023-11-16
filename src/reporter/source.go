@@ -1139,6 +1139,10 @@ func (s *Source) getPMUMetrics() (orderedMetricNames []string, timeStamps []floa
 		}
 		if colIdx != 0 {
 			metric.average = sum / float64(len(rows)-1)
+			if math.IsNaN(metric.average) {
+				metric.min = math.NaN()
+				metric.max = math.NaN()
+			}
 			metrics[rows[0][colIdx]] = metric
 		}
 	}
