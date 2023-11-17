@@ -165,7 +165,7 @@ func configureMetrics(metrics []MetricDefinition, evaluatorFunctions map[string]
 	tscFreq := fmt.Sprintf("%f", float64(metadata.TSCFrequencyHz))
 	tsc := fmt.Sprintf("%f", float64(metadata.TSC))
 	coresPerSocket := fmt.Sprintf("%f", float64(metadata.CoresPerSocket))
-	chasPerSocket := fmt.Sprintf("%f", float64(metadata.DeviceCounts["cha"]))
+	chasPerSocket := fmt.Sprintf("%f", float64(len(metadata.DeviceIDs["cha"])))
 	socketCount := fmt.Sprintf("%f", float64(metadata.SocketCount))
 	hyperThreadingOn := fmt.Sprintf("%t", metadata.ThreadsPerCore > 1)
 	threadsPerCore := fmt.Sprintf("%f", float64(metadata.ThreadsPerCore))

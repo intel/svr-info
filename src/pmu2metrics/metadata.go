@@ -18,8 +18,7 @@ import (
 
 type Metadata struct {
 	CoresPerSocket      int `yaml:"CoresPerSocket"`
-	DeviceCounts        map[string]int
-	IMCDeviceIDs        []int
+	DeviceIDs           map[string][]int
 	Microarchitecture   string `yaml:"Microarchitecture"`
 	ModelName           string
 	PerfSupportedEvents string
@@ -32,11 +31,7 @@ type Metadata struct {
 }
 
 func (md Metadata) String() string {
-	var uncoreDeviceCounts []string
-	for deviceType := range md.DeviceCounts {
-		uncoreDeviceCounts = append(uncoreDeviceCounts, fmt.Sprintf("%s: %d", deviceType, md.DeviceCounts[deviceType]))
-	}
-	return fmt.Sprintf(""+
+	out := fmt.Sprintf(""+
 		"Model Name: %s, "+
 		"Microarchitecture: %s, "+
 		"Socket Count: %d, "+
@@ -44,9 +39,8 @@ func (md Metadata) String() string {
 		"Threads per Core: %d, "+
 		"TSC Frequency (Hz): %d, "+
 		"TSC: %d, "+
-		"Uncore Device Counts: %s, "+
 		"ref-cycles supported: %t, "+
-		"TMA events supported: %t",
+		"TMA events supported: %t, ",
 		md.ModelName,
 		md.Microarchitecture,
 		md.SocketCount,
@@ -54,42 +48,34 @@ func (md Metadata) String() string {
 		md.ThreadsPerCore,
 		md.TSCFrequencyHz,
 		md.TSC,
-		strings.Join(uncoreDeviceCounts, ", "),
 		md.RefCyclesSupported,
 		md.TMASupported)
-}
-
-// counts uncore device files of format "uncore_<device type>_id" in /sys/devices
-func getDeviceCounts() (counts map[string]int, err error) {
-	counts = make(map[string]int)
-	var paths []string
-	pattern := filepath.Join("/", "sys", "devices", "uncore_*")
-	if paths, err = filepath.Glob(pattern); err != nil {
-		return
-	}
-	for _, path := range paths {
-		file := filepath.Base(path)
-		fields := strings.Split(file, "_")
-		if len(fields) == 3 {
-			counts[fields[1]] += 1
+	for deviceName, deviceIds := range md.DeviceIDs {
+		var ids []string
+		for _, id := range deviceIds {
+			ids = append(ids, fmt.Sprintf("%d", id))
 		}
+		out += fmt.Sprintf("%s: [%s] ", deviceName, strings.Join(ids, ","))
 	}
-	return
+	return out
 }
 
-func getIMCDeviceIds() (ids []int, err error) {
-	pattern := filepath.Join("/", "sys", "devices", "uncore_imc_*")
-	var files []string
-	if files, err = filepath.Glob(pattern); err != nil {
+// /sys/bus/event_source/devices
+func getUncoreDeviceIDs() (IDs map[string][]int, err error) {
+	pattern := filepath.Join("/", "sys", "bus", "event_source", "devices", "uncore_*")
+	var fileNames []string
+	if fileNames, err = filepath.Glob(pattern); err != nil {
 		return
 	}
-	re := regexp.MustCompile(`uncore_imc_(\d+)`)
-	for _, fileName := range files {
+	IDs = make(map[string][]int)
+	re := regexp.MustCompile(`uncore_(.*)_(\d+)`)
+	for _, fileName := range fileNames {
 		match := re.FindStringSubmatch(fileName)
-		if match != nil {
-			id, _ := strconv.Atoi(match[1])
-			ids = append(ids, id)
+		if match == nil {
+			continue
 		}
+		id, _ := strconv.Atoi(match[2])
+		IDs[match[1]] = append(IDs[match[1]], id)
 	}
 	return
 }
@@ -293,12 +279,8 @@ func loadMetadata() (metadata Metadata, err error) {
 	metadata.TSCFrequencyHz = GetTSCFreqMHz() * 1000000
 	// calculate TSC
 	metadata.TSC = metadata.SocketCount * metadata.CoresPerSocket * metadata.ThreadsPerCore * metadata.TSCFrequencyHz
-	// /sys/devices counts
-	if metadata.DeviceCounts, err = getDeviceCounts(); err != nil {
-		return
-	}
-	// uncore imc device ids (may not be consecutive)
-	if metadata.IMCDeviceIDs, err = getIMCDeviceIds(); err != nil {
+	// uncore device IDs
+	if metadata.DeviceIDs, err = getUncoreDeviceIDs(); err != nil {
 		return
 	}
 	// Model Name

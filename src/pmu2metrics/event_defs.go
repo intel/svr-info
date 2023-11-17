@@ -22,7 +22,7 @@ type GroupDefinition []EventDefinition // AKA a "group", ordered list of event d
 
 func isUncoreSupported(metadata Metadata) (supported bool) {
 	supported = false
-	for uncoreDeviceName := range metadata.DeviceCounts {
+	for uncoreDeviceName := range metadata.DeviceIDs {
 		if uncoreDeviceName == "cha" { // could be any uncore device
 			supported = true
 			break
@@ -49,7 +49,7 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 	// exclude uncore events when their corresponding device is not found
 	if event.Device != "cpu" && event.Device != "" {
 		deviceExists := false
-		for uncoreDeviceName := range metadata.DeviceCounts {
+		for uncoreDeviceName := range metadata.DeviceIDs {
 			if event.Device == uncoreDeviceName {
 				deviceExists = true
 				break
@@ -131,22 +131,13 @@ func expandUncoreGroups(groups []GroupDefinition, metadata Metadata) (expandedGr
 		device := group[0].Device
 		if device == "cha" || device == "upi" || device == "imc" || device == "iio" {
 			var newGroups []GroupDefinition
-			// unlike other device types, imc ids may not be consecutive
-			var ids []int
-			if device == "imc" {
-				ids = metadata.IMCDeviceIDs
-			} else {
-				for i := 0; i < metadata.DeviceCounts[device]; i++ {
-					ids = append(ids, i)
-				}
-			}
-			if len(ids) == 0 {
+			if len(metadata.DeviceIDs[device]) == 0 {
 				if gCmdLineArgs.verbose {
 					log.Printf("No uncore devices found for %s", device)
 				}
 				continue
 			}
-			if newGroups, err = expandUncoreGroup(group, ids, re); err != nil {
+			if newGroups, err = expandUncoreGroup(group, metadata.DeviceIDs[device], re); err != nil {
 				return
 			}
 			expandedGroups = append(expandedGroups, newGroups...)
