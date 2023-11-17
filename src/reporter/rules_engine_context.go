@@ -82,8 +82,38 @@ func (r *RulesEngineContext) GetValueFromColumn(reportName, tableName, rowValueN
 	return
 }
 
-// GetValuesFromColumn returns all values in specified valueIndex as a string (comma separated list)
+// GetValuesFromColumn returns all values in specified column as a string (comma separated list)
 func (r *RulesEngineContext) GetValuesFromColumn(reportName string, tableName string, valueIndex int64) (values string) {
+	var reportData *Report
+	for _, rd := range r.reportsData {
+		if rd.InternalName == reportName {
+			reportData = rd
+			break
+		}
+	}
+	if reportData == nil {
+		log.Printf("report specified in rule not found: %s", reportName)
+		return
+	}
+	table := reportData.findTable(tableName)
+	if table == nil {
+		log.Printf("table specified in rule not found: %s", tableName)
+		return
+	}
+	hv := &table.AllHostValues[r.sourceIdx]
+	var valList []string
+	for _, val := range hv.Values {
+		valList = append(valList, val[valueIndex])
+	}
+	values = strings.Join(valList, ",")
+	// if int64(len(hv.Values)) > valueIndex {
+	// 	values = strings.Join(hv.Values[valueIndex], ",")
+	// }
+	return
+}
+
+// GetValuesFromRow returns all values in specified row as a string (comma separated list)
+func (r *RulesEngineContext) GetValuesFromRow(reportName string, tableName string, valueIndex int64) (values string) {
 	var reportData *Report
 	for _, rd := range r.reportsData {
 		if rd.InternalName == reportName {

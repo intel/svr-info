@@ -23,8 +23,13 @@ dist-amd64: tools
 	cd dist && tar -czf $(TARBALL) svr-info
 	cd dist && md5sum $(TARBALL) > $(TARBALL).md5
 	rm -rf dist/svr-info
+	rm -rf dist/tools
+	mkdir -p dist/tools
+	cp src/orchestrator/resources/* dist/tools
+	cp src/pmu2metrics/pmu2metrics-with-perf dist/tools
+	cd dist/tools && tar -xf collector_deps_amd64.tgz && rm collector_deps_*.tgz *.yaml.tmpl
 
-dist: dist-amd64 oss
+dist: dist-amd64
 
 oss:
 	cd src && make oss-source

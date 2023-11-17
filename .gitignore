@@ -13,6 +13,9 @@ src/collector/collector_arm64
 src/rdmsr/rdmsrx
 src/wrmsr/wrmsrx
 src/msrbusy/msrbusy
+src/pmu2metrics/pmu2metrics
+src/pmu2metrics/pmu2metrics-with-perf
+src/pmu2metrics/resources/perf
 src/calcfreq/calcfreq
 # src
 async-profiler
@@ -47,3 +50,5 @@ src/reporter/debug_out/*
 __debug_bin*.log
 # other
 src/orchestrator/targets
+src/pmu2metrics/sys
+src/pmu2metrics/scripts

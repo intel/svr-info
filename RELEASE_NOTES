@@ -7,6 +7,24 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 16.04, 18.04, 20.04, 22.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.8.0
+Bugs Fixed
+- Turbo on/off incorrectly reported on Excel Brief Report summary field
+Features Added
+- PMU-based metrics added to profiling options, e.g., -profile pmu or -profile all
+- Package and DRAM power stats added to profiling options, e.g., -profile power or -profile all
+- Option to skip configuration data collection when profiling or analyzing, e.g., -profile all -noconfig
+- Recognize DLB and QAT accelerators on SRF and GNR
+- ISA table extended to show availability of newest ISAs
+- Add recognition of temperature related entries in System Event Log to Insights
+- Recognize GNR, SRF, and AMD Bergamo CPUs
+- upgraded to MLC v3.11
+Known Issues
+- Frequency measurement benchmark not yet supported on GNR and SRF
+- The storage micro-benchmark may not run on CentOS due to OS locale settings.
+- CPU cache sizes are reported in aggregate on Ubuntu 20.04 and newer.
+- DRAM population and CPU frequencies may not be accurate on some public cloud IaaS VMs.
+
 2.7.4
 Bugs Fixed
 - false positive Vulnerability for CVE-2022-40982 ("Downfall") on some ICX systems

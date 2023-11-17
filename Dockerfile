@@ -26,11 +26,14 @@ RUN cp /usr/local/lib/libz.a /usr/lib/x86_64-linux-gnu/libz.a
 RUN curl -s https://gitlab.com/akihe/radamsa/uploads/a2228910d0d3c68d19c09cee3943d7e5/radamsa-0.6.c.gz | gzip -d | cc -O2 -x c -o /usr/local/bin/radamsa -
 
 # Install Go
-ARG GO_VERSION="1.21.1"
+ARG GO_VERSION="1.21.4"
 RUN wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
 RUN tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
 RUN rm go${GO_VERSION}.linux-amd64.tar.gz
 ENV PATH="$PATH:/usr/local/go/bin"
+
+# Create directory where pre-built third party components will be built after user change
+RUN mkdir prebuilt && chmod 777 prebuilt
 
 # so that build output files have the correct owner
 # add non-root user
@@ -45,6 +48,20 @@ RUN if [ ! -z "${LOCALBUILD}" ] ; then \
 
 # Run container as non-root user from here onwards
 USER ${USERNAME}
+
+# Build third-party components
+COPY src/Makefile prebuilt/
+RUN cd prebuilt && make -j4 prebuilt_tools
+# intent here is to fill out the go package cache
+RUN mkdir prebuilt/x
+COPY src prebuilt/x
+RUN cd prebuilt/x/orchestrator && go get -d ./...
+RUN cd prebuilt/x/reporter && go get -d ./...
+RUN cd prebuilt/x/collector && go get -d ./...
+RUN cd prebuilt/x/rdmsr && go get -d ./...
+RUN cd prebuilt/x/wrmsr && go get -d ./...
+RUN cd prebuilt/x/msrbusy && go get -d ./...
+RUN cd prebuilt/x/pmu2metrics && go get -d ./...
 
 # run bash script and process the input command
 ENTRYPOINT [ "/bin/bash", "/scripts/entrypoint"]

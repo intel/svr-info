@@ -50,35 +50,29 @@ func newReportGeneratorHTML(outputDir string, cpusInfo *cpu.CPU, configurationDa
 	return
 }
 
+type ReportWithMore struct {
+	Report
+	Name    string
+	Notes   []string
+	RefData []*HostReferenceData
+}
+
 // ReportGen - struct used within the HTML template
 type ReportGen struct {
-	HostIndices                      []int
-	ConfigurationReport              *Report
-	ConfigurationReportReferenceData []*HostReferenceData
-	BenchmarkReport                  *Report
-	BenchmarkReportReferenceData     []*HostReferenceData
-	ProfileReport                    *Report
-	ProfileReportReferenceData       []*HostReferenceData
-	AnalyzeReport                    *Report
-	AnalyzeReportReferenceData       []*HostReferenceData
-	InsightsReport                   *Report
-	InsightsReportReferenceData      []*HostReferenceData
-	Version                          string
+	HostIndices []int
+	Reports     []*ReportWithMore
 }
 
 func newReportGen(reportsData []*Report, hostIndices []int, hostsReferenceData []*HostReferenceData) (gen *ReportGen) {
+	namedReports := []*ReportWithMore{}
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[configurationDataIndex], Name: "Configuration", Notes: []string{""}})
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[benchmarkDataIndex], Name: "Benchmark", Notes: []string{"Use the \"-benchmark all\" option to collect all micro-benchmarking data. See \"-help\" for finer control."}, RefData: hostsReferenceData})
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[profileDataIndex], Name: "Profile", Notes: []string{"Use the \"-profile all\" option to collect all system profiling data. See \"-help\" for finer control."}})
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[analyzeDataIndex], Name: "Analyze", Notes: []string{"Use the \"-analyze all\" option to collect all analysis data. See \"-help\" for finer control.", "Note: Perl is required on the target machine to collapse the call stacks used to produce System Flame Graphs."}})
+	namedReports = append(namedReports, &ReportWithMore{Report: *reportsData[insightDataIndex], Name: "Insights", Notes: []string{"Insights are derived from data collected by Intel® System Health Inspector. They are provided for consideration but may not always be relevant."}})
 	gen = &ReportGen{
-		HostIndices:                      hostIndices,
-		ConfigurationReport:              reportsData[configurationDataIndex],
-		ConfigurationReportReferenceData: []*HostReferenceData{},
-		BenchmarkReport:                  reportsData[benchmarkDataIndex],
-		BenchmarkReportReferenceData:     hostsReferenceData,
-		ProfileReport:                    reportsData[profileDataIndex],
-		ProfileReportReferenceData:       []*HostReferenceData{},
-		AnalyzeReport:                    reportsData[analyzeDataIndex],
-		AnalyzeReportReferenceData:       []*HostReferenceData{},
-		InsightsReport:                   reportsData[insightDataIndex],
-		InsightsReportReferenceData:      []*HostReferenceData{},
+		HostIndices: hostIndices,
+		Reports:     namedReports,
 	}
 	return
 }
@@ -132,7 +126,7 @@ func (r *ReportGeneratorHTML) loadHostReferenceData(hostIndex int, referenceData
 	return
 }
 
-func (r *ReportGen) RenderMenuItems(reportData *Report) template.HTML {
+func (r *ReportGen) RenderMenuItems(reportData *ReportWithMore) template.HTML {
 	var out string
 	category := NoCategory
 	for _, table := range reportData.Tables {
@@ -955,6 +949,71 @@ func (r *ReportGen) renderMemoryStatsChart(table *Table, refData []*HostReferenc
 	return
 }
 
+func (r *ReportGen) renderPowerStatsChart(table *Table, refData []*HostReferenceData) (out string) {
+	// one chart per host
+	for _, hostIndex := range r.HostIndices {
+		// add hostname only if more than one host or a single host with reference data
+		hostnameHeader := len(r.HostIndices) > 1
+		if hostnameHeader {
+			out += `<h3>` + table.AllHostValues[hostIndex].Name + `</h3>`
+		}
+		hv := table.AllHostValues[hostIndex]
+		// need at least one set of values
+		if len(hv.Values) > 0 {
+			var datasets []string
+			for statIdx, stat := range hv.ValueNames { // 1 data set per stat, e.g., Package, DRAM
+				formattedPoints := []string{}
+				for pointIdx, point := range table.AllHostValues[hostIndex].Values {
+					formattedPoints = append(formattedPoints, fmt.Sprintf("{x: %d, y: %s}", pointIdx, point[statIdx]))
+				}
+				if len(formattedPoints) > 0 {
+					specValues := strings.Join(formattedPoints, ",")
+					dst := texttemplate.Must(texttemplate.New("datasetTemplate").Parse(datasetTemplate))
+					buf := new(bytes.Buffer)
+					err := dst.Execute(buf, struct {
+						Label string
+						Data  string
+						Color string
+					}{
+						Label: stat,
+						Data:  specValues,
+						Color: getColor(statIdx),
+					})
+					if err != nil {
+						return
+					}
+					datasets = append(datasets, buf.String())
+				}
+			}
+			if len(datasets) > 0 {
+				sct := texttemplate.Must(texttemplate.New("scatterChartTemplate").Parse(scatterChartTemplate))
+				buf := new(bytes.Buffer)
+				err := sct.Execute(buf, scatterChartTemplateStruct{
+					ID:            "powerstat" + fmt.Sprintf("%d", hostIndex),
+					Datasets:      strings.Join(datasets, ","),
+					XaxisText:     "Time/Samples",
+					YaxisText:     "Watts",
+					TitleText:     "",
+					DisplayTitle:  "false",
+					DisplayLegend: "true",
+					AspectRatio:   "2",
+					YaxisZero:     "true",
+				})
+				if err != nil {
+					return
+				}
+				out += buf.String()
+				out += "\n"
+			} else {
+				out += noDataFound
+			}
+		} else {
+			out += noDataFound
+		}
+	}
+	return
+}
+
 const flameGraphTemplate = `
 <div id="chart{{.ID}}"></div>
 <script type="text/javascript">
@@ -1435,6 +1494,8 @@ func (r *ReportGen) RenderDataTable(unsafeTable *Table, refData []*HostReference
 		out += r.renderMemoryStatsChart(table, refData)
 	} else if table.Name == "Code Path Frequency" {
 		out += r.renderCodePathFrequency(table)
+	} else if table.Name == "Power Stats" {
+		out += r.renderPowerStatsChart(table, refData)
 	} else if isSingleValueTable(table) {
 		out += r.renderSingleValueTable(table, refData)
 	} else {

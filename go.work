@@ -1,4 +1,6 @@
-go 1.20
+go 1.21
+
+toolchain go1.21.3
 
 use ./src/collector
 
@@ -23,3 +25,5 @@ use ./src/pkg/msr
 use ./src/pkg/progress
 
 use ./src/pkg/target
+
+use ./src/pmu2metrics

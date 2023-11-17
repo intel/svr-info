@@ -7,6 +7,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -1074,6 +1075,76 @@ func (s *Source) getVulnerabilities() (vulns map[string]string) {
 	// from spectre-meltdown-checker
 	for _, pair := range s.valsArrayFromRegexSubmatch("spectre-meltdown-checker", `(CVE-\d+-\d+): (.+)`) {
 		vulns[pair[0]] = pair[1]
+	}
+	return
+}
+
+type PMUMetric struct {
+	series  []float64
+	average float64
+	min     float64
+	max     float64
+}
+
+func (s *Source) getPMUMetrics() (orderedMetricNames []string, timeStamps []float64, metrics map[string]PMUMetric) {
+	output := strings.Join(s.getProfileLines("pmu2metrics"), "\n")
+	if output == "" {
+		return
+	}
+	r := csv.NewReader(strings.NewReader(output))
+	rows, err := r.ReadAll()
+	if err != nil {
+		log.Printf("failed to read PMU Metrics")
+		return
+	}
+	if len(rows) < 2 {
+		return
+	}
+	metrics = make(map[string]PMUMetric)
+	// 1st row has metric names, 2nd-nth have metric values
+	// 1st col has timestamp
+	for colIdx := 0; colIdx < len(rows[0]); colIdx++ {
+		if rows[0][colIdx] == "" { // skip metrics with no name (can occur in some situations)
+			continue
+		}
+		if colIdx != 0 { // don't put timestamp column in the metric names list
+			orderedMetricNames = append(orderedMetricNames, rows[0][colIdx])
+		}
+		var metric PMUMetric
+		metric.min = math.MaxFloat64
+		var sum float64
+		for rowIdx := 1; rowIdx < len(rows); rowIdx++ {
+			if colIdx == 0 { // this is the timestamp column
+				ts, err := strconv.ParseFloat(rows[rowIdx][colIdx], 64)
+				if err != nil {
+					log.Printf("failed to parse timestamp float value: %s", rows[rowIdx][colIdx])
+					break
+				}
+				timeStamps = append(timeStamps, ts)
+				continue
+			}
+			val, err := strconv.ParseFloat(rows[rowIdx][colIdx], 64)
+			if err != nil {
+				log.Printf("failed to parse metric float value: %s", rows[rowIdx][colIdx])
+				break
+			}
+			sum += val
+			if val < metric.min {
+				metric.min = val
+			}
+			if val > metric.max {
+				metric.max = val
+			}
+			metric.series = append(metric.series, val)
+		}
+		if colIdx != 0 {
+			metric.average = sum / float64(len(rows)-1)
+			if math.IsNaN(metric.average) {
+				metric.min = math.NaN()
+				metric.max = math.NaN()
+			}
+			metrics[rows[0][colIdx]] = metric
+		}
 	}
 	return
 }

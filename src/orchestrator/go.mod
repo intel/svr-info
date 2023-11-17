@@ -1,6 +1,6 @@
 module intel.com/svr-info/orchestrator/v2
 
-go 1.20
+go 1.21
 
 replace intel.com/svr-info/pkg/core => ../pkg/core
 
@@ -15,8 +15,8 @@ replace intel.com/svr-info/pkg/target => ../pkg/target
 replace intel.com/svr-info/pkg/commandfile => ../pkg/commandfile
 
 require (
-	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
-	golang.org/x/term v0.12.0
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
+	golang.org/x/term v0.14.0
 	gopkg.in/yaml.v2 v2.4.0
 	intel.com/svr-info/pkg/commandfile v0.0.0-00010101000000-000000000000
 	intel.com/svr-info/pkg/core v0.0.0-00010101000000-000000000000
@@ -25,8 +25,8 @@ require (
 )
 
 require (
-	github.com/creasty/defaults v1.6.0 // indirect
-	github.com/kr/pretty v0.1.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
+	github.com/creasty/defaults v1.7.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
+	golang.org/x/sys v0.14.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

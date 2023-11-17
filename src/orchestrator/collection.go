@@ -51,6 +51,16 @@ func (c *Collection) getCommandFilePath(extra string) (commandFilePath string) {
 	return
 }
 
+// true if string is in list of strings
+func stringInList(s string, l []string) bool {
+	for _, item := range l {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
 func customizeCommandYAML(cmdTemplate []byte, cmdLineArgs *CmdLineArgs, targetBinDir string, targetHostName string) (customized []byte, err error) {
 	var cf commandfile.CommandFile
 	err = yaml.Unmarshal(cmdTemplate, &cf)
@@ -66,79 +76,90 @@ func customizeCommandYAML(cmdTemplate []byte, cmdLineArgs *CmdLineArgs, targetBi
 		if cmd.Label == "lspci -vmm" {
 			cmd.Command = fmt.Sprintf("lspci -i %s -vmm", filepath.Join(targetBinDir, "pci.ids.gz"))
 		}
-		// optional collection
-		if cmd.Label == "Memory MLC Bandwidth" || cmd.Label == "Memory MLC Loaded Latency Test" {
-			cmd.Run = strings.Contains(cmdLineArgs.benchmark, "memory") || strings.Contains(cmdLineArgs.benchmark, "all")
-		} else if cmd.Label == "stress-ng cpu methods" {
-			cmd.Run = strings.Contains(cmdLineArgs.benchmark, "cpu") || strings.Contains(cmdLineArgs.benchmark, "all")
-		} else if cmd.Label == "Measure Turbo Frequencies" {
-			cmd.Run = strings.Contains(cmdLineArgs.benchmark, "frequency") || strings.Contains(cmdLineArgs.benchmark, "all")
-		} else if cmd.Label == "CPU Turbo Test" || cmd.Label == "CPU Idle" {
-			cmd.Run = strings.Contains(cmdLineArgs.benchmark, "turbo") || strings.Contains(cmdLineArgs.benchmark, "all")
-		} else if cmd.Label == "fio" {
-			cmd.Run = strings.Contains(cmdLineArgs.benchmark, "storage") || strings.Contains(cmdLineArgs.benchmark, "all")
-			if cmd.Run {
-				fioDir := cmdLineArgs.storageDir
-				if fioDir == "" {
-					fioDir = targetBinDir
-				}
-				tmpl := template.Must(template.New("fioCommand").Parse(cmd.Command))
-				buf := new(bytes.Buffer)
-				err = tmpl.Execute(buf, struct {
-					FioDir string
-				}{
-					FioDir: fioDir,
-				})
-				if err != nil {
-					return
-				}
-				cmd.Command = buf.String()
+		optionalCommands := []string{"Memory MLC Bandwidth", "Memory MLC Loaded Latency Test", "stress-ng cpu methods", "Measure Turbo Frequencies", "CPU Turbo Test", "CPU Idle", "fio", "profile", "analyze"}
+		if !stringInList(cmd.Label, optionalCommands) {
+			if !cmdLineArgs.noConfig {
+				cmd.Run = true
 			}
-		} else if cmd.Label == "profile" {
-			cmd.Run = cmdLineArgs.profile != ""
-			if cmd.Run {
-				tmpl := template.Must(template.New("profileCommand").Parse(cmd.Command))
-				buf := new(bytes.Buffer)
-				err = tmpl.Execute(buf, struct {
-					Duration       int
-					Interval       int
-					ProfileCPU     bool
-					ProfileStorage bool
-					ProfileMemory  bool
-					ProfileNetwork bool
-				}{
-					Duration:       cmdLineArgs.profileDuration,
-					Interval:       cmdLineArgs.profileInterval,
-					ProfileCPU:     strings.Contains(cmdLineArgs.profile, "cpu") || strings.Contains(cmdLineArgs.profile, "all"),
-					ProfileStorage: strings.Contains(cmdLineArgs.profile, "storage") || strings.Contains(cmdLineArgs.profile, "all"),
-					ProfileMemory:  strings.Contains(cmdLineArgs.profile, "memory") || strings.Contains(cmdLineArgs.profile, "all"),
-					ProfileNetwork: strings.Contains(cmdLineArgs.profile, "network") || strings.Contains(cmdLineArgs.profile, "all"),
-				})
-				if err != nil {
-					return
+		} else {
+			// benchmark
+			if cmd.Label == "Memory MLC Bandwidth" || cmd.Label == "Memory MLC Loaded Latency Test" {
+				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "memory") || strings.Contains(cmdLineArgs.benchmark, "all")
+			} else if cmd.Label == "stress-ng cpu methods" {
+				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "cpu") || strings.Contains(cmdLineArgs.benchmark, "all")
+			} else if cmd.Label == "Measure Turbo Frequencies" {
+				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "frequency") || strings.Contains(cmdLineArgs.benchmark, "all")
+			} else if cmd.Label == "CPU Turbo Test" || cmd.Label == "CPU Idle" {
+				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "turbo") || strings.Contains(cmdLineArgs.benchmark, "all")
+			} else if cmd.Label == "fio" {
+				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "storage") || strings.Contains(cmdLineArgs.benchmark, "all")
+				if cmd.Run {
+					fioDir := cmdLineArgs.storageDir
+					if fioDir == "" {
+						fioDir = targetBinDir
+					}
+					tmpl := template.Must(template.New("fioCommand").Parse(cmd.Command))
+					buf := new(bytes.Buffer)
+					err = tmpl.Execute(buf, struct {
+						FioDir string
+					}{
+						FioDir: fioDir,
+					})
+					if err != nil {
+						return
+					}
+					cmd.Command = buf.String()
 				}
-				cmd.Command = buf.String()
-			}
-		} else if cmd.Label == "analyze" {
-			cmd.Run = cmdLineArgs.analyze != ""
-			if cmd.Run {
-				tmpl := template.Must(template.New("analyzeCommand").Parse(cmd.Command))
-				buf := new(bytes.Buffer)
-				err = tmpl.Execute(buf, struct {
-					Duration      int
-					Frequency     int
-					AnalyzeSystem bool
-					AnalyzeJava   bool
-				}{
-					Duration:      cmdLineArgs.analyzeDuration,
-					Frequency:     cmdLineArgs.analyzeFrequency,
-					AnalyzeSystem: strings.Contains(cmdLineArgs.analyze, "system") || strings.Contains(cmdLineArgs.analyze, "all"),
-					AnalyzeJava:   strings.Contains(cmdLineArgs.analyze, "java") || strings.Contains(cmdLineArgs.analyze, "all"),
-				})
-				if err != nil {
-					return
+			} else if cmd.Label == "profile" {
+				cmd.Run = cmdLineArgs.profile != ""
+				if cmd.Run {
+					tmpl := template.Must(template.New("profileCommand").Parse(cmd.Command))
+					buf := new(bytes.Buffer)
+					err = tmpl.Execute(buf, struct {
+						Duration       int
+						Interval       int
+						ProfileCPU     bool
+						ProfileStorage bool
+						ProfileMemory  bool
+						ProfileNetwork bool
+						ProfilePMU     bool
+						ProfilePower   bool
+					}{
+						Duration:       cmdLineArgs.profileDuration,
+						Interval:       cmdLineArgs.profileInterval,
+						ProfileCPU:     strings.Contains(cmdLineArgs.profile, "cpu") || strings.Contains(cmdLineArgs.profile, "all"),
+						ProfileStorage: strings.Contains(cmdLineArgs.profile, "storage") || strings.Contains(cmdLineArgs.profile, "all"),
+						ProfileMemory:  strings.Contains(cmdLineArgs.profile, "memory") || strings.Contains(cmdLineArgs.profile, "all"),
+						ProfileNetwork: strings.Contains(cmdLineArgs.profile, "network") || strings.Contains(cmdLineArgs.profile, "all"),
+						ProfilePMU:     strings.Contains(cmdLineArgs.profile, "pmu") || strings.Contains(cmdLineArgs.profile, "all"),
+						ProfilePower:   strings.Contains(cmdLineArgs.profile, "power") || strings.Contains(cmdLineArgs.profile, "all"),
+					})
+					if err != nil {
+						return
+					}
+					cmd.Command = buf.String()
 				}
-				cmd.Command = buf.String()
+			} else if cmd.Label == "analyze" {
+				cmd.Run = cmdLineArgs.analyze != ""
+				if cmd.Run {
+					tmpl := template.Must(template.New("analyzeCommand").Parse(cmd.Command))
+					buf := new(bytes.Buffer)
+					err = tmpl.Execute(buf, struct {
+						Duration      int
+						Frequency     int
+						AnalyzeSystem bool
+						AnalyzeJava   bool
+					}{
+						Duration:      cmdLineArgs.analyzeDuration,
+						Frequency:     cmdLineArgs.analyzeFrequency,
+						AnalyzeSystem: strings.Contains(cmdLineArgs.analyze, "system") || strings.Contains(cmdLineArgs.analyze, "all"),
+						AnalyzeJava:   strings.Contains(cmdLineArgs.analyze, "java") || strings.Contains(cmdLineArgs.analyze, "all"),
+					})
+					if err != nil {
+						return
+					}
+					cmd.Command = buf.String()
+				}
 			}
 		}
 	}

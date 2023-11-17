@@ -14,7 +14,7 @@ type Command struct {
 	Command   string `yaml:"command"`
 	Modprobe  string `yaml:"modprobe"`
 	Superuser bool   `default:"false" yaml:"superuser"`
-	Run       bool   `default:"true" yaml:"run"`
+	Run       bool   `default:"false" yaml:"run"`
 	Parallel  bool   `default:"false" yaml:"parallel"`
 }
 

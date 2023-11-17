@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 	"intel.com/svr-info/pkg/cpu"
 )
 
@@ -202,6 +204,13 @@ func getDIMMSocketSlot(dimmType DIMMType, reBankLoc *regexp.Regexp, reLoc *regex
 			slot = slot - 1
 			return
 		}
+	} else if dimmType == DIMMType14 {
+		match := reLoc.FindStringSubmatch(locator)
+		if match != nil {
+			socket, _ = strconv.Atoi(match[1])
+			slot = 0
+			return
+		}
 	}
 	err = fmt.Errorf("unrecognized bank locator and/or locator in dimm info: %s %s", bankLocator, locator)
 	return
@@ -225,6 +234,7 @@ const (
 	DIMMType11
 	DIMMType12
 	DIMMType13
+	DIMMType14
 )
 
 func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, reBankLoc *regexp.Regexp, reLoc *regexp.Regexp) {
@@ -349,6 +359,20 @@ func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, re
 	reLoc = regexp.MustCompile(`CPU([\d])_DIMM_([A-H])([1-2])`)
 	if reLoc.FindStringSubmatch(locator) != nil {
 		dimmType = DIMMType13
+		return
+	}
+	/* BIRCHSTREAM GRANITE RAPIDS AP/X3
+	 * LOCATOR      BANK LOCATOR
+	 * CPU0_DIMM_A  BANK 0
+	 * CPU0_DIMM_B  BANK 1
+	 * CPU0_DIMM_C  BANK 2
+	 * CPU0_DIMM_D  BANK 3
+	 * ...
+	 * CPU0_DIMM_L  BANK 11
+	 */
+	reLoc = regexp.MustCompile(`CPU([\d])_DIMM_([A-L])`)
+	if reLoc.FindStringSubmatch(locator) != nil {
+		dimmType = DIMMType14
 		return
 	}
 	return
@@ -564,6 +588,17 @@ func expandCPUList(cpuList string) (cpus []int) {
 	return
 }
 
+func getPMUMetricFromTable(PMUMetricsTable *Table, sourceIndex int, fieldName string) (metric string) {
+	hostValues := &PMUMetricsTable.AllHostValues[sourceIndex]
+	for _, row := range hostValues.Values {
+		if row[0] == fieldName {
+			metric = row[1]
+			break
+		}
+	}
+	return
+}
+
 func getCPUAveragePercentage(table *Table, sourceIndex int, fieldName string, inverse bool) (average string) {
 	hostValues := &table.AllHostValues[sourceIndex]
 	sum, _, err := getSumOfFields(hostValues, []string{fieldName}, "Time")
@@ -590,16 +625,20 @@ func getMetricAverage(table *Table, sourceIndex int, fieldNames []string, separa
 	}
 	if len(fieldNames) > 0 && seps > 0 {
 		averageFloat := sum / float64(seps/len(fieldNames))
-		average = fmt.Sprintf("%0.2f", averageFloat)
+		p := message.NewPrinter(language.English) // use printer to get commas at thousands, e.g., Memory Available (kB)  258,691,376.80
+		average = p.Sprintf("%0.2f", averageFloat)
 	}
 	return
 }
 
 func getSumOfFields(hostValues *HostValues, fieldNames []string, separatorFieldName string) (sum float64, numSeparators int, err error) {
 	prevSeparator := ""
-	separatorIdx, err := findValueIndex(hostValues, separatorFieldName)
-	if err != nil {
-		return
+	var separatorIdx int
+	if separatorFieldName != "" {
+		separatorIdx, err = findValueIndex(hostValues, separatorFieldName)
+		if err != nil {
+			return
+		}
 	}
 	for _, fieldName := range fieldNames {
 		var fieldIdx int
@@ -614,10 +653,14 @@ func getSumOfFields(hostValues *HostValues, fieldNames []string, separatorFieldN
 			if err != nil {
 				return
 			}
-			separator := entry[separatorIdx]
-			if separator != prevSeparator {
+			if separatorFieldName != "" {
+				separator := entry[separatorIdx]
+				if separator != prevSeparator {
+					numSeparators++
+					prevSeparator = separator
+				}
+			} else {
 				numSeparators++
-				prevSeparator = separator
 			}
 			sum += valueFloat
 		}
@@ -635,72 +678,9 @@ func getInsightsRules() (rules []byte, err error) {
 }
 
 func getMicroArchitecture(cpusInfo *cpu.CPU, family, model, stepping, capid4, devices, sockets string) (uArch string) {
-	var err error
-	if family == "6" {
-		uArch, err = getMicroArchitectureExt(family, model, sockets, capid4, devices)
-		if err != nil {
-			uArch, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
-		}
-	} else {
-		uArch, err = cpusInfo.GetMicroArchitecture(family, model, stepping)
-	}
-
+	uArch, err := cpusInfo.GetMicroArchitecture(family, model, stepping, sockets, capid4, devices)
 	if err != nil && family == "6" {
 		uArch = "Unknown Intel"
-	}
-	return
-}
-
-func getMicroArchitectureExt(family, model, sockets string, capid4 string, devices string) (uarch string, err error) {
-	if family != "6" || (model != "143" && model != "207" && model != "173") {
-		err = fmt.Errorf("no extended architecture info for %s:%s", family, model)
-		return
-	}
-	var capid4Int, bits int64
-	if model == "143" || model == "207" {
-		capid4Int, err = strconv.ParseInt(capid4, 16, 64)
-		if err != nil {
-			return
-		}
-		bits = (capid4Int >> 6) & 0b11
-	}
-	if model == "143" { // SPR
-		if bits == 3 {
-			uarch = "SPR_XCC"
-		} else if bits == 1 {
-			uarch = "SPR_MCC"
-		} else {
-			uarch = "SPR_Unknown"
-		}
-	} else if model == "207" { /*EMR*/
-		if bits == 3 {
-			uarch = "EMR_XCC"
-		} else if bits == 1 {
-			uarch = "EMR_MCC"
-		} else {
-			uarch = "EMR_Unknown"
-		}
-	} else if model == "173" { /*GNR*/
-		var devCount int
-		devCount, err = strconv.Atoi(devices)
-		if err != nil {
-			return
-		}
-		var socketsCount int
-		socketsCount, err = strconv.Atoi(sockets)
-		if socketsCount == 0 || err != nil {
-			return
-		}
-		ratio := devCount / socketsCount
-		if ratio == 3 {
-			uarch = "GNR_X1"
-		} else if ratio == 4 {
-			uarch = "GNR_X2"
-		} else if ratio == 5 {
-			uarch = "GNR_X3"
-		} else {
-			uarch = "GNR_Unknown"
-		}
 	}
 	return
 }

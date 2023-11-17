@@ -4,6 +4,6 @@ docker image build                         \
     --build-arg USERNAME="${USER}"         \
     --build-arg USERID="$(id -u ${USER})"  \
     --build-arg LOCALBUILD="true"          \
-    --file builder/Dockerfile              \
+    --file Dockerfile                      \
     --tag svr_info_builder:v4              \
     .

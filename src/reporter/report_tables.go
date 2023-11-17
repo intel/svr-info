@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hyperjumptech/grule-rule-engine/ast"
 	"github.com/hyperjumptech/grule-rule-engine/builder"
@@ -65,10 +66,12 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 			htOnOff = "?"
 		}
 		turboEnabledDisabled, _ := fullReport.findTable("CPU").getValue(sourceIdx, "Intel Turbo Boost")
-		if turboEnabledDisabled == "Enabled" {
+		if strings.Contains(strings.ToLower(turboEnabledDisabled), "enabled") {
 			turboOnOff = "On"
-		} else {
+		} else if strings.Contains(strings.ToLower(turboEnabledDisabled), "disabled") {
 			turboOnOff = "Off"
+		} else {
+			turboOnOff = "?"
 		}
 		numaNodes, _ = fullReport.findTable("CPU").getValue(sourceIdx, "NUMA Nodes")
 		accelerators, _ := tableAcceleratorSummary.getValue(sourceIdx, "Accelerators Available [used]")
@@ -706,7 +709,7 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
 		coresPerSocket := source.valFromRegexSubmatch("lscpu", `^Core\(s\) per socket.*:\s*(.+?)$`)
 		microarchitecture := getMicroArchitecture(cpusInfo, family, model, stepping, capid4, devices, sockets)
-		channelCount, err := cpusInfo.GetMemoryChannels(family, model, stepping)
+		channelCount, err := cpusInfo.GetMemoryChannels(microarchitecture)
 		channels := fmt.Sprintf("%d", channelCount)
 		if err != nil {
 			channels = "Unknown"
@@ -818,16 +821,21 @@ func newISATable(sources []*Source, category TableCategory) (table *Table) {
 		lscpu    string
 	}
 	isas := []ISA{
-		{"AVX", "Advanced Vector Extensions", "AVX: advanced vector extensions", "avx"},
-		{"AVX2", "Advanced Vector Extensions 2", "AVX2: advanced vector extensions 2", "avx2"},
-		{"AVX512F", "AVX-512 Foundation", "AVX512F: AVX-512 foundation instructions", "avx512f"},
-		{"AVX512_VNNI", "Vector Neural Network Instructions", "AVX512_VNNI: neural network instructions", "avx512_vnni"},
-		{"AVX512_BF16", "BFLOAT16", "AVX512_BF16: bfloat16 instructions", "avx512_bf16"},
 		{"AES", "Advanced Encryption Standard New Instructions (AES-NI)", "AES instruction", "aes"},
+		{"AMX", "Advanced Matrix Extensions", "AMX-BF16: tile bfloat16 support", "amx_bf16"},
+		{"AVX512F", "AVX-512 Foundation", "AVX512F: AVX-512 foundation instructions", "avx512f"},
+		{"AVX512_BF16", "Vector Neural Network Instructions - BF16", "AVX512_BF16: bfloat16 instructions", "avx512_bf16"},
+		{"AVX512_FP16", "Advanced Vector Extensions 512 - FP16", "AVX512_FP16: fp16 support", "avx512_fp16"},
+		{"AVX512_VNNI", "Vector Neural Network Instructions", "AVX512_VNNI: neural network instructions", "avx512_vnni"},
+		{"CLDEMOTE", "Cache Line Demote", "CLDEMOTE supports cache line demote", "cldemote"},
+		{"ENQCMD", "Enqueue Command Instruction", "ENQCMD instruction", "enqcmd"},
+		{"MOVDIRI", "Move Doubleword as Direct Store", "MOVDIRI instruction", "movdiri"},
+		{"MOVDIR64B", "Move 64 Bytes as Direct Store", "MOVDIR64B instruction", "movdir64b"},
+		{"SERIALIZE", "SERIALIZE Instruction", "SERIALIZE instruction", "serialize"},
+		{"SHA_NI", "SHA1/SHA256 Instruction Extensions", "SHA instructions", "sha_ni"},
+		{"TSXLDTRK", "Transactional Synchronization Extensions", "TSXLDTRK: TSX suspend load addr tracking", "tsxldtrk"},
 		{"VAES", "Vector AES", "VAES instructions", "vaes"},
-		{"AMX-BF16", "Advanced Matrix Extensions Tile BFLOAT16", "AMX-BF16: tile bfloat16 support", "amx_bf16"},
-		{"AMX-TILE", "Advanced Matrix Extensions Tile Architecture", "AMX-TILE: tile architecture support", "amx_tile"},
-		{"AMX-INT8", "Advanced Matrix Extensions Tile 8-bit Integer", "AMX-INT8: tile 8-bit integer support", "amx_int8"},
+		{"WAITPKG", "UMONITOR, UMWAIT, TPAUSE Instructions", "WAITPKG instructions", "waitpkg"},
 	}
 	for _, source := range sources {
 		var hostValues = HostValues{
@@ -1299,7 +1307,11 @@ func newDIMMPopulationTable(sources []*Source, dimmTable *Table, cpusInfo *cpu.C
 		family := source.valFromRegexSubmatch("lscpu", `^CPU family.*:\s*([0-9]+)$`)
 		model := source.valFromRegexSubmatch("lscpu", `^Model.*:\s*([0-9]+)$`)
 		stepping := source.valFromRegexSubmatch("lscpu", `^Stepping.*:\s*(.+)$`)
-		channels, err := cpusInfo.GetMemoryChannels(family, model, stepping)
+		sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
+		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
+		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
+		uarch := getMicroArchitecture(cpusInfo, family, model, stepping, capid4, devices, sockets)
+		channels, err := cpusInfo.GetMemoryChannels(uarch)
 		if err != nil {
 			log.Printf("Failed to find CPU info: %v", err)
 		} else {
@@ -1972,47 +1984,72 @@ func newMemoryStatsTable(sources []*Source, category TableCategory) (table *Tabl
 	return
 }
 
-func newProfileSummaryTable(sources []*Source, category TableCategory, averageCPUUtilizationTable, CPUUtilizationTable, IRQRateTable, driveStatsTable, netStatsTable, memStatsTable *Table) (table *Table) {
+func newPowerStatsTable(sources []*Source, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "Power Stats",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, source := range sources {
+		var hostValues = HostValues{
+			Name: source.getHostname(),
+			ValueNames: []string{
+				"Package",
+				"DRAM",
+			},
+			Values: [][]string{},
+		}
+		reStat := regexp.MustCompile(`^(\d+\.\d+)\s*(\d+\.\d+)$`)
+		for _, line := range source.getProfileLines("turbostat") {
+			match := reStat.FindStringSubmatch(line)
+			if len(match) == 0 {
+				continue
+			}
+			hostValues.Values = append(hostValues.Values, match[1:])
+		}
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
+func newProfileSummaryTable(sources []*Source, category TableCategory, averageCPUUtilizationTable, CPUUtilizationTable, IRQRateTable, driveStatsTable, netStatsTable, memStatsTable, PMUMetricsTable, powerStatsTable *Table) (table *Table) {
 	table = &Table{
 		Name:          "Summary",
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
 	for idx, source := range sources {
+		utilization := getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%idle", true)
+		if utilization == "" {
+			utilization = getPMUMetricFromTable(PMUMetricsTable, idx, "CPU utilization %")
+		}
+		packagePower := getMetricAverage(powerStatsTable, idx, []string{"Package"}, "")
+		if packagePower == "" {
+			packagePower = getPMUMetricFromTable(PMUMetricsTable, idx, "package power (watts)")
+		}
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
 				"CPU Utilization (%)",
-				"Kernel Utilization (%)",
-				"User Utilization (%)",
-				"Soft IRQ Utilization (%)",
-				"IRQ Rate (IRQ/s)",
+				"CPU Frequency (GHz)",
+				"CPI",
+				"Package Power (Watts)",
 				"Drive Reads (kB/s)",
 				"Drive Writes (kB/s)",
-				"Network RX (packets/s)",
-				"Network TX (packets/s)",
 				"Network RX (kB/s)",
 				"Network TX (kB/s)",
-				"Memory Free (kB)",
 				"Memory Available (kB)",
-				"Memory Used (kB)",
 			},
 			Values: [][]string{
 				{
-					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%idle", true),
-					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%sys", false),
-					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%usr", false),
-					getCPUAveragePercentage(averageCPUUtilizationTable, idx, "%irq", false),
-					getMetricAverage(IRQRateTable, idx, []string{"HI/s", "TIMER/s", "NET_TX/s", "NET_RX/s", "BLOCK/s", "IRQ_POLL/s", "TASKLET/s", "SCHED/s", "HRTIMER/s", "RCU/s"}, "Time"),
+					utilization,
+					getPMUMetricFromTable(PMUMetricsTable, idx, "CPU operating frequency (in GHz)"),
+					getPMUMetricFromTable(PMUMetricsTable, idx, "CPI"),
+					packagePower,
 					getMetricAverage(driveStatsTable, idx, []string{"kB_read/s"}, "Device"),
 					getMetricAverage(driveStatsTable, idx, []string{"kB_wrtn/s"}, "Device"),
-					getMetricAverage(netStatsTable, idx, []string{"rxpck/s"}, "Time"),
-					getMetricAverage(netStatsTable, idx, []string{"txpck/s"}, "Time"),
 					getMetricAverage(netStatsTable, idx, []string{"rxkB/s"}, "Time"),
 					getMetricAverage(netStatsTable, idx, []string{"txkB/s"}, "Time"),
-					getMetricAverage(memStatsTable, idx, []string{"free"}, "Time"),
 					getMetricAverage(memStatsTable, idx, []string{"avail"}, "Time"),
-					getMetricAverage(memStatsTable, idx, []string{"used"}, "Time"),
 				},
 			},
 		}
@@ -2193,6 +2230,46 @@ func newSvrinfoTable(sources []*Source, category TableCategory) (table *Table) {
 					gVersion,
 				},
 			},
+		}
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
+
+func newPMUMetricsTable(sources []*Source, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "PMU Metrics",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, source := range sources {
+		var hostValues = HostValues{
+			Name: source.getHostname(),
+			ValueNames: []string{
+				"Name",
+				"Average",
+				"Min",
+				"Max",
+			},
+			Values: [][]string{},
+		}
+		metricNames, timeStamps, metrics := source.getPMUMetrics()
+		if len(metrics) > 0 {
+			var series []string
+			for _, ts := range timeStamps {
+				t := time.Unix(int64(ts), 0)
+				series = append(series, t.Format("15:04:05"))
+			}
+			hostValues.ValueNames = append(hostValues.ValueNames, series...)
+			for i, name := range metricNames {
+				hostValues.Values = append(hostValues.Values, []string{})
+				var values []string
+				values = append(values, name, strconv.FormatFloat(metrics[name].average, 'f', 4, 64), strconv.FormatFloat(metrics[name].min, 'f', 4, 64), strconv.FormatFloat(metrics[name].max, 'f', 4, 64))
+				for _, val := range metrics[name].series {
+					values = append(values, strconv.FormatFloat(val, 'f', 4, 64))
+				}
+				hostValues.Values[i] = append(hostValues.Values[i], values...)
+			}
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
