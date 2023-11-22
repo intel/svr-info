@@ -87,73 +87,6 @@
         "expression-txn": "[L2_RQSTS.CODE_RD_MISS] / [TXN]"
     },
     {
-        "name": "metric_UPI Data transmit BW (MB/sec) (only data)",
-        "expression": "([UNC_UPI_TxL_FLITS.ALL_DATA] * (64 / 9.0) / 1000000) / 1"
-    },
-    {
-        "name": "metric_package power (watts)",
-        "expression": "[power/energy-pkg/]",
-        "origin": "perfspect"
-    },
-    {
-        "name": "metric_DRAM power (watts)",
-        "expression": "[power/energy-ram/]",
-        "origin": "perfspect"
-    },
-    {
-        "name": "metric_core c6 residency %",
-        "expression": "100 * [cstate_core/c6-residency/] / [TSC]",
-        "origin": "perfspect"
-    },
-    {
-        "name": "metric_package c6 residency %",
-        "expression": "100 * [cstate_pkg/c6-residency/] * [CORES_PER_SOCKET] / [TSC]",
-        "origin": "perfspect"
-    },
-    {
-        "name": "metric_% Uops delivered from decoded Icache (DSB)",
-        "expression": "100 * ([IDQ.DSB_UOPS] / ([IDQ.DSB_UOPS] + [IDQ.MITE_UOPS] + [IDQ.MS_UOPS] + [LSD.UOPS]) )"
-    },
-    {
-        "name": "metric_% Uops delivered from legacy decode pipeline (MITE)",
-        "expression": "100 * ([IDQ.MITE_UOPS] / ([IDQ.DSB_UOPS] + [IDQ.MITE_UOPS] + [IDQ.MS_UOPS] + [LSD.UOPS]) )"
-    },
-    {
-        "name": "metric_core % cycles in non AVX license",
-        "expression": "(100 * [CORE_POWER.LVL0_TURBO_LICENSE]) / ([CORE_POWER.LVL0_TURBO_LICENSE] + [CORE_POWER.LVL1_TURBO_LICENSE] + [CORE_POWER.LVL2_TURBO_LICENSE])",
-        "origin": "perfspect"
-    },
-    {
-        "name": "metric_core % cycles in AVX2 license",
-        "expression": "(100 * [CORE_POWER.LVL1_TURBO_LICENSE]) / ([CORE_POWER.LVL0_TURBO_LICENSE] + [CORE_POWER.LVL1_TURBO_LICENSE] + [CORE_POWER.LVL2_TURBO_LICENSE])",
-        "origin": "perfspect"
-    },
-    {
-        "name": "metric_core % cycles in AVX-512 license",
-        "expression": "(100 * [CORE_POWER.LVL2_TURBO_LICENSE]) / ([CORE_POWER.LVL0_TURBO_LICENSE] + [CORE_POWER.LVL1_TURBO_LICENSE] + [CORE_POWER.LVL2_TURBO_LICENSE])",
-        "origin": "perfspect"
-    },
-    {
-        "name": "metric_core initiated local dram read bandwidth (MB/sec)",
-        "expression": "(([OCR.READS_TO_CORE.LOCAL_DRAM] + [OCR.HWPF_L3.L3_MISS_LOCAL]) * 64 / 1000000) / 1"
-    },
-    {
-        "name": "metric_core initiated remote dram read bandwidth (MB/sec)",
-        "expression": "(([OCR.READS_TO_CORE.REMOTE_DRAM] + [OCR.HWPF_L3.REMOTE]) * 64 / 1000000) / 1"
-    },
-    {
-        "name": "metric_memory bandwidth read (MB/sec)",
-        "expression": "([UNC_M_CAS_COUNT.RD] * 64 / 1000000) / 1"
-    },
-    {
-        "name": "metric_memory bandwidth write (MB/sec)",
-        "expression": "([UNC_M_CAS_COUNT.WR] * 64 / 1000000) / 1"
-    },
-    {
-        "name": "metric_memory bandwidth total (MB/sec)",
-        "expression": "(([UNC_M_CAS_COUNT.RD] + [UNC_M_CAS_COUNT.WR]) * 64 / 1000000) / 1"
-    },
-    {
         "name": "metric_LLC code read MPI (demand+prefetch)",
         "name-txn": "metric_LLC code read (demand+prefetch) misses per txn",
         "expression": "([UNC_CHA_TOR_INSERTS.IA_MISS_CRD] + [UNC_CHA_TOR_INSERTS.IA_MISS_CRD_PREF]) / [instructions]",
@@ -188,6 +121,58 @@
     {
         "name": "metric_Average LLC demand data read miss latency for REMOTE requests (in ns)",
         "expression": "( 1000000000 * ([UNC_CHA_TOR_OCCUPANCY.IA_MISS_DRD_REMOTE] / [UNC_CHA_TOR_INSERTS.IA_MISS_DRD_REMOTE]) / ([UNC_CHA_CLOCKTICKS] / ([CHAS_PER_SOCKET] * [SOCKET_COUNT]) ) ) * 1"
+    },
+    {
+        "name": "metric_UPI Data transmit BW (MB/sec) (only data)",
+        "expression": "([UNC_UPI_TxL_FLITS.ALL_DATA] * (64 / 9.0) / 1000000) / 1"
+    },
+    {
+        "name": "metric_package power (watts)",
+        "expression": "[power/energy-pkg/]",
+        "origin": "perfspect"
+    },
+    {
+        "name": "metric_DRAM power (watts)",
+        "expression": "[power/energy-ram/]",
+        "origin": "perfspect"
+    },
+    {
+        "name": "metric_core c6 residency %",
+        "expression": "100 * [cstate_core/c6-residency/] / [TSC]",
+        "origin": "perfspect"
+    },
+    {
+        "name": "metric_package c6 residency %",
+        "expression": "100 * [cstate_pkg/c6-residency/] * [CORES_PER_SOCKET] / [TSC]",
+        "origin": "perfspect"
+    },
+    {
+        "name": "metric_% Uops delivered from decoded Icache (DSB)",
+        "expression": "100 * ([IDQ.DSB_UOPS] / ([IDQ.DSB_UOPS] + [IDQ.MITE_UOPS] + [IDQ.MS_UOPS] + [LSD.UOPS]) )"
+    },
+    {
+        "name": "metric_% Uops delivered from legacy decode pipeline (MITE)",
+        "expression": "100 * ([IDQ.MITE_UOPS] / ([IDQ.DSB_UOPS] + [IDQ.MITE_UOPS] + [IDQ.MS_UOPS] + [LSD.UOPS]) )"
+    },
+    {
+        "name": "metric_core initiated local dram read bandwidth (MB/sec)",
+        "expression": "(([OCR.READS_TO_CORE.LOCAL_DRAM] + [OCR.HWPF_L3.L3_MISS_LOCAL]) * 64 / 1000000) / 1"
+    },
+    {
+        "name": "metric_core initiated remote dram read bandwidth (MB/sec)",
+        "expression": "(([OCR.READS_TO_CORE.REMOTE_DRAM] + [OCR.HWPF_L3.REMOTE]) * 64 / 1000000) / 1"
+    },
+    {
+        "name": "metric_memory bandwidth read (MB/sec)",
+        "expression": "([UNC_M_CAS_COUNT.RD] * 64 / 1000000) / 1"
+    },
+    {
+        "name": "metric_memory bandwidth write (MB/sec)",
+        "expression": "([UNC_M_CAS_COUNT.WR] * 64 / 1000000) / 1"
+    },
+    {
+        "name": "metric_memory bandwidth total (MB/sec)",
+        "expression": "(([UNC_M_CAS_COUNT.RD] + [UNC_M_CAS_COUNT.WR]) * 64 / 1000000) / 1"
     },
     {
         "name": "metric_ITLB (2nd level) MPI",
@@ -366,16 +351,16 @@
         "expression": "100 * ( max( 0 , ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) - ( ( ( ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [TOPDOWN.SLOTS] ) ) / [UOPS_ISSUED.ANY] ) * [IDQ.MS_UOPS] / ( [TOPDOWN.SLOTS] ) ) + ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [UOPS_DECODED.DEC0] - [UOPS_DECODED.DEC0:c1] ) / [IDQ.MITE_UOPS] ) ) )"
     },
     {
-        "name": "metric_TMA_....FP_Arith(%)",
-        "expression": "100 * ( ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * [UOPS_EXECUTED.X87] / [UOPS_EXECUTED.THREAD] ) + ( ( [FP_ARITH_INST_RETIRED.SCALAR_SINGLE:u0x03] ) / ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [TOPDOWN.SLOTS] ) ) ) + ( min( ( ( [FP_ARITH_INST_RETIRED.128B_PACKED_DOUBLE:u0xfc] ) / ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [TOPDOWN.SLOTS] ) ) ) , ( 1 ) ) ) )"
+        "name": "metric_TMA_........FP_Vector_128b(%)",
+        "expression": "100 * ( min( ( ( [FP_ARITH_INST_RETIRED.128B_PACKED_DOUBLE] + [FP_ARITH_INST_RETIRED.128B_PACKED_SINGLE] ) / ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [TOPDOWN.SLOTS] ) ) ) , ( 1 ) ) )"
     },
     {
-        "name": "metric_TMA_......FP_Scalar(%)",
-        "expression": "100 * ( ( [FP_ARITH_INST_RETIRED.SCALAR_SINGLE:u0x03] ) / ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [TOPDOWN.SLOTS] ) ) )"
+        "name": "metric_TMA_........FP_Vector_256b(%)",
+        "expression": "100 * ( min( ( ( [FP_ARITH_INST_RETIRED.256B_PACKED_DOUBLE] + [FP_ARITH_INST_RETIRED.256B_PACKED_SINGLE] ) / ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [TOPDOWN.SLOTS] ) ) ) , ( 1 ) ) )"
     },
     {
-        "name": "metric_TMA_......FP_Vector(%)",
-        "expression": "100 * ( min( ( ( [FP_ARITH_INST_RETIRED.128B_PACKED_DOUBLE:u0xfc] ) / ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [TOPDOWN.SLOTS] ) ) ) , ( 1 ) ) )"
+        "name": "metric_TMA_........FP_Vector_512b(%)",
+        "expression": "100 * ( min( ( ( [FP_ARITH_INST_RETIRED.512B_PACKED_DOUBLE] + [FP_ARITH_INST_RETIRED.512B_PACKED_SINGLE] ) / ( ( [PERF_METRICS.RETIRING] / ( [PERF_METRICS.FRONTEND_BOUND] + [PERF_METRICS.BAD_SPECULATION] + [PERF_METRICS.RETIRING] + [PERF_METRICS.BACKEND_BOUND] ) ) * ( [TOPDOWN.SLOTS] ) ) ) , ( 1 ) ) )"
     },
     {
         "name": "metric_TMA_..Heavy_Operations(%)",
