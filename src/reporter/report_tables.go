@@ -769,7 +769,7 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 					source.getL3(microarchitecture),
 					source.getL3PerCore(microarchitecture, coresPerSocket, sockets, virtualization),
 					channels,
-					source.getPrefetchers(),
+					source.getPrefetchers(microarchitecture),
 					source.getTurboEnabled(family),
 					virtualization,
 					source.getPPINs(),

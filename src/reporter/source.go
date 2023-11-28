@@ -612,23 +612,38 @@ func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string, socketsStr
 	return
 }
 
-func (s *Source) getPrefetchers() (val string) {
+func (s *Source) getPrefetchers(uarch string) (val string) {
 	prefetchers := s.valFromRegexSubmatch("rdmsr 0x1a4", `^([0-9a-fA-F]+)`)
 	if prefetchers != "" {
 		prefetcherInt, err := strconv.ParseInt(prefetchers, 16, 64)
 		if err == nil {
+			// MSR_PREFETCH_CONTROL
 			// prefetchers are enabled when associated bit is 0
-			// 1: "L2 HW"
-			// 2: "L2 Adj."
-			// 4: "DCU HW"
-			// 8: "DCU IP"
+			// bit 0 -- 1: "L2 HW"
+			// bit 1 -- 2: "L2 Adj."
+			// bit 2 -- 4: "DCU HW"
+			// bit 3 -- 8: "DCU IP"
+			// bit 4 -- reserved
+			// bit 5 -- 32: "AMP" - Adapative Multipath Probability (SPR, EMR, GNR)
+			// bit 6-63 -- reserved
+			prefNames := []string{"L2 HW", "L2 Adj.", "DCU HW", "DCU IP", ""} // all Xeons
+			if strings.Contains(uarch, "SPR") || strings.Contains(uarch, "EMR") || strings.Contains(uarch, "GNR") {
+				prefNames = append(prefNames, "AMP")
+			}
 			var prefList []string
-			for i, pref := range []string{"L2 HW", "L2 Adj.", "DCU HW", "DCU IP"} {
-				bitMask := int64(math.Pow(2, float64(i)))
-				// if bit is zero
-				if bitMask&prefetcherInt == 0 {
-					prefList = append(prefList, pref)
+			for i, pref := range prefNames {
+				if pref == "" {
+					continue
 				}
+				bitMask := int64(math.Pow(2, float64(i)))
+				var enabledDisabled string
+				// enabled if bit is zero
+				if bitMask&prefetcherInt == 0 {
+					enabledDisabled = "Enabled"
+				} else {
+					enabledDisabled = "Disabled"
+				}
+				prefList = append(prefList, fmt.Sprintf("%s: %s", pref, enabledDisabled))
 			}
 			if len(prefList) > 0 {
 				val = strings.Join(prefList, ", ")

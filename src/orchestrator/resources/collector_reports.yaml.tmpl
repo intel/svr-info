@@ -127,7 +127,7 @@ commands:
     superuser: true
     parallel: true
   - label: rdmsr 0x1a4
-    command: rdmsrx -f 3:0 0x1a4  # MSR_MISC_FEATURE_CONTROL: L2 and DCU Prefetcher enabled/disabled
+    command: rdmsrx -f 7:0 0x1a4  # MSR_PREFETCH_CONTROL: L2, DCU, and AMP Prefetchers enabled/disabled
     superuser: true
     modprobe: msr
     parallel: true
