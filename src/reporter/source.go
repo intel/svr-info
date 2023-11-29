@@ -613,44 +613,48 @@ func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string, socketsStr
 }
 
 func (s *Source) getPrefetchers(uarch string) (val string) {
-	prefetchers := s.valFromRegexSubmatch("rdmsr 0x1a4", `^([0-9a-fA-F]+)`)
-	if prefetchers != "" {
-		prefetcherInt, err := strconv.ParseInt(prefetchers, 16, 64)
-		if err == nil {
-			// MSR_PREFETCH_CONTROL
-			// prefetchers are enabled when associated bit is 0
-			// bit 0 -- 1: "L2 HW"
-			// bit 1 -- 2: "L2 Adj."
-			// bit 2 -- 4: "DCU HW"
-			// bit 3 -- 8: "DCU IP"
-			// bit 4 -- reserved
-			// bit 5 -- 32: "AMP" - Adapative Multipath Probability (SPR, EMR, GNR)
-			// bit 6-63 -- reserved
-			prefNames := []string{"L2 HW", "L2 Adj.", "DCU HW", "DCU IP", ""} // all Xeons
-			if strings.Contains(uarch, "SPR") || strings.Contains(uarch, "EMR") || strings.Contains(uarch, "GNR") {
-				prefNames = append(prefNames, "AMP")
+	// MSR_PREFETCH_CONTROL
+	// prefetchers are enabled when associated bit is 0
+	prefetcherDefs := []struct {
+		name   string
+		msr    string
+		bit    int
+		uarchs string
+	}{
+		{name: "L2 HW", msr: "0x1a4", bit: 0, uarchs: "all"},
+		{name: "L2 Adj.", msr: "0x1a4", bit: 1, uarchs: "all"},
+		{name: "DCU HW", msr: "0x1a4", bit: 2, uarchs: "all"},
+		{name: "DCU IP", msr: "0x1a4", bit: 3, uarchs: "all"},
+		{name: "AMP", msr: "0x1a4", bit: 5, uarchs: "SPR_EMR_GNR"},
+		{name: "Homeless", msr: "0x6d", bit: 14, uarchs: "SPR_EMR_GNR"},
+		{name: "LLC", msr: "0x6d", bit: 42, uarchs: "SPR_EMR_GNR"},
+	}
+	var prefList []string
+	for _, pf := range prefetcherDefs {
+		if pf.uarchs == "all" || strings.Contains(pf.uarchs, uarch[:3]) {
+			msrVal := s.valFromRegexSubmatch(fmt.Sprintf("rdmsr %s", pf.msr), `^([0-9a-fA-F]+)`)
+			if msrVal == "" {
+				continue
 			}
-			var prefList []string
-			for i, pref := range prefNames {
-				if pref == "" {
-					continue
-				}
-				bitMask := int64(math.Pow(2, float64(i)))
-				var enabledDisabled string
-				// enabled if bit is zero
-				if bitMask&prefetcherInt == 0 {
-					enabledDisabled = "Enabled"
-				} else {
-					enabledDisabled = "Disabled"
-				}
-				prefList = append(prefList, fmt.Sprintf("%s: %s", pref, enabledDisabled))
+			msrInt, err := strconv.ParseInt(msrVal, 16, 64)
+			if err != nil {
+				continue
 			}
-			if len(prefList) > 0 {
-				val = strings.Join(prefList, ", ")
+			bitMask := int64(math.Pow(2, float64(pf.bit)))
+			var enabledDisabled string
+			// enabled if bit is zero
+			if bitMask&msrInt == 0 {
+				enabledDisabled = "Enabled"
 			} else {
-				val = "None"
+				enabledDisabled = "Disabled"
 			}
+			prefList = append(prefList, fmt.Sprintf("%s: %s", pf.name, enabledDisabled))
 		}
+	}
+	if len(prefList) > 0 {
+		val = strings.Join(prefList, ", ")
+	} else {
+		val = "None"
 	}
 	return
 }
@@ -659,11 +663,9 @@ func (s *Source) getPrefetchers(uarch string) (val string) {
 ....................	bit		default
 "BI to IFU",			2		0
 "EnableDBPForF",		3		0
-"NoHmlessPref",			14		0
 "DisFBThreadSlicing",	15		1
 "DISABLE_FASTGO",		27		0
 "SpecI2MEn",			30		1
-"disable_llpref",		42		0
 "DPT_DISABLE",			45		0
 */
 func (s *Source) getFeatures() (vals []string) {
@@ -671,7 +673,7 @@ func (s *Source) getFeatures() (vals []string) {
 	if features != "" {
 		featureInt, err := strconv.ParseInt(features, 16, 64)
 		if err == nil {
-			for _, bit := range []int{2, 3, 14, 15, 27, 30, 42, 45} {
+			for _, bit := range []int{2, 3, 15, 27, 30, 45} {
 				bitMask := int64(math.Pow(2, float64(bit)))
 				vals = append(vals, fmt.Sprintf("%d", bitMask&featureInt>>bit))
 			}

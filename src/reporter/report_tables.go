@@ -2070,11 +2070,9 @@ func newFeatureTable(sources []*Source, category TableCategory) (table *Table) {
 			ValueNames: []string{
 				"BI_2IFU_4_F_VICTIMS_EN",
 				"EnableDBPForF",
-				"NoHmlessPref",
 				"FBThreadSlicing",
 				"DISABLE_FASTGO",
 				"SpecI2MEn",
-				"disable_llpref",
 				"DPT_DISABLE",
 			},
 		}
