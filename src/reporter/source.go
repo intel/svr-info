@@ -493,9 +493,9 @@ func (s *Source) getCacheWays(uArch string) (cacheWays []int64) {
 		wayCount = 11
 	} else if uArch == "ICX" {
 		wayCount = 12
-	} else if uArch == "SPR_MCC" || uArch == "SPR_XCC" {
+	} else if uArch == "SPR_MCC" || uArch == "SPR_XCC" || uArch == "EMR_MCC" {
 		wayCount = 15
-	} else if uArch == "EMR_MCC" || uArch == "EMR_XCC" {
+	} else if uArch == "EMR_XCC" {
 		wayCount = 20
 	} else {
 		return
