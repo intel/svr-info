@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"sync"
 
 	"github.com/Knetic/govaluate"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -15,8 +16,29 @@ type Metric struct {
 	Value float64
 }
 
+// lock to protect metric variable map that holds the event group where a variable value will be retrieved
+var metricVariablesLock = sync.RWMutex{}
+
 // for each variable in a metric, set the best group from which to get its value
 func loadMetricBestGroups(metric MetricDefinition, frame EventFrame) (err error) {
+	// one thread at a time through this function, since it updates the metric variables map and this only needs to be done one time
+	metricVariablesLock.Lock()
+	defer metricVariablesLock.Unlock()
+	// only load event groups one time for each metric
+	loadGroups := false
+	for variableName := range metric.Variables {
+		if metric.Variables[variableName] == -1 { // group not yet set
+			loadGroups = true
+			break
+		}
+		if metric.Variables[variableName] == -2 { // tried previously and failed, don't try again
+			err = fmt.Errorf("metric variable group assignment previously failed, skipping: %s", variableName)
+			return
+		}
+	}
+	if !loadGroups {
+		return // nothing to do, already loaded
+	}
 	allVariableNames := mapset.NewSetFromMapKeys(metric.Variables)
 	remainingVariableNames := allVariableNames.Clone()
 	for {
@@ -58,28 +80,9 @@ func loadMetricBestGroups(metric MetricDefinition, frame EventFrame) (err error)
 // get the variable values that will be used to evaluate the metric's expression
 func getExpressionVariableValues(metric MetricDefinition, frame EventFrame, previousTimestamp float64, metadata Metadata) (variables map[string]interface{}, err error) {
 	variables = make(map[string]interface{})
-	// if first frame, we'll need to determine the best groups from which to get event values for the variables
-	loadGroups := false
-	for variableName := range metric.Variables {
-		if metric.Variables[variableName] == -1 { // group not yet set
-			loadGroups = true
-		}
-		if metric.Variables[variableName] == -2 { // tried previously and failed, don't try again
-			err = fmt.Errorf("metric variable group assignment previously failed, skipping: %s", variableName)
-			if gCmdLineArgs.veryVerbose {
-				log.Print(err.Error())
-			}
-			return
-		}
-	}
-	if loadGroups {
-		if err = loadMetricBestGroups(metric, frame); err != nil {
-			err = fmt.Errorf("at least one of the variables couldn't be assigned to a group: %v", err)
-			if gCmdLineArgs.veryVerbose {
-				log.Print(err.Error())
-			}
-			return
-		}
+	if err = loadMetricBestGroups(metric, frame); err != nil {
+		err = fmt.Errorf("at least one of the variables couldn't be assigned to a group: %v", err)
+		return
 	}
 	// set the variable values to be used in the expression evaluation
 	for variableName := range metric.Variables {
@@ -150,7 +153,7 @@ func evaluateExpression(metric MetricDefinition, variables map[string]interface{
 		}
 	}()
 	if result, err = metric.Evaluable.Evaluate(variables); err != nil {
-		log.Printf("%v : %s : %s", err, metric.Name, metric.Expression)
+		err = fmt.Errorf("%v : %s : %s", err, metric.Name, metric.Expression)
 	}
 	return
 }
@@ -170,12 +173,14 @@ func processEvents(perfEvents [][]byte, metricDefinitions []MetricDefinition, pr
 			if gCmdLineArgs.verbose {
 				log.Printf("failed to get expression variable values: %v", err)
 			}
+			err = nil
 		} else {
 			var result interface{}
 			if result, err = evaluateExpression(metricDef, variables); err != nil {
 				if gCmdLineArgs.verbose {
 					log.Printf("failed to evaluate expression: %v", err)
 				}
+				err = nil
 			} else {
 				metric.Value = result.(float64)
 			}

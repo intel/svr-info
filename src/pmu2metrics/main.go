@@ -16,21 +16,30 @@ import (
 )
 
 type CmdLineArgs struct {
-	showHelp          bool
-	showVersion       bool
-	timeout           int // seconds
+	showHelp        bool
+	showVersion     bool
+	showMetricNames bool
+	timeout         int // seconds
+	// process options
+	processMode    bool
+	pidList        string
+	processFilter  string
+	processCount   int
+	processRefresh int // secons
+	// advanced options
 	eventFilePath     string
 	metricFilePath    string
 	perfPrintInterval int // milliseconds
 	perfMuxInterval   int // milliseconds
-	printCSV          bool
-	verbose           bool
-	veryVerbose       bool
-	metadataFilePath  string
-	perfStatFilePath  string
-	showMetricNames   bool
-	metricsList       string
-	printWide         bool
+	// output format options
+	metricsList string
+	printWide   bool
+	printCSV    bool
+	verbose     bool
+	veryVerbose bool
+	// debugging options
+	metadataFilePath string
+	perfStatFilePath string
 }
 
 // globals
@@ -96,9 +105,99 @@ func getPerfPath() (path string, tempDir string, err error) {
 	return
 }
 
+func printMetrics(process Process, metrics []Metric, frameCount int, frameTimestamp float64) {
+	if gCmdLineArgs.printCSV {
+		if frameCount == 1 {
+			// print "Timestamp,PID,CMD,", then metric names as CSV headers
+			fmt.Print("Timestamp,PID,CMD,")
+			var names []string
+			for _, metric := range metrics {
+				names = append(names, metric.Name)
+			}
+			fmt.Printf("%s\n", strings.Join(names, ","))
+		}
+		fmt.Printf("%d,%s,%s,", gCollectionStartTime.Unix()+int64(frameTimestamp), process.pid, process.comm)
+		var values []string
+		for _, metric := range metrics {
+			values = append(values, strconv.FormatFloat(metric.Value, 'g', 8, 64))
+		}
+		fmt.Printf("%s\n", strings.Join(values, ","))
+	} else { // human readable output
+		if !gCmdLineArgs.printWide {
+			fmt.Println("--------------------------------------------------------------------------------------")
+			fmt.Printf("- Metrics captured at %s\n", gCollectionStartTime.Add(time.Second*time.Duration(int(frameTimestamp))).UTC())
+			if process.pid != "" {
+				fmt.Printf("- PID: %s\n", process.pid)
+				fmt.Printf("- CMD: %s\n", process.comm)
+			}
+			fmt.Println("--------------------------------------------------------------------------------------")
+			fmt.Printf("%-70s %15s\n", "metric", "value")
+			fmt.Printf("%-70s %15s\n", "------------------------", "----------")
+			for _, metric := range metrics {
+				fmt.Printf("%-70s %15s\n", metric.Name, strconv.FormatFloat(metric.Value, 'g', 4, 64))
+			}
+		} else { // wide format
+			var names []string
+			var values []float64
+			for _, metric := range metrics {
+				names = append(names, metric.Name)
+				values = append(values, metric.Value)
+			}
+			minColWidth := 6
+			colSpacing := 3
+			if frameCount == 1 { // print headers
+				header := "Timestamp    " // 10 + 3
+				if process.pid != "" {
+					header += "PID       "         // 7 + 3
+					header += "Command           " // 15 + 3
+				}
+				for _, name := range names {
+					extend := 0
+					if len(name) < minColWidth {
+						extend = minColWidth - len(name)
+					}
+					header += fmt.Sprintf("%s%*s%*s", name, extend, "", colSpacing, "")
+				}
+				fmt.Println(header)
+			}
+			// handle values
+			TimestampColWidth := 10
+			formattedTimestamp := fmt.Sprintf("%d", gCollectionStartTime.Unix()+int64(frameTimestamp))
+			row := fmt.Sprintf("%s%*s%*s", formattedTimestamp, TimestampColWidth-len(formattedTimestamp), "", colSpacing, "")
+			if process.pid != "" {
+				PIDColWidth := 7
+				commandColWidth := 15
+				row += fmt.Sprintf("%s%*s%*s", process.pid, PIDColWidth-len(process.pid), "", colSpacing, "")
+				var command string
+				if len(process.comm) <= commandColWidth {
+					command = process.comm
+				} else {
+					command = process.comm[:commandColWidth]
+				}
+				row += fmt.Sprintf("%s%*s%*s", command, commandColWidth-len(command), "", colSpacing, "")
+			}
+			// handle the metric values
+			for i, value := range values {
+				colWidth := max(len(names[i]), minColWidth)
+				formattedVal := fmt.Sprintf("%.2f", value)
+				row += fmt.Sprintf("%s%*s%*s", formattedVal, colWidth-len(formattedVal), "", colSpacing, "")
+			}
+			fmt.Println(row)
+		}
+	}
+}
+
 // build perf args from event groups
-func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
-	args = append(args, []string{"stat", "-I", fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval), "-a", "-j", "-e"}...)
+func getPerfCommandArgs(pid string, timeout int, eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
+	args = append(args, "stat", "-I", fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval), "-j")
+	// add pid, if applicable
+	if pid != "" {
+		args = append(args, "-p", pid)
+	} else {
+		args = append(args, "-a") // system-wide collection
+	}
+	// add events to collect
+	args = append(args, "-e")
 	var groups []string
 	for _, group := range eventGroups {
 		var events []string
@@ -108,34 +207,87 @@ func getPerfCommandArgs(eventGroups []GroupDefinition, metadata Metadata) (args 
 		groups = append(groups, fmt.Sprintf("{%s}", strings.Join(events, ",")))
 	}
 	args = append(args, fmt.Sprintf("'%s'", strings.Join(groups, ",")))
-	if gCmdLineArgs.timeout > 0 {
-		args = append(args, "sleep")
-		args = append(args, fmt.Sprintf("%d", gCmdLineArgs.timeout))
+	// add timeout, if applicable
+	if timeout != 0 {
+		args = append(args, "sleep", fmt.Sprintf("%d", timeout))
 	}
 	return
 }
 
-func doWork(perfPath string, eventGroups []GroupDefinition, metricDefinitions []MetricDefinition, metadata Metadata) (err error) {
-	var args []string
-	if args, err = getPerfCommandArgs(eventGroups, metadata); err != nil {
-		log.Printf("failed to assemble perf args: %v", err)
-		return
+func getPerfCommands(perfPath string, eventGroups []GroupDefinition, metadata Metadata) (processes []Process, perfCommands []*exec.Cmd, err error) {
+	if gCmdLineArgs.processMode {
+		if gCmdLineArgs.pidList != "" {
+			pids := strings.Split(gCmdLineArgs.pidList, ",")
+			for _, pid := range pids {
+				if processExists(pid) {
+					var process Process
+					if process, err = getProcess(pid); err != nil {
+						return
+					}
+					processes = append(processes, process)
+				}
+			}
+		} else {
+			if processes, err = getHotProcesses(gCmdLineArgs.processCount, gCmdLineArgs.processFilter); err != nil {
+				return
+			}
+		}
+		if len(processes) == 0 {
+			err = fmt.Errorf("no PIDs selected")
+			return
+		}
+		var timeout int
+		if gCmdLineArgs.timeout > 0 && gCmdLineArgs.timeout < gCmdLineArgs.processRefresh {
+			timeout = gCmdLineArgs.timeout
+		} else {
+			timeout = gCmdLineArgs.processRefresh
+		}
+		for _, process := range processes {
+			var args []string
+			if args, err = getPerfCommandArgs(process.pid, timeout, eventGroups, metadata); err != nil {
+				err = fmt.Errorf("failed to assemble perf args: %v", err)
+				return
+			}
+			cmd := exec.Command(perfPath, args...)
+			perfCommands = append(perfCommands, cmd)
+		}
+	} else {
+		var args []string
+		if args, err = getPerfCommandArgs("", gCmdLineArgs.timeout, eventGroups, metadata); err != nil {
+			err = fmt.Errorf("failed to assemble perf args: %v", err)
+			return
+		}
+		cmd := exec.Command(perfPath, args...)
+		perfCommands = append(perfCommands, cmd)
 	}
-	cmd := exec.Command(perfPath, args...)
+	return
+}
+
+// MetricFrame -- the metrics values and associated metadata
+type MetricFrame struct {
+	process    Process
+	metrics    []Metric
+	frameCount int
+	timestamp  float64
+}
+
+func runPerf(process Process, cmd *exec.Cmd, metricDefinitions []MetricDefinition, metadata Metadata, frameChannel chan MetricFrame, errorChannel chan error) {
+	var err error
+	defer func() { errorChannel <- err }()
 	reader, _ := cmd.StderrPipe()
 	if gCmdLineArgs.veryVerbose {
+		log.Printf("PID: %s", process.pid)
 		log.Print(cmd)
 	}
 	scanner := bufio.NewScanner(reader)
 	var outputLines [][]byte
-	// start perf stat
+	// start perf
 	if err = cmd.Start(); err != nil {
-		log.Printf("failed to run perf: %v", err)
+		err = fmt.Errorf("failed to run perf: %v", err)
+		log.Printf("%v", err)
 		return
 	}
-	// get current time for use in setting timestamps on output
-	gCollectionStartTime = time.Now()
-	// Use a timer to determine when to send a frame of events back to the caller (over the eventChannel).
+	// Use a timer to determine when we received an entire frame of events from perf
 	// The timer will expire when no lines (events) have been received from perf for more than 100ms. This
 	// works because perf writes the events to stderr in a burst every collection interval, e.g., 5 seconds.
 	// When the timer expires, this code assumes that perf is done writing events to stderr.
@@ -153,13 +305,13 @@ func doWork(perfPath string, eventGroups []GroupDefinition, metricDefinitions []
 					return
 				}
 				frameCount += 1
-				printMetrics(metrics, frameCount, frameTimestamp)
+				frameChannel <- MetricFrame{process, metrics, frameCount, frameTimestamp}
 				outputLines = [][]byte{} // empty it
 			}
 		}
 	}()
-	// read perf stat output
-	for scanner.Scan() { // blocks waiting for next token (line)
+	// read perf output
+	for scanner.Scan() { // blocks waiting for next token (line), loop terminated (Scan returns false) when file empty/closed
 		line := scanner.Text()
 		if gCmdLineArgs.veryVerbose {
 			log.Print(line)
@@ -175,23 +327,75 @@ func doWork(perfPath string, eventGroups []GroupDefinition, metricDefinitions []
 			return
 		}
 		frameCount += 1
-		printMetrics(metrics, frameCount, frameTimestamp)
+		frameChannel <- MetricFrame{process, metrics, frameCount, frameTimestamp}
 	}
 	// wait for perf stat to exit
 	if err = cmd.Wait(); err != nil {
-		if strings.Contains(err.Error(), "signal") {
+		if strings.Contains(err.Error(), "signal") { // perf received kill signal, ignore
 			err = nil
 		} else {
-			log.Printf("error from perf stat on exit: %v", err)
+			err = fmt.Errorf("error from perf on exit: %v", err)
+			log.Printf("%v", err)
 		}
 		return
 	}
+}
+
+func receiveMetrics(frameChannel chan MetricFrame) {
+	totalFrameCount := 0
+	for frame := range frameChannel {
+		totalFrameCount++
+		printMetrics(frame.process, frame.metrics, totalFrameCount, frame.timestamp)
+	}
+}
+
+func doWork(perfPath string, eventGroups []GroupDefinition, metricDefinitions []MetricDefinition, metadata Metadata) (err error) {
+	refreshPIDs := gCmdLineArgs.processMode && gCmdLineArgs.pidList == ""
+	errorChannel := make(chan error)
+	frameChannel := make(chan MetricFrame)
+	totalRuntimeSeconds := 0 // only relevant in process Mode
+	go receiveMetrics(frameChannel)
+	for {
+		// get current time for use in setting timestamps on output
+		gCollectionStartTime = time.Now()
+		var perfCommands []*exec.Cmd
+		var processes []Process
+		if processes, perfCommands, err = getPerfCommands(perfPath, eventGroups, metadata); err != nil {
+			return
+		}
+		for i, cmd := range perfCommands {
+			var process Process
+			if len(processes) > i {
+				process = processes[i]
+			}
+			go runPerf(process, cmd, metricDefinitions, metadata, frameChannel, errorChannel)
+		}
+		// wait for all runPerf goroutines to finish
+		for range perfCommands {
+			err = <-errorChannel // TODO: capture all errors
+		}
+		totalRuntimeSeconds += gCmdLineArgs.processRefresh
+		if !refreshPIDs || (gCmdLineArgs.timeout != 0 && totalRuntimeSeconds >= gCmdLineArgs.timeout) {
+			break
+		}
+	}
+	close(frameChannel) // trigger receiveMetrics to end
 	return
 }
 
 // Function used for testing and debugging
 // Plays back events present in a file that contains perf stat output
-func doWorkDebug(perfStatFilePath string, metricDefinitions []MetricDefinition, metadata Metadata) (err error) {
+func doWorkDebug(perfStatFilePath string, eventGroups []GroupDefinition, metricDefinitions []MetricDefinition, metadata Metadata) (err error) {
+	gCollectionStartTime = time.Now()
+	var perfCommands []*exec.Cmd
+	var processes []Process
+	if processes, perfCommands, err = getPerfCommands("perf", nil /*eventGroups*/, metadata); err != nil {
+		return
+	}
+	for _, cmd := range perfCommands {
+		log.Print(cmd)
+	}
+	log.Print(processes)
 	file, err := os.Open(perfStatFilePath)
 	if err != nil {
 		return
@@ -220,7 +424,11 @@ func doWorkDebug(perfStatFilePath string, metricDefinitions []MetricDefinition, 
 					return
 				}
 				frameCount++
-				printMetrics(metrics, frameCount, frameTimestamp)
+				var process Process
+				if gCmdLineArgs.processMode {
+					process = Process{pid: fmt.Sprintf("%d", frameCount), cmd: "long command", comm: "process name is big"}
+				}
+				printMetrics(process, metrics, frameCount, frameTimestamp)
 				outputLines = [][]byte{} // empty it
 			}
 		}
@@ -234,7 +442,11 @@ func doWorkDebug(perfStatFilePath string, metricDefinitions []MetricDefinition, 
 			return
 		}
 		frameCount += 1
-		printMetrics(metrics, frameCount, frameTimestamp)
+		var process Process
+		if gCmdLineArgs.processMode {
+			process = Process{pid: fmt.Sprintf("%d", frameCount), cmd: "long command", comm: "process name is big"}
+		}
+		printMetrics(process, metrics, frameCount, frameTimestamp)
 	}
 	err = scanner.Err()
 	return
@@ -249,20 +461,34 @@ func showUsage() {
 	usage := `
   -h, --help
   	Print this usage message and exit.
-  --csv
-  	CSV formatted output.
-  --list
-  	Show metric names available on this platform and exit.
-  --metrics <metric names>
-  	Metric names to include in output. (Quoted and comma separated list.)
-  --wide
-  	Wide formatted output. Best when a few selected metrics are printed.
-  -t, --timeout <seconds>
-  	Number of seconds to run. By default, runs indefinitely.
-  -v[v]
-  	Enable verbose logging.
   -V, --version
   	Show program version and exit.
+  --list
+  	Show metric names available on this platform and exit.
+
+Collection Options:
+  -t, --timeout <seconds>
+  	Number of seconds to run (default: indefinitely).
+  --per-process
+  	Enable process mode. Associates metrics with processes.
+  -p, --pid <pids>
+  	Comma separated list of pids. Only valid when in process mode (default: None).
+  --process-filter <regex>
+  	Regular expression used to match process names. Valid only when in process mode and --pid not specified (default: None).
+  --process-count <count>
+  	The number of processes to monitor. Used only when in process mode and --pid not specified (default: 5).
+  --process-refesh <seconds>
+	The number of seconds to run before refreshing the process list. Used only when in process mode and --pid not specified (default: 30).
+
+Output Options:
+  --metrics <metric names>
+  	Metric names to include in output. (Quoted and comma separated list.)
+  --csv
+  	CSV formatted output. Best for parsing.
+  --wide
+  	Wide formatted output. Best used when a small number of metrics are printed.
+  -v[v]
+  	Enable verbose, or very verbose (-vv) logging.
 
 Advanced Options:
   -e, --eventfile <path>
@@ -270,22 +496,22 @@ Advanced Options:
   -m, --metricfile <path>
   	Path to metric definition file.
   -i, --interval <milliseconds>
-  	Event collection interval in milliseconds
+  	Event collection interval in milliseconds (default: 5000).
   -x, --muxinterval <milliseconds>
-  	Multiplexing interval in milliseconds`
+  	Multiplexing interval in milliseconds (default: 125).`
 	fmt.Println(usage)
 }
 
 func validateArgs() (err error) {
 	if gCmdLineArgs.metadataFilePath != "" {
 		if gCmdLineArgs.perfStatFilePath == "" {
-			err = fmt.Errorf("-p and -d options must both be specified")
+			err = fmt.Errorf("-perfstat and -metadata options must both be specified")
 			return
 		}
 	}
 	if gCmdLineArgs.perfStatFilePath != "" {
 		if gCmdLineArgs.metadataFilePath == "" {
-			err = fmt.Errorf("-p and -d options must both be specified")
+			err = fmt.Errorf("-perfstat and -metadata options must both be specified")
 			return
 		}
 	}
@@ -293,62 +519,56 @@ func validateArgs() (err error) {
 		err = fmt.Errorf("-csv and -wide are mutually exclusive, choose one")
 		return
 	}
+	if gCmdLineArgs.pidList != "" && !gCmdLineArgs.processMode {
+		err = fmt.Errorf("-pid only valid in process mode")
+		return
+	}
+	if gCmdLineArgs.processFilter != "" && !gCmdLineArgs.processMode {
+		err = fmt.Errorf("-pfilter only valid in process mode")
+		return
+	}
+	if gCmdLineArgs.pidList != "" && gCmdLineArgs.processFilter != "" {
+		err = fmt.Errorf("-pid and -pfilter are mutually exclusive")
+		return
+	}
 	return
 }
 
-func printMetrics(metrics []Metric, frameCount int, frameTimestamp float64) {
-	if gCmdLineArgs.printCSV {
-		if frameCount == 1 {
-			// print "Timestamp,", then metric names as CSV headers
-			fmt.Print("Timestamp,")
-			var names []string
-			for _, metric := range metrics {
-				names = append(names, metric.Name)
-			}
-			fmt.Printf("%s\n", strings.Join(names, ","))
-		}
-		fmt.Printf("%d,", gCollectionStartTime.Unix()+int64(frameTimestamp))
-		var values []string
-		for _, metric := range metrics {
-			values = append(values, strconv.FormatFloat(metric.Value, 'g', 8, 64))
-		}
-		fmt.Printf("%s\n", strings.Join(values, ","))
-	} else { // human readable output
-		if !gCmdLineArgs.printWide {
-			fmt.Println("--------------------------------------------------------------------------------------")
-			fmt.Printf("- Metrics captured at %s\n", gCollectionStartTime.Add(time.Second*time.Duration(int(frameTimestamp))).UTC())
-			fmt.Println("--------------------------------------------------------------------------------------")
-			fmt.Printf("%-70s %15s\n", "metric", "value")
-			fmt.Printf("%-70s %15s\n", "------------------------", "----------")
-			for _, metric := range metrics {
-				fmt.Printf("%-70s %15s\n", metric.Name, strconv.FormatFloat(metric.Value, 'g', 4, 64))
-			}
-		} else { // wide format
-			var names []string
-			var values []float64
-			for _, metric := range metrics {
-				names = append(names, metric.Name)
-				values = append(values, metric.Value)
-			}
-			if frameCount == 1 { // print headers
-				header := "Timestamp    "
-				header += strings.Join(names, "   ")
-				fmt.Printf("%s\n", header)
-			}
-			// handle timestamp
-			colWidth := 10
-			colSpacing := 3
-			val := fmt.Sprintf("%d", gCollectionStartTime.Unix()+int64(frameTimestamp))
-			row := fmt.Sprintf("%s%*s%*s", val, colWidth-len(val), "", colSpacing, "")
-			// handle the metric values
-			for i, value := range values {
-				colWidth = len(names[i])
-				val = fmt.Sprintf("%.2f", value)
-				row += fmt.Sprintf("%s%*s%*s", val, colWidth-len(val), "", colSpacing, "")
-			}
-			fmt.Println(row)
-		}
-	}
+func configureArgs() {
+	flag.Usage = func() { showUsage() } // override default usage output
+	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "")
+	flag.BoolVar(&gCmdLineArgs.showHelp, "help", false, "")
+	flag.BoolVar(&gCmdLineArgs.showVersion, "V", false, "")
+	flag.BoolVar(&gCmdLineArgs.showVersion, "version", false, "")
+	flag.BoolVar(&gCmdLineArgs.showMetricNames, "l", false, "")
+	flag.BoolVar(&gCmdLineArgs.showMetricNames, "list", false, "")
+	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
+	flag.BoolVar(&gCmdLineArgs.printCSV, "csv", false, "")
+	flag.BoolVar(&gCmdLineArgs.printWide, "wide", false, "")
+	flag.BoolVar(&gCmdLineArgs.verbose, "v", false, "")
+	flag.BoolVar(&gCmdLineArgs.veryVerbose, "vv", false, "")
+	flag.IntVar(&gCmdLineArgs.timeout, "t", 0, "")
+	flag.IntVar(&gCmdLineArgs.timeout, "timeout", 0, "")
+	// process mode options
+	flag.BoolVar(&gCmdLineArgs.processMode, "per-process", false, "")
+	flag.StringVar(&gCmdLineArgs.pidList, "p", "", "")
+	flag.StringVar(&gCmdLineArgs.pidList, "pid", "", "")
+	flag.StringVar(&gCmdLineArgs.processFilter, "process-filter", "", "")
+	flag.IntVar(&gCmdLineArgs.processCount, "process-count", 5, "")
+	flag.IntVar(&gCmdLineArgs.processRefresh, "process-refresh", 30, "")
+	// advanced options
+	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "i", 5000, "")
+	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "interval", 5000, "")
+	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "x", 125, "")
+	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "muxinterval", 125, "")
+	flag.StringVar(&gCmdLineArgs.eventFilePath, "e", "", "")
+	flag.StringVar(&gCmdLineArgs.eventFilePath, "eventfile", "", "")
+	flag.StringVar(&gCmdLineArgs.metricFilePath, "m", "", "")
+	flag.StringVar(&gCmdLineArgs.metricFilePath, "metricfile", "", "")
+	// debugging options
+	flag.StringVar(&gCmdLineArgs.metadataFilePath, "metadata", "", "")
+	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "perfstat", "", "")
+	flag.Parse()
 }
 
 const (
@@ -358,32 +578,7 @@ const (
 )
 
 func mainReturnWithCode() int {
-	flag.Usage = func() { showUsage() } // override default usage output
-	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "")
-	flag.BoolVar(&gCmdLineArgs.showHelp, "help", false, "")
-	flag.BoolVar(&gCmdLineArgs.showVersion, "V", false, "")
-	flag.BoolVar(&gCmdLineArgs.showVersion, "version", false, "")
-	flag.BoolVar(&gCmdLineArgs.showMetricNames, "l", false, "")
-	flag.BoolVar(&gCmdLineArgs.showMetricNames, "list", false, "")
-	flag.IntVar(&gCmdLineArgs.timeout, "t", 0, "")
-	flag.IntVar(&gCmdLineArgs.timeout, "timeout", 0, "")
-	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "i", 5000, "")
-	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "interval", 5000, "")
-	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "x", 125, "")
-	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "muxinterval", 125, "")
-	flag.StringVar(&gCmdLineArgs.eventFilePath, "e", "", "")
-	flag.StringVar(&gCmdLineArgs.eventFilePath, "eventfile", "", "")
-	flag.StringVar(&gCmdLineArgs.metricFilePath, "m", "", "")
-	flag.StringVar(&gCmdLineArgs.metricFilePath, "metricfile", "", "")
-	flag.BoolVar(&gCmdLineArgs.printCSV, "csv", false, "")
-	flag.BoolVar(&gCmdLineArgs.printWide, "wide", false, "")
-	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
-	flag.BoolVar(&gCmdLineArgs.verbose, "v", false, "")
-	flag.BoolVar(&gCmdLineArgs.veryVerbose, "vv", false, "")
-	// debugging options
-	flag.StringVar(&gCmdLineArgs.metadataFilePath, "d", "", "")
-	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "p", "", "")
-	flag.Parse()
+	configureArgs()
 	err := validateArgs()
 	if err != nil {
 		log.Printf("Invalid argument error: %v", err)
@@ -470,10 +665,17 @@ func mainReturnWithCode() int {
 		log.Printf("failed to configure metrics: %v", err)
 		return exitError
 	}
+	var groupDefinitions []GroupDefinition
+	if groupDefinitions, err = loadEventDefinitions(gCmdLineArgs.eventFilePath, metadata); err != nil {
+		log.Printf("failed to load event definitions: %v", err)
+		return exitError
+	}
+	if !gCmdLineArgs.printCSV {
+		fmt.Print(".")
+	}
 	if gCmdLineArgs.perfStatFilePath != "" { // testing/debugging flow
 		fmt.Print(".\n")
-		gCollectionStartTime = time.Now()
-		if err = doWorkDebug(gCmdLineArgs.perfStatFilePath, metricDefinitions, metadata); err != nil {
+		if err = doWorkDebug(gCmdLineArgs.perfStatFilePath, groupDefinitions, metricDefinitions, metadata); err != nil {
 			log.Printf("%v", err)
 			return exitError
 		}
@@ -492,14 +694,6 @@ func mainReturnWithCode() int {
 		}
 		if gCmdLineArgs.verbose {
 			log.Printf("Using perf at %s.", perfPath)
-		}
-		var groupDefinitions []GroupDefinition
-		if groupDefinitions, err = loadEventDefinitions(gCmdLineArgs.eventFilePath, metadata); err != nil {
-			log.Printf("failed to load event definitions: %v", err)
-			return exitError
-		}
-		if !gCmdLineArgs.printCSV {
-			fmt.Print(".")
 		}
 		var nmiWatchdog string
 		if nmiWatchdog, err = getNmiWatchdog(); err != nil {

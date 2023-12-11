@@ -43,11 +43,17 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 		return
 	}
 	// short-circuit off-core response events
-	if event.Device == "cpu" && strings.HasPrefix(event.Name, "OCR") && isUncoreSupported(metadata) {
+	if event.Device == "cpu" && strings.HasPrefix(event.Name, "OCR") && isUncoreSupported(metadata) && !gCmdLineArgs.processMode {
 		return
 	}
-	// exclude uncore events when their corresponding device is not found
+	// exclude uncore events when
+	// - their corresponding device is not found
+	// - not in system-wide collection mode
 	if event.Device != "cpu" && event.Device != "" {
+		if gCmdLineArgs.processMode {
+			collectable = false
+			return
+		}
 		deviceExists := false
 		for uncoreDeviceName := range metadata.DeviceIDs {
 			if event.Device == uncoreDeviceName {
@@ -69,7 +75,12 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 		return
 	}
 	// no uncore means we're on a VM where cpu fixed cycles are likely not supported
-	if !isUncoreSupported(metadata) && strings.Contains(event.Name, "cpu-cycles") {
+	if strings.Contains(event.Name, "cpu-cycles") && !isUncoreSupported(metadata) {
+		collectable = false
+		return
+	}
+	// no cstate and power events in process mode
+	if gCmdLineArgs.processMode && (strings.Contains(event.Name, "cstate_") || strings.Contains(event.Name, "power/energy")) {
 		collectable = false
 		return
 	}
