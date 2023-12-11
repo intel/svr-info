@@ -1317,7 +1317,7 @@ func newDIMMPopulationTable(sources []*Source, dimmTable *Table, cpusInfo *cpu.C
 		} else {
 			vendor := source.valFromDmiDecodeRegexSubmatch("0", `^\s*Vendor:\s*(.+?)$`)
 			sockets, _ := strconv.Atoi(source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`))
-			if vendor == "Dell" {
+			if strings.Contains(vendor, "Dell") {
 				err := deriveDIMMInfoDell(&hv.Values, sockets, channels)
 				if err != nil {
 					log.Printf("%v", err)
