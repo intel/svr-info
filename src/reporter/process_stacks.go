@@ -45,14 +45,13 @@ func (p *ProcessStacks) parsePerfFolded(folded string) (err error) {
 }
 
 func (p *ProcessStacks) parseAsyncProfilerFolded(folded string, processName string) (err error) {
-	re := regexp.MustCompile(`^(.+) (\d+)$`)
 	for _, line := range strings.Split(folded, "\n") {
-		match := re.FindStringSubmatch(line)
-		if match == nil {
+		splitAt := strings.LastIndex(line, " ")
+		if splitAt == -1 {
 			continue
 		}
-		stack := match[1]
-		count, err := strconv.Atoi(match[2])
+		stack := line[:splitAt]
+		count, err := strconv.Atoi(line[splitAt+1:])
 		if err != nil {
 			continue
 		}
@@ -98,11 +97,13 @@ func (p *ProcessStacks) averageDepth(processName string) (average float64) {
 }
 
 func (p *ProcessStacks) dumpFolded() (folded string) {
+	var sb strings.Builder
 	for processName, stacks := range *p {
 		for stack, stackCount := range stacks {
-			folded += fmt.Sprintf("%s;%s %d\n", processName, stack, stackCount)
+			sb.WriteString(fmt.Sprintf("%s;%s %d\n", processName, stack, stackCount))
 		}
 	}
+	folded = sb.String()
 	return
 }
 

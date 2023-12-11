@@ -1001,12 +1001,16 @@ func (s *Source) getJavaFolded() (folded string) {
 	re := regexp.MustCompile(`^async-profiler (\d+) (.*)$`)
 	for header, stacks := range asyncProfilerOutput {
 		if stacks == "" {
-			log.Printf("no stacks for: %s", header)
+			log.Printf("profiling data error, no stacks for: %s", header)
+			continue
+		}
+		if strings.HasPrefix(stacks, "Failed to inject profiler") {
+			log.Printf("profiling data error: %s", stacks)
 			continue
 		}
 		match := re.FindStringSubmatch(header)
 		if match == nil {
-			log.Printf("header didn't match regex: %s", header)
+			log.Printf("profiling data error, regex didn't match header: %s", header)
 			continue
 		}
 		pid := match[1]

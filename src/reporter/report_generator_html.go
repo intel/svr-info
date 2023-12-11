@@ -1078,6 +1078,8 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 	})
 }
 
+var maxStackDepth = 50
+
 func convertFoldedToJSON(folded string) (out string, err error) {
 	rootNode := Node{Name: "root", Value: 0, Children: make(map[string]*Node)}
 	scanner := bufio.NewScanner(strings.NewReader(folded))
@@ -1088,6 +1090,10 @@ func convertFoldedToJSON(folded string) (out string, err error) {
 		v := line[sep+1:]
 		stack := strings.Split(s, ";")
 		reverse(stack)
+		if len(stack) > maxStackDepth {
+			log.Printf("Trimming call stack depth from %d to %d", len(stack), maxStackDepth)
+			stack = stack[:maxStackDepth]
+		}
 		var i int
 		i, err = strconv.Atoi(v)
 		if err != nil {
