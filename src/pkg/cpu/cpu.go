@@ -150,6 +150,10 @@ func (c *CPU) getMicroArchitectureExt(family, model, sockets string, capid4 stri
 }
 
 func (c *CPU) getCPUByUarch(uarch string) (cpu CPUInfo, err error) {
+	if uarch == "" {
+		err = fmt.Errorf("microarchitecture not provided")
+		return
+	}
 	for _, info := range c.cpusInfo {
 		var re *regexp.Regexp
 		re, err = regexp.Compile(info.Architecture)

@@ -613,6 +613,10 @@ func (s *Source) getL3PerCore(uArch string, coresPerSocketStr string, socketsStr
 }
 
 func (s *Source) getPrefetchers(uarch string) (val string) {
+	if uarch == "" {
+		// uarch is required
+		return
+	}
 	// MSR_PREFETCH_CONTROL
 	// prefetchers are enabled when associated bit is 0
 	prefetcherDefs := []struct {

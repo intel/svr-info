@@ -848,16 +848,22 @@ func newISATable(sources []*Source, category TableCategory) (table *Table) {
 			},
 		}
 		flags := source.valFromRegexSubmatch("lscpu", `^Flags.*:\s*(.*)$`)
+		cpuid := source.getCommandOutput("cpuid -1")
 		for _, isa := range isas {
-			cpuSupport := yesIfTrue(source.valFromRegexSubmatch("cpuid -1", isa.CPUID+`\s*= (.+?)$`))
-			kernelSupport := "Yes"
-			match, err := regexp.MatchString(" "+isa.lscpu+" ", flags)
-			if err != nil {
-				log.Printf("regex match failed: %v", err)
-				return
+			var kernelSupport, cpuSupport string
+			if cpuid != "" {
+				cpuSupport = yesIfTrue(source.valFromRegexSubmatch("cpuid -1", isa.CPUID+`\s*= (.+?)$`))
 			}
-			if !match {
-				kernelSupport = "No"
+			if flags != "" {
+				kernelSupport = "Yes"
+				match, err := regexp.MatchString(" "+isa.lscpu+" ", flags)
+				if err != nil {
+					log.Printf("regex match failed: %v", err)
+					return
+				}
+				if !match {
+					kernelSupport = "No"
+				}
 			}
 			hostValues.Values = append(hostValues.Values, []string{isa.Name, isa.FullName, cpuSupport, kernelSupport})
 		}
