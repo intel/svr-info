@@ -290,7 +290,7 @@ func cleanupOutputDir(outputDir string, collections []*Collection, reportFilePat
 }
 
 func (app *App) doWork() (err error) {
-	if app.args.dumpConfig {
+	if app.args.printConfig {
 		var bytes []byte
 		bytes, err = resources.ReadFile("resources/collector_reports.yaml.tmpl")
 		if err != nil {

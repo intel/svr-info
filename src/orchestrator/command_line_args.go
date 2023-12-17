@@ -37,7 +37,7 @@ type CmdLineArgs struct {
 	output           string
 	targetTemp       string
 	temp             string
-	dumpConfig       bool
+	printConfig      bool
 	noConfig         bool
 	cmdTimeout       int
 	reporter         string
@@ -57,7 +57,7 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "                [-analyze SELECT] [-analyze_duration SECONDS] [-analyze_frequency N]\n")
 	fmt.Fprintf(os.Stderr, "                [-megadata]\n")
 	fmt.Fprintf(os.Stderr, "                [-ip IP] [-port PORT] [-user USER] [-key KEY] [-targets TARGETS]\n")
-	fmt.Fprintf(os.Stderr, "                [-output OUTPUT] [-temp TEMP] [-targettemp TEMP] [-dumpconfig] [-cmd_timeout]\n")
+	fmt.Fprintf(os.Stderr, "                [-output OUTPUT] [-temp TEMP] [-targettemp TEMP] [-printconfig] [-noconfig] [-cmd_timeout]\n")
 	fmt.Fprintf(os.Stderr, "                [-reporter \"args\"] [-collector \"args\"] [-debug]\n")
 
 	longHelp := `
@@ -89,7 +89,7 @@ analyze arguments:
   -analyze_frequency N  the number of samples taken per second (default: 11)
 
 additional data collection arguments:
-  -megadata             collect additional data specified in megadata template file (default: False)
+  -megadata             collect additional data in megadata directory (default: False)
 
 remote target arguments:
   -ip IP                ip address or hostname (default: Nil)
@@ -106,7 +106,7 @@ advanced arguments:
   -output DIR           path to output directory. Directory must exist. (default: $PWD/orchestrator_timestamp)
   -temp DIR             path to temporary directory on localhost. Directory must exist. (default: system default)
   -targettemp DIR       path to temporary directory on target. Directory must exist. (default: system default)
-  -dumpconfig           dump the collector configuration file and exit (default: False)
+  -printconfig          print the collector configuration file and exit (default: False)
   -noconfig             do not collect system configuration data. (default: False)
   -cmd_timeout          the maximum number of seconds to wait for each data collection command (default: 300)
   -reporter             run the the reporter sub-component with args
@@ -147,7 +147,7 @@ func (cmdLineArgs *CmdLineArgs) parse(name string, arguments []string) (err erro
 	flagSet.StringVar(&cmdLineArgs.output, "output", "", "")
 	flagSet.StringVar(&cmdLineArgs.temp, "temp", "", "")
 	flagSet.StringVar(&cmdLineArgs.targetTemp, "targettemp", "", "")
-	flagSet.BoolVar(&cmdLineArgs.dumpConfig, "dumpconfig", false, "")
+	flagSet.BoolVar(&cmdLineArgs.printConfig, "printconfig", false, "")
 	flagSet.BoolVar(&cmdLineArgs.noConfig, "noconfig", false, "")
 	flagSet.IntVar(&cmdLineArgs.cmdTimeout, "cmd_timeout", 300, "")
 	flagSet.StringVar(&cmdLineArgs.format, "format", "html,xlsx,json", "")
