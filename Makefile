@@ -20,14 +20,13 @@ dist-amd64: tools
 	cp THIRD_PARTY_PROGRAMS dist/svr-info
 	cp docs/guide/SvrInfoUserGuide.pdf dist/svr-info/USER_GUIDE.pdf
 	cp src/orchestrator/orchestrator dist/svr-info/svr-info
+	mkdir -p dist/svr-info/tools
+	cp src/orchestrator/resources/* dist/svr-info/tools
+	cp src/pmu2metrics/pmu2metrics-with-perf dist/svr-info/tools
+	cd dist/svr-info/tools && tar -xf collector_deps_amd64.tgz && rm collector_deps_*.tgz
 	cd dist && tar -czf $(TARBALL) svr-info
 	cd dist && md5sum $(TARBALL) > $(TARBALL).md5
 	rm -rf dist/svr-info
-	rm -rf dist/tools
-	mkdir -p dist/tools
-	cp src/orchestrator/resources/* dist/tools
-	cp src/pmu2metrics/pmu2metrics-with-perf dist/tools
-	cd dist/tools && tar -xf collector_deps_amd64.tgz && rm collector_deps_*.tgz *.yaml.tmpl
 
 dist: dist-amd64
 
