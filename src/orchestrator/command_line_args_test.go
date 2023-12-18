@@ -86,7 +86,7 @@ func TestAllExceptTargetsFile(t *testing.T) {
 		"-megadata",
 		"-debug",
 		"-cmd_timeout", "150",
-		"-dumpconfig",
+		"-printconfig",
 		"-ip", "192.168.1.1",
 		"-port", "20",
 		"-user", "foo",
