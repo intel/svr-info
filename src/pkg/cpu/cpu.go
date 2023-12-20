@@ -100,8 +100,9 @@ func (c *CPU) getMicroArchitectureExt(family, model, sockets string, capid4 stri
 		err = fmt.Errorf("no extended architecture info for %s:%s", family, model)
 		return
 	}
-	var capid4Int, bits int64
-	if model == "143" || model == "207" { // SPR and EMR
+	var bits int64
+	if (model == "143" || model == "207") && capid4 != "" { // SPR and EMR
+		var capid4Int int64
 		capid4Int, err = strconv.ParseInt(capid4, 16, 64)
 		if err != nil {
 			return
