@@ -21,8 +21,8 @@ rule DIMMSpeed {
 		(
 		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "CLX" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 2933) ||
 		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "ICX" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 3200) ||
-		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "SPR" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 4800) ||
-		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "EMR" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 4800)
+		(Report.GetValue("Configuration", "CPU", "Microarchitecture").Contains("SPR") && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 4800) ||
+		(Report.GetValue("Configuration", "CPU", "Microarchitecture").Contains("EMR") && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 5600)
 		)
 	then
 		Report.AddInsight(
@@ -118,18 +118,6 @@ rule FrequencyGovernor {
 		"Consider setting the CPU frequency governors to 'performance'."
 		);
 		Retract("FrequencyGovernor");
-}
-
-rule IRQBalance {
-	when
-		Report.GetValue("Configuration", "NIC", "IRQBalance") != "" &&
-		Report.GetValue("Configuration", "NIC", "IRQBalance") == "Enabled"
-	then
-		Report.AddInsight(
-			"System is using the IRQ Balance service to manage IRQ CPU affinity.",
-			"Consider manually configuring IRQ CPU affinity for network intensive workloads."
-			);
-		Retract("IRQBalance");
 }
 
 rule TurboBoost {
