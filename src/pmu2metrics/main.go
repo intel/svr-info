@@ -25,7 +25,10 @@ type CmdLineArgs struct {
 	pidList        string
 	processFilter  string
 	processCount   int
-	processRefresh int // secons
+	processRefresh int // seconds
+	// post-processing options
+	inputCSVFilePath     string
+	postProcessingFormat string
 	// advanced options
 	eventFilePath     string
 	metricFilePath    string
@@ -472,7 +475,7 @@ Collection Options:
   --per-process
   	Enable process mode. Associates metrics with processes.
   -p, --pid <pids>
-  	Comma separated list of pids. Only valid when in process mode (default: None).
+  	Comma separated list of process ids. Only valid when in process mode (default: None).
   --process-filter <regex>
   	Regular expression used to match process names. Valid only when in process mode and --pid not specified (default: None).
   --process-count <count>
@@ -484,11 +487,19 @@ Output Options:
   --metrics <metric names>
   	Metric names to include in output. (Quoted and comma separated list.)
   --csv
-  	CSV formatted output. Best for parsing.
+  	CSV formatted output. Best for parsing. Required for HTML report generation.
   --wide
   	Wide formatted output. Best used when a small number of metrics are printed.
   -v[v]
   	Enable verbose, or very verbose (-vv) logging.
+
+Post-processing Options:
+  --post-process <CSV file>
+  	Path to csv file created from --csv output.
+  --format <option>
+  	File format to generate when post-processing the collected CSV file. Options: 'html' or 'csv' (default: html).
+  -p, --pid <pid>
+	Choose one process's data to post-process. Required when data was captured in process mode.
 
 Advanced Options:
   -e, --eventfile <path>
@@ -519,8 +530,8 @@ func validateArgs() (err error) {
 		err = fmt.Errorf("-csv and -wide are mutually exclusive, choose one")
 		return
 	}
-	if gCmdLineArgs.pidList != "" && !gCmdLineArgs.processMode {
-		err = fmt.Errorf("-pid only valid in process mode")
+	if gCmdLineArgs.pidList != "" && !(gCmdLineArgs.processMode || gCmdLineArgs.inputCSVFilePath != "") {
+		err = fmt.Errorf("-pid only valid when collected in process mode or post-processing previously collected data")
 		return
 	}
 	if gCmdLineArgs.processFilter != "" && !gCmdLineArgs.processMode {
@@ -530,6 +541,25 @@ func validateArgs() (err error) {
 	if gCmdLineArgs.pidList != "" && gCmdLineArgs.processFilter != "" {
 		err = fmt.Errorf("-pid and -pfilter are mutually exclusive")
 		return
+	}
+	if gCmdLineArgs.postProcessingFormat != "" && gCmdLineArgs.inputCSVFilePath == "" {
+		err = fmt.Errorf("--format only valid in post-processing mode, i.e., --post-process <csv> required")
+		return
+	}
+	if gCmdLineArgs.postProcessingFormat != "" && strings.ToLower(gCmdLineArgs.postProcessingFormat) != "html" && strings.ToLower(gCmdLineArgs.postProcessingFormat) != "csv" {
+		err = fmt.Errorf("'html' and 'csv' are valid options for post processing format")
+		return
+	}
+	if gCmdLineArgs.pidList != "" && gCmdLineArgs.inputCSVFilePath != "" {
+		pids := strings.Split(gCmdLineArgs.pidList, ",")
+		if len(pids) > 1 {
+			err = fmt.Errorf("can only post-process one PID at a time")
+			return
+		}
+		if _, err = strconv.Atoi(gCmdLineArgs.pidList); err != nil {
+			err = fmt.Errorf("invalid PID: %s", gCmdLineArgs.pidList)
+			return
+		}
 	}
 	return
 }
@@ -556,6 +586,9 @@ func configureArgs() {
 	flag.StringVar(&gCmdLineArgs.processFilter, "process-filter", "", "")
 	flag.IntVar(&gCmdLineArgs.processCount, "process-count", 5, "")
 	flag.IntVar(&gCmdLineArgs.processRefresh, "process-refresh", 30, "")
+	// post-processing options
+	flag.StringVar(&gCmdLineArgs.inputCSVFilePath, "post-process", "", "")
+	flag.StringVar(&gCmdLineArgs.postProcessingFormat, "format", "", "")
 	// advanced options
 	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "i", 5000, "")
 	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "interval", 5000, "")
@@ -603,6 +636,15 @@ func mainReturnWithCode() int {
 			gVersion,
 			strings.Join(os.Args[1:], " "),
 		)
+	}
+	if gCmdLineArgs.inputCSVFilePath != "" {
+		var output string
+		if output, err = postProcess(gCmdLineArgs.inputCSVFilePath, gCmdLineArgs.postProcessingFormat, gCmdLineArgs.pidList); err != nil {
+			log.Printf("Error while post-processing: %v", err)
+			return exitError
+		}
+		fmt.Print(output)
+		return exitNoError
 	}
 	if gCmdLineArgs.timeout != 0 {
 		// round up to next perfPrintInterval second (the collection interval used by perf stat)
