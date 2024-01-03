@@ -115,7 +115,7 @@ func (c *CPU) getMicroArchitectureExt(family, model, sockets string, capid4 stri
 		} else if bits == 1 {
 			uarch = "SPR_MCC"
 		} else {
-			uarch = "SPR_Unknown"
+			uarch = "SPR"
 		}
 	} else if model == "207" { // EMR
 		if bits == 3 {
@@ -123,7 +123,7 @@ func (c *CPU) getMicroArchitectureExt(family, model, sockets string, capid4 stri
 		} else if bits == 1 {
 			uarch = "EMR_MCC"
 		} else {
-			uarch = "EMR_Unknown"
+			uarch = "EMR"
 		}
 	} else if model == "173" { // GNR
 		var devCount int
@@ -144,7 +144,7 @@ func (c *CPU) getMicroArchitectureExt(family, model, sockets string, capid4 stri
 		} else if ratio == 5 {
 			uarch = "GNR_X3" // 3 dies, GNR-AP UCC
 		} else {
-			uarch = "GNR_Unknown"
+			uarch = "GNR"
 		}
 	}
 	return
