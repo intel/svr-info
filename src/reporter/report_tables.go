@@ -1366,26 +1366,28 @@ func newBenchmarkSummaryTable(sources []*Source, tableMemBandwidthLatency *Table
 		AllHostValues: []HostValues{},
 	}
 	for _, source := range sources {
-		singleCoreTurbo, allCoreTurbo, turboTDP := source.getTurbo()
+		singleCoreTurbo, allCoreTurbo, turboPower, turboTemperature := source.getTurbo()
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
 				"CPU Speed",
-				"Single-core Turbo",
-				"All-core Turbo",
-				"Turbo TDP",
-				"Idle TDP",
+				"Single-core Turbo Frequency",
+				"All-core Turbo Frequency",
+				"All-core Turbo Power",
+				"All-core Turbo Temperature",
+				"Idle Power",
 				"Memory Peak Bandwidth",
 				"Memory Minimum Latency",
 				"Disk Speed",
 			},
 			Values: [][]string{
 				{
-					source.getCPUSpeed(), // CPU speed
-					singleCoreTurbo,      // single-core turbo
-					allCoreTurbo,         // all-core turbo
-					turboTDP,             // turbo TDP
-					source.getIdleTDP(),  // idle TDP
+					source.getCPUSpeed(),  // CPU speed
+					singleCoreTurbo,       // single-core turbo
+					allCoreTurbo,          // all-core turbo
+					turboPower,            // all-core turbo power
+					turboTemperature,      // all-core turbo temperature
+					source.getIdlePower(), // idle power
 					source.getPeakBandwidth(tableMemBandwidthLatency), // peak memory bandwidth
 					source.getMinLatency(tableMemBandwidthLatency),    // minimum memory latency
 					source.getDiskSpeed(),                             // disk speed

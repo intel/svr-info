@@ -806,14 +806,17 @@ func (s *Source) getCPUSpeed() (val string) {
 	return
 }
 
-func (s *Source) getTurbo() (singleCoreTurbo, allCoreTurbo, turboTDP string) {
+func (s *Source) getTurbo() (singleCoreTurbo, allCoreTurbo, turboPower, turboTemperature string) {
 	var allTurbos []string
 	var allTDPs []string
+	var allTemps []string
 	var turbos []string
 	var tdps []string
+	var temps []string
 	var headers []string
 	idxTurbo := -1
 	idxTdp := -1
+	idxTemp := -1
 	re := regexp.MustCompile(`\s+`) // whitespace
 	for _, line := range s.getCommandOutputLines("CPU Turbo Test") {
 		if strings.Contains(line, "stress-ng") {
@@ -826,6 +829,10 @@ func (s *Source) getTurbo() (singleCoreTurbo, allCoreTurbo, turboTDP string) {
 					tdps = append(tdps, allTDPs[len(allTDPs)-2])
 					allTDPs = nil
 				}
+				if idxTemp >= 0 && len(allTemps) >= 2 {
+					temps = append(temps, allTemps[len(allTemps)-2])
+					allTemps = nil
+				}
 			}
 			continue
 		}
@@ -836,6 +843,8 @@ func (s *Source) getTurbo() (singleCoreTurbo, allCoreTurbo, turboTDP string) {
 					idxTurbo = i
 				} else if h == "PkgWatt" {
 					idxTdp = i
+				} else if h == "PkgTmp" {
+					idxTemp = i
 				}
 			}
 			continue
@@ -847,18 +856,24 @@ func (s *Source) getTurbo() (singleCoreTurbo, allCoreTurbo, turboTDP string) {
 		if idxTdp >= 0 {
 			allTDPs = append(allTDPs, tokens[idxTdp])
 		}
+		if idxTemp >= 0 {
+			allTemps = append(allTemps, tokens[idxTemp])
+		}
 	}
 	if len(turbos) == 2 {
 		singleCoreTurbo = turbos[0] + " MHz"
 		allCoreTurbo = turbos[1] + " MHz"
 	}
 	if len(tdps) == 2 {
-		turboTDP = tdps[1] + " Watts"
+		turboPower = tdps[1] + " Watts"
+	}
+	if len(temps) == 2 {
+		turboTemperature = temps[1] + " C"
 	}
 	return
 }
 
-func (s *Source) getIdleTDP() (val string) {
+func (s *Source) getIdlePower() (val string) {
 	cmdout := s.getCommandOutputLine("CPU Idle")
 	if cmdout != "" && cmdout != "0.00" {
 		val = cmdout + " Watts"

@@ -7,9 +7,9 @@ BDX_2:
     Name: Reference (Intel 2S Xeon E5-2699A v4)
   Summary:
     CPU Speed: "403415 ops/s"
-    Single-core Turbo: "3509 MHz"
-    All-core Turbo: "2980 MHz"
-    Turbo TDP: "289.90 Watts"
+    Single-core Turbo Frequency: "3509 MHz"
+    All-core Turbo Frequency: "2980 MHz"
+    All-core Turbo Power: "289.90 Watts"
     Memory Peak Bandwidth: "138.1 GB/s"
     Memory Minimum Latency: "78 ns"
   Memory NUMA Bandwidth:
@@ -62,9 +62,9 @@ SKX_2:
     Name: Reference (Intel 2S Xeon Platinum 8180)
   Summary:
     CPU Speed: "585157 ops/s"
-    Single-core Turbo: "3758 MHz"
-    All-core Turbo: "3107 MHz"
-    Turbo TDP: "429.07 Watts"
+    Single-core Turbo Frequency: "3758 MHz"
+    All-core Turbo Frequency: "3107 MHz"
+    All-core Turbo Power: "429.07 Watts"
     Memory Peak Bandwidth: "225.1 GB/s"
     Memory Minimum Latency: "71 ns"
   Memory NUMA Bandwidth:
@@ -117,9 +117,9 @@ CLX_2:
     Name: Reference (Intel 2S Xeon Platinum 8280)
   Summary:
     CPU Speed: "548644 ops/s"
-    Single-core Turbo: "3928 MHz"
-    All-core Turbo: "3296 MHz"
-    Turbo TDP: "415.93 Watts"
+    Single-core Turbo Frequency: "3928 MHz"
+    All-core Turbo Frequency: "3296 MHz"
+    All-core Turbo Power: "415.93 Watts"
     Memory Peak Bandwidth: "223.9 GB/s"
     Memory Minimum Latency: "72 ns"
   Memory NUMA Bandwidth:
@@ -172,10 +172,10 @@ ICX_2:
     Name: Reference (Intel 2S Xeon Platinum 8380)
   Summary:
     CPU Speed: "933644 ops/s"
-    Single-core Turbo: "3334 MHz"
-    All-core Turbo: "2950 MHz"
-    Turbo TDP: "552.00 Watts"
-    Idle TDP: "175.38 Watts"
+    Single-core Turbo Frequency: "3334 MHz"
+    All-core Turbo Frequency: "2950 MHz"
+    All-core Turbo Power: "552.00 Watts"
+    Idle Power: "175.38 Watts"
     Memory Peak Bandwidth: "350.7 GB/s"
     Memory Minimum Latency: "70 ns"
   Memory NUMA Bandwidth:
@@ -228,10 +228,10 @@ SPR_XCC_2:
     Name: Reference (Intel 2S Xeon Platinum 8480+)
   Summary:
     CPU Speed: "1678712 ops/s"
-    Single-core Turbo: "3776 MHz"
-    All-core Turbo: "2996 MHz"
-    Turbo TDP: "698.35 Watts"
-    Idle TDP: "349.21 Watts"
+    Single-core Turbo Frequency: "3776 MHz"
+    All-core Turbo Frequency: "2996 MHz"
+    All-core Turbo Power: "698.35 Watts"
+    Idle Power: "349.21 Watts"
     Memory Peak Bandwidth: "524.6 GB/s"
     Memory Minimum Latency: "111.8 ns"
   Memory NUMA Bandwidth:
@@ -283,13 +283,13 @@ SPR_XCC_1:
   Hostref:
     Name: Reference (Intel 1S Xeon Platinum 8480+)
   Summary:
-    All-core Turbo: "2999 MHz"
+    All-core Turbo Frequency: "2999 MHz"
     CPU Speed: "845743 ops/s"
-    Idle TDP: "163.79 Watts"
+    Idle Power: "163.79 Watts"
     Memory Minimum Latency: "112.2 ns"
     Memory Peak Bandwidth: "264.0 GB/s"
-    Single-core Turbo: "3783 MHz"
-    Turbo TDP: "334.68 Watts"
+    Single-core Turbo Frequency: "3783 MHz"
+    All-core Turbo Power: "334.68 Watts"
   Memory NUMA Bandwidth:
     - - 263646.3 # 0, 0
   Memory Bandwidth and Latency:
