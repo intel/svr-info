@@ -1147,7 +1147,7 @@ func (s *Source) getPMUMetrics() (orderedMetricNames []string, timeStamps []floa
 		label := rows[0][colIdx]
 		// skip metrics with no name (can occur in some rate situations)
 		// skip PID and CMD -- not used in system mode
-		if label == "" || label == "PID" || label == "CMD" {
+		if label == "" || label == "PID" || label == "CMD" || label == "CID" {
 			continue
 		}
 		if colIdx != 0 { // don't put timestamp column in the metric names list

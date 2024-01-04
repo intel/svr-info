@@ -12,8 +12,9 @@ import (
 )
 
 type Metric struct {
-	Name  string
-	Value float64
+	Name   string
+	Value  float64
+	Cgroup string
 }
 
 // lock to protect metric variable map that holds the event group where a variable value will be retrieved
@@ -159,39 +160,41 @@ func evaluateExpression(metric MetricDefinition, variables map[string]interface{
 }
 
 func processEvents(perfEvents [][]byte, metricDefinitions []MetricDefinition, previousTimestamp float64, metadata Metadata) (metrics []Metric, timeStamp float64, err error) {
-	var eventFrame EventFrame
-	if eventFrame, err = getEventFrame(perfEvents); err != nil { // arrange the events into groups
+	var eventFrames []EventFrame
+	if eventFrames, err = getEventFrames(perfEvents); err != nil { // arrange the events into groups
 		err = fmt.Errorf("failed to put perf events into groups: %v", err)
 		return
 	}
-	timeStamp = eventFrame.Timestamp
-	// produce metrics from event groups
-	for _, metricDef := range metricDefinitions {
-		metric := Metric{Name: metricDef.Name, Value: math.NaN()}
-		var variables map[string]interface{}
-		if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
-			if gCmdLineArgs.verbose {
-				log.Printf("failed to get expression variable values: %v", err)
-			}
-			err = nil
-		} else {
-			var result interface{}
-			if result, err = evaluateExpression(metricDef, variables); err != nil {
+	for _, eventFrame := range eventFrames {
+		timeStamp = eventFrame.Timestamp
+		// produce metrics from event groups
+		for _, metricDef := range metricDefinitions {
+			metric := Metric{Name: metricDef.Name, Value: math.NaN(), Cgroup: eventFrame.Cgroup}
+			var variables map[string]interface{}
+			if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
 				if gCmdLineArgs.verbose {
-					log.Printf("failed to evaluate expression: %v", err)
+					log.Printf("failed to get expression variable values: %v", err)
 				}
 				err = nil
 			} else {
-				metric.Value = result.(float64)
+				var result interface{}
+				if result, err = evaluateExpression(metricDef, variables); err != nil {
+					if gCmdLineArgs.verbose {
+						log.Printf("failed to evaluate expression: %v", err)
+					}
+					err = nil
+				} else {
+					metric.Value = result.(float64)
+				}
 			}
-		}
-		metrics = append(metrics, metric)
-		if gCmdLineArgs.veryVerbose {
-			var prettyVars []string
-			for variableName := range variables {
-				prettyVars = append(prettyVars, fmt.Sprintf("%s=%f", variableName, variables[variableName]))
+			metrics = append(metrics, metric)
+			if gCmdLineArgs.veryVerbose {
+				var prettyVars []string
+				for variableName := range variables {
+					prettyVars = append(prettyVars, fmt.Sprintf("%s=%f", variableName, variables[variableName]))
+				}
+				log.Printf("%s : %s : %s", metricDef.Name, metricDef.Expression, strings.Join(prettyVars, ", "))
 			}
-			log.Printf("%s : %s : %s", metricDef.Name, metricDef.Expression, strings.Join(prettyVars, ", "))
 		}
 	}
 	return

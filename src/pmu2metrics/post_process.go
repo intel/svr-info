@@ -20,18 +20,18 @@ type metricStats struct {
 
 type row struct {
 	timestamp float64
-	pid       int
-	// cid       int
-	cmd     string
-	metrics map[string]float64
+	pid       string
+	cmd       string
+	cgroup    string
+	metrics   map[string]float64
 }
 
 const (
-	timestamp int = iota
-	pid
-	//	cid
-	cmd
-	firstMetric
+	Timestamp int = iota
+	Pid
+	Cmd
+	Cgroup
+	FirstMetric
 )
 
 type metricsFromCSV struct {
@@ -39,14 +39,15 @@ type metricsFromCSV struct {
 	rows  []row
 }
 
-func newMetricsFromCSV(csvPath string) (metrics metricsFromCSV, err error) {
+func newMetricsFromCSV(csvPath string, pid string, cgroup string) (metrics metricsFromCSV, err error) {
 	var file *os.File
 	if file, err = os.Open(csvPath); err != nil {
 		return
 	}
 	reader := csv.NewReader(file)
-	var fields []string
+	firstMatchingCgroup := ""
 	for idx := 0; true; idx++ {
+		var fields []string
 		if fields, err = reader.Read(); err != nil {
 			if err != io.EOF {
 				return
@@ -60,7 +61,7 @@ func newMetricsFromCSV(csvPath string) (metrics metricsFromCSV, err error) {
 		if idx == 0 {
 			// headers
 			for fIdx, field := range fields {
-				if fIdx < firstMetric { // skip non-metrics
+				if fIdx < FirstMetric { // skip non-metrics
 					continue
 				}
 				metrics.names = append(metrics.names, field)
@@ -70,56 +71,37 @@ func newMetricsFromCSV(csvPath string) (metrics metricsFromCSV, err error) {
 		r := row{}
 		r.metrics = make(map[string]float64)
 		for fIdx, field := range fields {
-			if fIdx == timestamp {
+			if fIdx == Timestamp {
 				var ts float64
 				if ts, err = strconv.ParseFloat(field, 64); err != nil {
 					return
 				}
 				r.timestamp = ts
-			} else if fIdx == pid {
-				var p int
-				if field != "" {
-					if p, err = strconv.Atoi(field); err != nil {
-						return
-					}
-				}
-				r.pid = p
-				// } else if fIdx == cid {
-				// 	var c int
-				// 	if field != "" {
-				// 		if c, err = strconv.Atoi(field); err != nil {
-				// 			return
-				// 		}
-				// 	}
-				// 	m.cid = c
-			} else if fIdx == cmd {
+			} else if fIdx == Pid {
+				r.pid = field
+			} else if fIdx == Cmd {
 				r.cmd = field
+			} else if fIdx == Cgroup {
+				r.cgroup = field
 			} else {
 				// metrics
 				var v float64
 				if v, err = strconv.ParseFloat(field, 64); err != nil {
 					return
 				}
-				r.metrics[metrics.names[fIdx-firstMetric]] = v
+				r.metrics[metrics.names[fIdx-FirstMetric]] = v
 			}
 		}
-		metrics.rows = append(metrics.rows, r)
-	}
-	return
-}
-
-func (m *metricsFromCSV) separateByPID() (pidMetrics map[int]metricsFromCSV, err error) {
-	pidMetrics = make(map[int]metricsFromCSV)
-	for _, row := range m.rows {
-		var entry metricsFromCSV
-		var ok bool
-		if entry, ok = pidMetrics[row.pid]; !ok {
-			pidMetrics[row.pid] = metricsFromCSV{}
-			entry = pidMetrics[row.pid]
-			entry.names = m.names
+		if r.pid == pid && strings.Contains(r.cgroup, cgroup) {
+			if firstMatchingCgroup == "" {
+				firstMatchingCgroup = r.cgroup
+			}
+			if firstMatchingCgroup != r.cgroup {
+				err = fmt.Errorf("provided cgroup matches more than one cgroup in CSV data, be more specific")
+				return
+			}
+			metrics.rows = append(metrics.rows, r)
 		}
-		entry.rows = append(entry.rows, row)
-		pidMetrics[row.pid] = entry
 	}
 	return
 }
@@ -129,7 +111,10 @@ func (m *metricsFromCSV) getStats() (stats map[string]metricStats, err error) {
 	for _, metricName := range m.names {
 		min := math.NaN()
 		max := math.NaN()
-		sum := math.NaN()
+		mean := math.NaN()
+		stddev := math.NaN()
+		count := 0
+		sum := 0.0
 		for _, row := range m.rows {
 			val := row.metrics[metricName]
 			if math.IsNaN(val) {
@@ -148,10 +133,11 @@ func (m *metricsFromCSV) getStats() (stats map[string]metricStats, err error) {
 				max = val
 			}
 			sum += val
+			count++
 		}
-		mean := sum / float64(len(m.rows))
-		stddev := math.NaN()
-		if !math.IsNaN(mean) {
+		// must be at least one valid value for this metric to calculate mean and standard deviation
+		if count > 0 {
+			mean = sum / float64(count)
 			distanceSquaredSum := 0.0
 			for _, row := range m.rows {
 				val := row.metrics[metricName]
@@ -162,34 +148,16 @@ func (m *metricsFromCSV) getStats() (stats map[string]metricStats, err error) {
 				squared := distance * distance
 				distanceSquaredSum += squared
 			}
-			stddev = distanceSquaredSum / float64(len(m.rows))
+			stddev = distanceSquaredSum / float64(count)
 		}
-		stats[metricName] = metricStats{min: min, max: max, mean: mean, stddev: stddev}
+		stats[metricName] = metricStats{mean: mean, min: min, max: max, stddev: stddev}
 	}
 	return
 }
 
-func generateHTML(csvInputPath string, pid int) (html string, err error) {
-	var metrics metricsFromCSV
-	if metrics, err = newMetricsFromCSV(csvInputPath); err != nil {
-		return
-	}
-	var allPIDMetrics map[int]metricsFromCSV
-	if allPIDMetrics, err = metrics.separateByPID(); err != nil {
-		return
-	}
-	var pidMetrics metricsFromCSV
-	var ok bool
-	if pidMetrics, ok = allPIDMetrics[pid]; !ok {
-		if pid == 0 {
-			err = fmt.Errorf("must specify a pid when post-processing data collected in process mode")
-		} else {
-			err = fmt.Errorf("specified pid (%d) not found in input file (%s)", pid, csvInputPath)
-		}
-		return
-	}
+func (m *metricsFromCSV) generateHTML() (html string, err error) {
 	var stats map[string]metricStats
-	if stats, err = pidMetrics.getStats(); err != nil {
+	if stats, err = m.getStats(); err != nil {
 		return
 	}
 	var htmlTemplate []byte
@@ -235,27 +203,27 @@ func generateHTML(csvInputPath string, pid int) (html string, err error) {
 		{"PKGPOWER", "package power (watts)"},
 		{"DRAMPOWER", "DRAM power (watts)"},
 	}
-	for _, m := range templateReplace {
+	for _, tmpl := range templateReplace {
 		var series [][]float64
 		var firstTimestamp float64
-		for rIdx, row := range metrics.rows {
+		for rIdx, row := range m.rows {
 			if rIdx == 0 {
 				firstTimestamp = row.timestamp
 			}
-			if math.IsNaN(row.metrics[m.metricName]) {
+			if math.IsNaN(row.metrics[tmpl.metricName]) {
 				continue
 			}
-			series = append(series, []float64{row.timestamp - firstTimestamp, row.metrics[m.metricName]})
+			series = append(series, []float64{row.timestamp - firstTimestamp, row.metrics[tmpl.metricName]})
 		}
 		var seriesBytes []byte
 		if seriesBytes, err = json.Marshal(series); err != nil {
 			return
 		}
-		html = strings.Replace(html, m.tmplVar, string(seriesBytes), -1)
+		html = strings.Replace(html, tmpl.tmplVar, string(seriesBytes), -1)
 	}
 	// All Metrics Tab
 	var metricHTMLStats [][]string
-	for _, name := range metrics.names {
+	for _, name := range m.names {
 		metricHTMLStats = append(metricHTMLStats, []string{
 			name,
 			fmt.Sprintf("%f", stats[name].mean),
@@ -273,47 +241,27 @@ func generateHTML(csvInputPath string, pid int) (html string, err error) {
 	return
 }
 
-func generateCSV(csvInputPath string, pid int) (out string, err error) {
-	var metrics metricsFromCSV
-	if metrics, err = newMetricsFromCSV(csvInputPath); err != nil {
-		return
-	}
-	var allPIDMetrics map[int]metricsFromCSV
-	if allPIDMetrics, err = metrics.separateByPID(); err != nil {
-		return
-	}
-	var pidMetrics metricsFromCSV
-	var ok bool
-	if pidMetrics, ok = allPIDMetrics[pid]; !ok {
-		if pid == 0 {
-			err = fmt.Errorf("must specify a pid when post-processing data collected in process mode")
-		} else {
-			err = fmt.Errorf("specified pid (%d) not found in input file (%s)", pid, csvInputPath)
-		}
-		return
-	}
+func (m *metricsFromCSV) generateCSV() (out string, err error) {
 	var stats map[string]metricStats
-	if stats, err = pidMetrics.getStats(); err != nil {
+	if stats, err = m.getStats(); err != nil {
 		return
 	}
 	out = "metric,mean,min,max,stddev\n"
-	for _, name := range metrics.names {
+	for _, name := range m.names {
 		out += fmt.Sprintf("%s,%f,%f,%f,%f\n", name, stats[name].mean, stats[name].min, stats[name].max, stats[name].stddev)
 	}
 	return
 }
 
-func postProcess(csvInputPath string, format string, pid string) (out string, err error) {
-	p := 0 // system
-	if pid != "" {
-		if p, err = strconv.Atoi(pid); err != nil {
-			return
-		}
+func postProcess(csvInputPath string, format string, pid string, cgroup string) (out string, err error) {
+	var metrics metricsFromCSV
+	if metrics, err = newMetricsFromCSV(csvInputPath, pid, cgroup); err != nil {
+		return
 	}
 	if format == "" || strings.ToLower(format) == "html" {
-		out, err = generateHTML(csvInputPath, p)
+		out, err = metrics.generateHTML()
 	} else if strings.ToLower(format) == "csv" {
-		out, err = generateCSV(csvInputPath, p)
+		out, err = metrics.generateCSV()
 	} else {
 		err = fmt.Errorf("unsupported post-processing format: %s", format)
 	}

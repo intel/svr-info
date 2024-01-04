@@ -43,14 +43,14 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 		return
 	}
 	// short-circuit off-core response events
-	if event.Device == "cpu" && strings.HasPrefix(event.Name, "OCR") && isUncoreSupported(metadata) && !gCmdLineArgs.processMode {
+	if event.Device == "cpu" && strings.HasPrefix(event.Name, "OCR") && isUncoreSupported(metadata) && !gCmdLineArgs.processMode && !gCmdLineArgs.cgroupMode {
 		return
 	}
 	// exclude uncore events when
 	// - their corresponding device is not found
 	// - not in system-wide collection mode
 	if event.Device != "cpu" && event.Device != "" {
-		if gCmdLineArgs.processMode {
+		if gCmdLineArgs.processMode || gCmdLineArgs.cgroupMode {
 			collectable = false
 			return
 		}
@@ -79,8 +79,8 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 		collectable = false
 		return
 	}
-	// no cstate and power events in process mode
-	if gCmdLineArgs.processMode && (strings.Contains(event.Name, "cstate_") || strings.Contains(event.Name, "power/energy")) {
+	// no cstate and power events in process mode or cgroup mode
+	if (gCmdLineArgs.processMode || gCmdLineArgs.cgroupMode) && (strings.Contains(event.Name, "cstate_") || strings.Contains(event.Name, "power/energy")) {
 		collectable = false
 		return
 	}

@@ -21,6 +21,7 @@ type EventGroup struct {
 type EventFrame struct {
 	EventGroups []EventGroup
 	Timestamp   float64
+	Cgroup      string
 }
 
 // groups are considered matching if includes the same event names (ignoring .ID suffix)
@@ -88,6 +89,7 @@ func collapseUncoreGroups(inGroups []EventGroup, firstIdx int, count int) (outGr
 // Note: we assume that uncore events are not mixed into groups that have other event types, e.g., cpu events
 func collapseUncoreGroupsInFrame(inFrame EventFrame) (outFrame EventFrame, err error) {
 	outFrame.Timestamp = inFrame.Timestamp
+	outFrame.Cgroup = inFrame.Cgroup
 	var idxUncoreMatches []int
 	for inGroupIdx, inGroup := range inFrame.EventGroups {
 		// skip groups that have been collapsed
@@ -132,13 +134,14 @@ type Event struct {
 	ValueStr   string  `json:"counter-value"`
 	Value      float64
 	Units      string  `json:"unit"`
+	Cgroup     string  `json:"cgroup"`
 	Name       string  `json:"event"`
 	GroupID    int     `json:"event-runtime"`
 	Percentage float64 `json:"pcnt-running"`
 }
 
 // parse JSON formatted event
-// {"interval" : 5.005113019, "counter-value" : "22901873.000000", "unit" : "", "event" : "L1D.REPLACEMENT", "event-runtime" : 80081151765, "pcnt-running" : 6.00, "metric-value" : 0.000000, "metric-unit" : "(null)"}
+// {"interval" : 5.005113019, "counter-value" : "22901873.000000", "unit" : "", "cgroup" : "...1cb2de.scope", "event" : "L1D.REPLACEMENT", "event-runtime" : 80081151765, "pcnt-running" : 6.00, "metric-value" : 0.000000, "metric-unit" : "(null)"}
 func parseEventJSON(rawEvent []byte) (event Event, err error) {
 	if err = json.Unmarshal(rawEvent, &event); err != nil {
 		err = fmt.Errorf("unrecognized event format [%s]: %v", rawEvent, err)
@@ -155,33 +158,44 @@ func parseEventJSON(rawEvent []byte) (event Event, err error) {
 }
 
 // organize events received from perf into groups where event values can be accessed by event name
-func getEventFrame(rawEvents [][]byte) (eventFrame EventFrame, err error) {
-	var lastGroupID int
-	group := EventGroup{EventValues: make(map[string]float64)}
-	for eventIdx, rawEvent := range rawEvents {
+func getEventFrames(rawEvents [][]byte) (eventFrames []EventFrame, err error) {
+	// parse and separate events by cgroup (may be empty)
+	cgroupEvents := make(map[string][]Event)
+	for _, rawEvent := range rawEvents {
 		var event Event
 		if event, err = parseEventJSON(rawEvent); err != nil {
 			err = fmt.Errorf("failed to parse perf event: %v", err)
 			return
 		}
-		if eventIdx == 0 {
-			lastGroupID = event.GroupID
-			eventFrame.Timestamp = event.Timestamp
-		}
-		if event.GroupID != lastGroupID {
-			eventFrame.EventGroups = append(eventFrame.EventGroups, group)
-			group = EventGroup{EventValues: make(map[string]float64)}
-			lastGroupID = event.GroupID
-		}
-		group.GroupID = event.GroupID
-		group.Percentage = event.Percentage
-		group.EventValues[event.Name] = event.Value
+		cgroupEvents[event.Cgroup] = append(cgroupEvents[event.Cgroup], event)
 	}
-	// add the last group
-	eventFrame.EventGroups = append(eventFrame.EventGroups, group)
-	// TODO: can we collapse uncore groups as we're parsing (above)?
-	if eventFrame, err = collapseUncoreGroupsInFrame(eventFrame); err != nil {
-		return
+	// one EventFrame per cgroup
+	group := EventGroup{EventValues: make(map[string]float64)}
+	for cgroup, events := range cgroupEvents {
+		var lastGroupID int
+		var eventFrame EventFrame
+		for eventIdx, event := range events {
+			if eventIdx == 0 {
+				lastGroupID = event.GroupID
+				eventFrame.Timestamp = event.Timestamp
+				eventFrame.Cgroup = cgroup
+			}
+			if event.GroupID != lastGroupID {
+				eventFrame.EventGroups = append(eventFrame.EventGroups, group)
+				group = EventGroup{EventValues: make(map[string]float64)}
+				lastGroupID = event.GroupID
+			}
+			group.GroupID = event.GroupID
+			group.Percentage = event.Percentage
+			group.EventValues[event.Name] = event.Value
+		}
+		// add the last group
+		eventFrame.EventGroups = append(eventFrame.EventGroups, group)
+		// TODO: can we collapse uncore groups as we're parsing (above)?
+		if eventFrame, err = collapseUncoreGroupsInFrame(eventFrame); err != nil {
+			return
+		}
+		eventFrames = append(eventFrames, eventFrame)
 	}
 	return
 }
