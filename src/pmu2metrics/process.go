@@ -57,7 +57,7 @@ func getProcess(pid string) (process Process, err error) {
 }
 
 func getCgroup(cid string) (cgroupName string, err error) {
-	cmd := exec.Command("ps", "-a", "-x", "-h", "-o", "pid,ppid,comm,cmd,cgroup", "--sort=-%cpu")
+	cmd := exec.Command("ps", "-a", "-x", "-h", "-o", "pid,ppid,comm,cmd,%cpu,cgroup", "--sort=-%cpu")
 	var outBuffer, errBuffer bytes.Buffer
 	cmd.Stderr = &errBuffer
 	cmd.Stdout = &outBuffer
