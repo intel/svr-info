@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2023 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ */
+
 // Adapted from https://github.com/dterei/gotsc/blob/master/tsc_amd64.s
 // Copyright 2016 David Terei.  All rights reserved.
 // Use of this source code is governed by a BSD-style
