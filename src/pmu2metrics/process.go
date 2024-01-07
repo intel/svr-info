@@ -2,6 +2,9 @@
  * Copyright (C) 2023 Intel Corporation
  * SPDX-License-Identifier: MIT
  */
+//
+// Linux process information helper functions
+//
 package main
 
 import (
@@ -30,61 +33,10 @@ var psRegex = `^\s*(\d+)\s+(\d+)\s+([\w\d\(\)\:\/_\-\:\.]+)\s+(.*)`
 // pid,ppid,comm,cmd,%cpu,cgroup
 var psCgroupRegex = `^\s*(\d+)\s+(\d+)\s+([\w\d\(\)\:\/_\-\:\.]+)\s+(.*)\s+(\d+\.?\d+)\s+\d+::(.*)`
 
-func processExists(pid string) (exists bool) {
-	exists = false
-	path := filepath.Join("/", "proc", pid)
-	if fileInfo, err := os.Stat(path); err == nil {
-		if fileInfo.Mode().IsDir() {
-			exists = true
-		}
-	}
-	return
-}
-
-func getProcess(pid string) (process Process, err error) {
-	cmd := exec.Command("ps", "-q", pid, "h", "-o", "pid,ppid,comm,cmd", "ww")
-	var outBuffer, errBuffer bytes.Buffer
-	cmd.Stderr = &errBuffer
-	cmd.Stdout = &outBuffer
-	if err = cmd.Run(); err != nil {
-		return
-	}
-	psOutput := outBuffer.String()
-	reProcess := regexp.MustCompile(psRegex)
-	match := reProcess.FindStringSubmatch(psOutput)
-	if match == nil {
-		err = fmt.Errorf("Process not found, PID: %s, ps output: %s", pid, psOutput)
-		return
-	}
-	process = Process{pid: match[1], ppid: match[2], comm: match[3], cmd: match[4]}
-	return
-}
-
-func getCgroup(cid string) (cgroupName string, err error) {
-	cmd := exec.Command("ps", "-a", "-x", "-h", "-o", "pid,ppid,comm,cmd,%cpu,cgroup", "--sort=-%cpu")
-	var outBuffer, errBuffer bytes.Buffer
-	cmd.Stderr = &errBuffer
-	cmd.Stdout = &outBuffer
-	if err = cmd.Run(); err != nil {
-		return
-	}
-	psOutput := outBuffer.String()
-	reCgroup := regexp.MustCompile(psCgroupRegex)
-	for _, line := range strings.Split(psOutput, "\n") {
-		match := reCgroup.FindStringSubmatch(line)
-		if match == nil {
-			continue
-		}
-		if strings.Contains(match[6], cid) {
-			cgroupName = match[6]
-			return
-		}
-	}
-	err = fmt.Errorf("cid not found: %s", cid)
-	return
-}
-
-func getProcesses(pidList string) (processes []Process, err error) {
+// GetProcesses - gets the list of processes associated with the given list of
+// process IDs. An error occurs when a given PID is not found in the current
+// set of running processes.
+func GetProcesses(pidList string) (processes []Process, err error) {
 	pids := strings.Split(pidList, ",")
 	for _, pid := range pids {
 		if processExists(pid) {
@@ -98,7 +50,10 @@ func getProcesses(pidList string) (processes []Process, err error) {
 	return
 }
 
-func getCgroups(cidList string) (cgroups []string, err error) {
+// GetCgroups - gets the list of full cgroup names associated with the given list of
+// partial cgroup names. An error occurs when a given cgroup name is not found in the
+// current set of process cgroups.
+func GetCgroups(cidList string) (cgroups []string, err error) {
 	cids := strings.Split(cidList, ",")
 	for _, cid := range cids {
 		var cgroup string
@@ -110,8 +65,9 @@ func getCgroups(cidList string) (cgroups []string, err error) {
 	return
 }
 
-// get maxProcesses processes with highest CPU utilization, matching filter if provided
-func getHotProcesses(maxProcesses int, filter string) (processes []Process, err error) {
+// GetHotProcesses - get maxProcesses processes with highest CPU utilization, matching
+// filter if provided
+func GetHotProcesses(maxProcesses int, filter string) (processes []Process, err error) {
 	// run ps to get list of processes sorted by cpu utilization (descending)
 	cmd := exec.Command("ps", "-a", "-x", "-h", "-o", "pid,ppid,comm,cmd", "--sort=-%cpu")
 	var outBuffer, errBuffer bytes.Buffer
@@ -155,7 +111,9 @@ func getHotProcesses(maxProcesses int, filter string) (processes []Process, err 
 	return
 }
 
-func getHotCgroups(maxCgroups int, filter string) (cgroups []string, err error) {
+// GetHotCgroups - get maxCgroups cgroup names whose associated processes have the
+// highest CPU utilization, matching filter if provided
+func GetHotCgroups(maxCgroups int, filter string) (cgroups []string, err error) {
 	cmd := exec.Command("ps", "-a", "-x", "-h", "-o", "pid,ppid,comm,cmd,%cpu,cgroup", "--sort=-%cpu")
 	var outBuffer, errBuffer bytes.Buffer
 	cmd.Stderr = &errBuffer
@@ -222,5 +180,59 @@ func getHotCgroups(maxCgroups int, filter string) (cgroups []string, err error) 
 	if gCmdLineArgs.veryVerbose {
 		log.Printf("Hot CIDs: %s", strings.Join(cgroups, ", "))
 	}
+	return
+}
+
+func processExists(pid string) (exists bool) {
+	exists = false
+	path := filepath.Join("/", "proc", pid)
+	if fileInfo, err := os.Stat(path); err == nil {
+		if fileInfo.Mode().IsDir() {
+			exists = true
+		}
+	}
+	return
+}
+
+func getProcess(pid string) (process Process, err error) {
+	cmd := exec.Command("ps", "-q", pid, "h", "-o", "pid,ppid,comm,cmd", "ww")
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stderr = &errBuffer
+	cmd.Stdout = &outBuffer
+	if err = cmd.Run(); err != nil {
+		return
+	}
+	psOutput := outBuffer.String()
+	reProcess := regexp.MustCompile(psRegex)
+	match := reProcess.FindStringSubmatch(psOutput)
+	if match == nil {
+		err = fmt.Errorf("Process not found, PID: %s, ps output: %s", pid, psOutput)
+		return
+	}
+	process = Process{pid: match[1], ppid: match[2], comm: match[3], cmd: match[4]}
+	return
+}
+
+func getCgroup(cid string) (cgroupName string, err error) {
+	cmd := exec.Command("ps", "-a", "-x", "-h", "-o", "pid,ppid,comm,cmd,%cpu,cgroup", "--sort=-%cpu")
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stderr = &errBuffer
+	cmd.Stdout = &outBuffer
+	if err = cmd.Run(); err != nil {
+		return
+	}
+	psOutput := outBuffer.String()
+	reCgroup := regexp.MustCompile(psCgroupRegex)
+	for _, line := range strings.Split(psOutput, "\n") {
+		match := reCgroup.FindStringSubmatch(line)
+		if match == nil {
+			continue
+		}
+		if strings.Contains(match[6], cid) {
+			cgroupName = match[6]
+			return
+		}
+	}
+	err = fmt.Errorf("cid not found: %s", cid)
 	return
 }

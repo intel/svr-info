@@ -2,6 +2,9 @@
  * Copyright (C) 2023 Intel Corporation
  * SPDX-License-Identifier: MIT
  */
+//
+// nmi_watchdog provides helper functions for enabling and disabling the NMI (non-maskable interrupt) watchdog
+//
 package main
 
 import (
@@ -9,7 +12,8 @@ import (
 	"os/exec"
 )
 
-func getNmiWatchdog() (setting string, err error) {
+// GetNMIWatchdog - gets the kernel.nmi_watchdog configuration value (0 or 1)
+func GetNMIWatchdog() (setting string, err error) {
 	// sysctl kernel.nmi_watchdog
 	// kernel.nmi_watchdog = [0|1]
 	cmd := exec.Command("sysctl", "kernel.nmi_watchdog")
@@ -22,7 +26,8 @@ func getNmiWatchdog() (setting string, err error) {
 	return
 }
 
-func setNmiWatchdog(setting string) (err error) {
+// SetNMIWatchdog -sets the kernel.nmi_watchdog configuration value
+func SetNMIWatchdog(setting string) (err error) {
 	// sysctl kernel.nmi_watchdog=[0|1]
 	cmd := exec.Command("sysctl", fmt.Sprintf("kernel.nmi_watchdog=%s", setting))
 	var stdout []byte

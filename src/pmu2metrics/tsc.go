@@ -2,14 +2,14 @@
  * Copyright (C) 2023 Intel Corporation
  * SPDX-License-Identifier: MIT
  */
+//
+// Time Stamp Counter helper functions.
+//
 package main
 
 import "time"
 
-func GetTSCStart() uint64
-
-func GetTSCEnd() uint64
-
+// GetTSCFreqMHz - gets the TSC frequency
 func GetTSCFreqMHz() (freqMHz int) {
 	start := GetTSCStart()
 	time.Sleep(time.Millisecond * 1000)
@@ -17,3 +17,7 @@ func GetTSCFreqMHz() (freqMHz int) {
 	freqMHz = int(end-start) / 1000000
 	return
 }
+
+func GetTSCStart() uint64
+
+func GetTSCEnd() uint64

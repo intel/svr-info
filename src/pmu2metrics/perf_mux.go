@@ -2,14 +2,65 @@
  * Copyright (C) 2023 Intel Corporation
  * SPDX-License-Identifier: MIT
  */
+//
+// Linux perf event/group multiplexing interval helper functions
+//
 package main
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
+// GetMuxIntervals - get a map of sysfs device file names to current mux value for the associated device
+func GetMuxIntervals() (intervals map[string]int, err error) {
+	var paths []string
+	if paths, err = getMuxIntervalFiles(); err != nil {
+		return
+	}
+	intervals = make(map[string]int)
+	for _, path := range paths {
+		var contents []byte
+		if contents, err = os.ReadFile(path); err != nil {
+			err = nil
+			continue
+		}
+		var interval int
+		if interval, err = strconv.Atoi(string(contents)); err != nil {
+			return
+		}
+		intervals[path] = interval
+	}
+	return
+}
+
+// SetMuxIntervals - write the given intervals (values in ms) to the given sysfs device file names (key)
+func SetMuxIntervals(intervals map[string]int) (err error) {
+	for device := range intervals {
+		if err = setMuxInterval(device, intervals[device]); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// SetAllMuxIntervals - writes the given interval (ms) to all perf mux sysfs device files
+func SetAllMuxIntervals(interval int) (err error) {
+	var paths []string
+	if paths, err = getMuxIntervalFiles(); err != nil {
+		return
+	}
+	for _, path := range paths {
+		if err = setMuxInterval(path, interval); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// getMuxIntervalFiles - get list of sysfs device file names used for getting/setting the mux interval
 func getMuxIntervalFiles() (paths []string, err error) {
 	pattern := filepath.Join("/", "sys", "devices", "*")
 	var files []string
@@ -36,46 +87,8 @@ func getMuxIntervalFiles() (paths []string, err error) {
 	return
 }
 
-func getMuxIntervals() (intervals map[string]string, err error) {
-	var paths []string
-	if paths, err = getMuxIntervalFiles(); err != nil {
-		return
-	}
-	intervals = make(map[string]string)
-	for _, path := range paths {
-		var contents []byte
-		if contents, err = os.ReadFile(path); err != nil {
-			err = nil
-			continue
-		}
-		intervals[path] = string(contents)
-	}
-	return
-}
-
-func setMuxInterval(device string, interval string) (err error) {
-	err = os.WriteFile(device, []byte(interval), 0644)
-	return
-}
-
-func setMuxIntervals(intervals map[string]string) (err error) {
-	for device := range intervals {
-		if err = setMuxInterval(device, intervals[device]); err != nil {
-			return
-		}
-	}
-	return
-}
-
-func setAllMuxIntervals(interval int) (err error) {
-	var paths []string
-	if paths, err = getMuxIntervalFiles(); err != nil {
-		return
-	}
-	for _, path := range paths {
-		if err = setMuxInterval(path, fmt.Sprintf("%d\n", interval)); err != nil {
-			return
-		}
-	}
+// setMuxInterval - write the given interval (ms) to the given sysfs device file name
+func setMuxInterval(device string, interval int) (err error) {
+	err = os.WriteFile(device, []byte(fmt.Sprintf("%d", interval)), 0644)
 	return
 }

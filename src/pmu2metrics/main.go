@@ -2,6 +2,9 @@
  * Copyright (C) 2023 Intel Corporation
  * SPDX-License-Identifier: MIT
  */
+//
+// Command line interface and program logic
+//
 package main
 
 import (
@@ -19,6 +22,7 @@ import (
 	"time"
 )
 
+// CmdLineArgs represents the program arguments provided by the user
 type CmdLineArgs struct {
 	showHelp        bool
 	showVersion     bool
@@ -65,7 +69,7 @@ var (
 //go:embed resources
 var resources embed.FS
 
-// extract executables from embedded resources to temporary directory
+// extractExecutableResources extracts executables from embedded resources to temporary directory
 func extractExecutableResources(tempDir string) (err error) {
 	toolNames := []string{"perf"}
 	for _, toolName := range toolNames {
@@ -90,7 +94,9 @@ func extractExecutableResources(tempDir string) (err error) {
 	return
 }
 
-func existsExecutableResource(filename string) (exists bool) {
+// resourceExists confirms that file of provided filename exists in the embedded
+// resources
+func resourceExists(filename string) (exists bool) {
 	f, err := resources.Open(filepath.Join("resources", filename))
 	if err != nil {
 		exists = false
@@ -101,8 +107,12 @@ func existsExecutableResource(filename string) (exists bool) {
 	return
 }
 
+// getPerfPath returns the path to the perf executable that will be used to collect
+// events. If the perf binary is included in the embedded resources, it will be extracted
+// to a temporary directory and run from there, otherwise the system-installed perf will
+// be used.
 func getPerfPath() (path string, tempDir string, err error) {
-	if existsExecutableResource("perf") {
+	if resourceExists("perf") {
 		if tempDir, err = os.MkdirTemp("", fmt.Sprintf("%s.tmp.", filepath.Base(os.Args[0]))); err != nil {
 			log.Printf("failed to create temporary directory: %v", err)
 			return
@@ -118,6 +128,9 @@ func getPerfPath() (path string, tempDir string, err error) {
 	return
 }
 
+// printMetrics prints one frame of metrics to stdout in the format requested by the user. The
+// frameCount argument is used to control when the headers are printed, e.g., on the first frame
+// only.
 func printMetrics(process Process, allMetrics []Metric, frameCount int, frameTimestamp float64) {
 	// separate metrics by CID
 	cidMetrics := make(map[string][]Metric)
@@ -225,7 +238,7 @@ func printMetrics(process Process, allMetrics []Metric, frameCount int, frameTim
 	}
 }
 
-// build perf args from event groups
+// getPerfCommandArgs assembles the arguments that will be passed to Linux perf
 func getPerfCommandArgs(pid string, timeout int, eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
 	args = append(args, "stat", "-I", fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval), "-j")
 	// add pid, if applicable
@@ -252,6 +265,8 @@ func getPerfCommandArgs(pid string, timeout int, eventGroups []GroupDefinition, 
 	return
 }
 
+// getPerfCommandArgsForCgroups assembles the arguments that will be passed to Linux
+// perf when collecting data in cgroup mode
 func getPerfCommandArgsForCgroups(cgroups []string, eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
 	args = append(args, "stat", "-I", fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval), "-j")
 	// add events to collect
@@ -270,14 +285,16 @@ func getPerfCommandArgsForCgroups(cgroups []string, eventGroups []GroupDefinitio
 	return
 }
 
+// getPerfCommands is responsible for assembling the command(s) that will be
+// executed to collect event data
 func getPerfCommands(perfPath string, eventGroups []GroupDefinition, metadata Metadata) (processes []Process, perfCommands []*exec.Cmd, err error) {
 	if gCmdLineArgs.processMode {
 		if gCmdLineArgs.pidList != "" {
-			if processes, err = getProcesses(gCmdLineArgs.pidList); err != nil {
+			if processes, err = GetProcesses(gCmdLineArgs.pidList); err != nil {
 				return
 			}
 		} else {
-			if processes, err = getHotProcesses(gCmdLineArgs.processCount, gCmdLineArgs.processFilter); err != nil {
+			if processes, err = GetHotProcesses(gCmdLineArgs.processCount, gCmdLineArgs.processFilter); err != nil {
 				return
 			}
 		}
@@ -303,11 +320,11 @@ func getPerfCommands(perfPath string, eventGroups []GroupDefinition, metadata Me
 	} else if gCmdLineArgs.cgroupMode {
 		var cgroups []string
 		if gCmdLineArgs.cidList != "" {
-			if cgroups, err = getCgroups(gCmdLineArgs.cidList); err != nil {
+			if cgroups, err = GetCgroups(gCmdLineArgs.cidList); err != nil {
 				return
 			}
 		} else {
-			if cgroups, err = getHotCgroups(gCmdLineArgs.cgroupCount, gCmdLineArgs.cgroupFilter); err != nil {
+			if cgroups, err = GetHotCgroups(gCmdLineArgs.cgroupCount, gCmdLineArgs.cgroupFilter); err != nil {
 				return
 			}
 		}
@@ -335,7 +352,7 @@ func getPerfCommands(perfPath string, eventGroups []GroupDefinition, metadata Me
 	return
 }
 
-// MetricFrame -- the metrics values and associated metadata
+// MetricFrame represents the metrics values and associated metadata
 type MetricFrame struct {
 	process    Process
 	metrics    []Metric
@@ -343,6 +360,10 @@ type MetricFrame struct {
 	timestamp  float64
 }
 
+// runPerf starts Linux perf using the provided command, then reads perf's output
+// until perf stops. In cgroup-mode, perf will be manually terminated if/when the
+// run duration exceeds the collection time or the time when the cgroup list needs
+// to be refreshed.
 func runPerf(process Process, cmd *exec.Cmd, metricDefinitions []MetricDefinition, metadata Metadata, frameChannel chan MetricFrame, errorChannel chan error) {
 	var err error
 	defer func() { errorChannel <- err }()
@@ -425,14 +446,18 @@ func runPerf(process Process, cmd *exec.Cmd, metricDefinitions []MetricDefinitio
 	}
 }
 
+// receiveMetrics prints metrics that it receives over the provided channel
 func receiveMetrics(frameChannel chan MetricFrame) {
 	totalFrameCount := 0
+	// block until next frame of metrics arrives, will exit loop when channel is closed
 	for frame := range frameChannel {
 		totalFrameCount++
 		printMetrics(frame.process, frame.metrics, totalFrameCount, frame.timestamp)
 	}
 }
 
+// doWork is the primary application event loop. It sets up the goroutines and
+// communication channels, runs perf, restarts perf (if necessary), etc.
 func doWork(perfPath string, eventGroups []GroupDefinition, metricDefinitions []MetricDefinition, metadata Metadata) (err error) {
 	// refresh if in process/cgroup mode and list of PIDs/CIDs not specified
 	refresh := (gCmdLineArgs.processMode && gCmdLineArgs.pidList == "") || (gCmdLineArgs.cgroupMode && gCmdLineArgs.cidList == "")
@@ -484,7 +509,7 @@ func doWork(perfPath string, eventGroups []GroupDefinition, metricDefinitions []
 	return
 }
 
-// Function used for testing and debugging
+// doWorkDebug is used for testing and debugging
 // Plays back events present in a file that contains perf stat output
 func doWorkDebug(perfStatFilePath string, eventGroups []GroupDefinition, metricDefinitions []MetricDefinition, metadata Metadata) (err error) {
 	gCollectionStartTime = time.Now()
@@ -553,6 +578,7 @@ func doWorkDebug(perfStatFilePath string, eventGroups []GroupDefinition, metricD
 	return
 }
 
+// showUsage prints program usage and options to stdout
 func showUsage() {
 	fmt.Printf("\nusage: sudo %s [OPTIONS]\n", filepath.Base(os.Args[0]))
 	fmt.Println("\ndefault: Prints all available metrics at 5 second intervals in human readable format until interrupted by user.")
@@ -627,6 +653,8 @@ Advanced Options:
 	fmt.Println(usage)
 }
 
+// validateArgs is responsible for checking the sanity of the provided command
+// line arguments
 func validateArgs() (err error) {
 	if gCmdLineArgs.metadataFilePath != "" {
 		if gCmdLineArgs.perfStatFilePath == "" {
@@ -697,6 +725,7 @@ func validateArgs() (err error) {
 	return
 }
 
+// configureArgs defines the arguments accepted by the application
 func configureArgs() {
 	flag.Usage = func() { showUsage() } // override default usage output
 	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "")
@@ -744,12 +773,15 @@ func configureArgs() {
 	flag.Parse()
 }
 
+// The program will exist with one of these exit codes
 const (
 	exitNoError   = 0
 	exitError     = 1
 	exitInterrupt = 2
 )
 
+// mainReturnWithCode is responsible for initialization and highest-level program
+// logic/flow
 func mainReturnWithCode() int {
 	configureArgs()
 	err := validateArgs()
@@ -779,7 +811,7 @@ func mainReturnWithCode() int {
 	}
 	if gCmdLineArgs.inputCSVFilePath != "" {
 		var output string
-		if output, err = postProcess(gCmdLineArgs.inputCSVFilePath, gCmdLineArgs.postProcessingFormat, gCmdLineArgs.pidList, gCmdLineArgs.cidList); err != nil {
+		if output, err = PostProcess(gCmdLineArgs.inputCSVFilePath, gCmdLineArgs.postProcessingFormat, gCmdLineArgs.pidList, gCmdLineArgs.cidList); err != nil {
 			log.Printf("Error while post-processing: %v", err)
 			return exitError
 		}
@@ -800,12 +832,12 @@ func mainReturnWithCode() int {
 	}
 	var metadata Metadata
 	if gCmdLineArgs.metadataFilePath != "" { // testing/debugging flow
-		if metadata, err = loadMetadataFromFile(gCmdLineArgs.metadataFilePath); err != nil {
+		if metadata, err = LoadMetadataFromFile(gCmdLineArgs.metadataFilePath); err != nil {
 			log.Printf("failed to load metadata from file: %v", err)
 			return exitError
 		}
 	} else {
-		if metadata, err = loadMetadata(); err != nil {
+		if metadata, err = LoadMetadata(); err != nil {
 			if os.Geteuid() != 0 {
 				fmt.Println("\nElevated permissions required, try again as root user or with sudo.")
 				return exitError
@@ -829,7 +861,7 @@ func mainReturnWithCode() int {
 			selectedMetricNames[i] = strings.TrimSpace(selectedMetricNames[i])
 		}
 	}
-	if metricDefinitions, err = loadMetricDefinitions(gCmdLineArgs.metricFilePath, selectedMetricNames, metadata); err != nil {
+	if metricDefinitions, err = LoadMetricDefinitions(gCmdLineArgs.metricFilePath, selectedMetricNames, metadata); err != nil {
 		log.Printf("failed to load metric definitions: %v", err)
 		return exitError
 	}
@@ -843,12 +875,12 @@ func mainReturnWithCode() int {
 		}
 		return exitNoError
 	}
-	if err = configureMetrics(metricDefinitions, evaluatorFunctions, metadata); err != nil {
+	if err = ConfigureMetrics(metricDefinitions, evaluatorFunctions, metadata); err != nil {
 		log.Printf("failed to configure metrics: %v", err)
 		return exitError
 	}
 	var groupDefinitions []GroupDefinition
-	if groupDefinitions, err = loadEventDefinitions(gCmdLineArgs.eventFilePath, metadata); err != nil {
+	if groupDefinitions, err = LoadEventGroups(gCmdLineArgs.eventFilePath, metadata); err != nil {
 		log.Printf("failed to load event definitions: %v", err)
 		return exitError
 	}
@@ -878,30 +910,30 @@ func mainReturnWithCode() int {
 			log.Printf("Using perf at %s.", perfPath)
 		}
 		var nmiWatchdog string
-		if nmiWatchdog, err = getNmiWatchdog(); err != nil {
+		if nmiWatchdog, err = GetNMIWatchdog(); err != nil {
 			log.Printf("failed to retrieve NMI watchdog status: %v", err)
 			return exitError
 		}
 		if nmiWatchdog != "0" {
-			if err = setNmiWatchdog("0"); err != nil {
+			if err = SetNMIWatchdog("0"); err != nil {
 				log.Printf("failed to set NMI watchdog status: %v", err)
 				return exitError
 			}
-			defer setNmiWatchdog(nmiWatchdog)
+			defer SetNMIWatchdog(nmiWatchdog)
 		}
 		if !gCmdLineArgs.printCSV {
 			fmt.Print(".")
 		}
-		var perfMuxIntervals map[string]string
-		if perfMuxIntervals, err = getMuxIntervals(); err != nil {
+		var perfMuxIntervals map[string]int
+		if perfMuxIntervals, err = GetMuxIntervals(); err != nil {
 			log.Printf("failed to get perf mux intervals: %v", err)
 			return exitError
 		}
-		if err = setAllMuxIntervals(gCmdLineArgs.perfMuxInterval); err != nil {
+		if err = SetAllMuxIntervals(gCmdLineArgs.perfMuxInterval); err != nil {
 			log.Printf("failed to set all perf mux intervals to %d: %v", gCmdLineArgs.perfMuxInterval, err)
 			return exitError
 		}
-		defer setMuxIntervals(perfMuxIntervals)
+		defer SetMuxIntervals(perfMuxIntervals)
 		if !gCmdLineArgs.printCSV {
 			fmt.Print(".\n")
 			fmt.Printf("Reporting metrics in %d millisecond intervals...\n", gCmdLineArgs.perfPrintInterval)
@@ -914,6 +946,7 @@ func mainReturnWithCode() int {
 	return exitNoError
 }
 
+// main exits the process with code returned by called function
 func main() {
 	os.Exit(mainReturnWithCode())
 }

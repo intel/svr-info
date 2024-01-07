@@ -27,7 +27,117 @@ type MetricDefinition struct {
 	Evaluable  *govaluate.EvaluableExpression // parse expression once, store here for use in metric evaluation
 }
 
-// transform if/else to ternary conditional (? :) so expression evaluator can handle it
+// LoadMetricDefinitions reads and parses metric definitions from an architecture-specific metric
+// definition file. When the override path argument is empty, the function will load metrics from
+// the file associated with the platform's architecture found in the provided metadata. When
+// a list of metric names is provided, only those metric definitions will be loaded.
+func LoadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics []string, metadata Metadata) (metrics []MetricDefinition, err error) {
+	var bytes []byte
+	if metricDefinitionOverridePath != "" {
+		if bytes, err = os.ReadFile(metricDefinitionOverridePath); err != nil {
+			return
+		}
+	} else {
+		if bytes, err = resources.ReadFile(filepath.Join("resources", fmt.Sprintf("%s_metrics.json", metadata.Microarchitecture))); err != nil {
+			return
+		}
+	}
+	var metricsInFile []MetricDefinition
+	if err = json.Unmarshal(bytes, &metricsInFile); err != nil {
+		return
+	}
+	// remove "metric_" prefix from metric names
+	for i := range metricsInFile {
+		metricsInFile[i].Name = strings.TrimPrefix(metricsInFile[i].Name, "metric_")
+	}
+	// if a list of metric names provided, reduce list to match
+	if len(selectedMetrics) > 0 {
+		// confirm provided metric names are valid (included in metrics defined in file)
+		for _, metricName := range selectedMetrics {
+			found := false
+			for _, metric := range metricsInFile {
+				if metricName == metric.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				err = fmt.Errorf("provided metric name not found: %s", metricName)
+				return
+			}
+		}
+		// build list of metrics based on provided list of metric names
+		for _, metric := range metricsInFile {
+			if !stringInList(metric.Name, selectedMetrics) {
+				continue
+			}
+			metrics = append(metrics, metric)
+		}
+	} else {
+		metrics = metricsInFile
+	}
+	return
+}
+
+// ConfigureMetrics prepares metrics for use by the evaluator, by e.g., replacing
+// metric constants with known values and aligning metric variables to perf event
+// groups
+func ConfigureMetrics(metrics []MetricDefinition, evaluatorFunctions map[string]govaluate.ExpressionFunction, metadata Metadata) (err error) {
+	// get constants as strings
+	tscFreq := fmt.Sprintf("%f", float64(metadata.TSCFrequencyHz))
+	tsc := fmt.Sprintf("%f", float64(metadata.TSC))
+	coresPerSocket := fmt.Sprintf("%f", float64(metadata.CoresPerSocket))
+	chasPerSocket := fmt.Sprintf("%f", float64(len(metadata.DeviceIDs["cha"])))
+	socketCount := fmt.Sprintf("%f", float64(metadata.SocketCount))
+	hyperThreadingOn := fmt.Sprintf("%t", metadata.ThreadsPerCore > 1)
+	threadsPerCore := fmt.Sprintf("%f", float64(metadata.ThreadsPerCore))
+	// configure each metric
+	for metricIdx := range metrics {
+		// transform if/else to ?/:
+		var transformed string
+		if transformed, err = transformConditional(metrics[metricIdx].Expression); err != nil {
+			return
+		}
+		if transformed != metrics[metricIdx].Expression {
+			if gCmdLineArgs.veryVerbose {
+				log.Printf("transformed %s to %s", metrics[metricIdx].Name, transformed)
+			}
+			metrics[metricIdx].Expression = transformed
+		}
+		// replace constants with their values
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SYSTEM_TSC_FREQ]", tscFreq)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[TSC]", tsc)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CORES_PER_SOCKET]", coresPerSocket)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CHAS_PER_SOCKET]", chasPerSocket)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SOCKET_COUNT]", socketCount)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[HYPERTHREADING_ON]", hyperThreadingOn)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[const_thread_count]", threadsPerCore)
+		// get a list of the variables in the expression
+		metrics[metricIdx].Variables = make(map[string]int)
+		expressionIdx := 0
+		for {
+			startVar := strings.IndexRune(metrics[metricIdx].Expression[expressionIdx:], '[')
+			if startVar == -1 { // no more vars in this expression
+				break
+			}
+			endVar := strings.IndexRune(metrics[metricIdx].Expression[expressionIdx:], ']')
+			if endVar == -1 {
+				err = fmt.Errorf("didn't find end of variable indicator (]) in expression: %s", metrics[metricIdx].Expression[expressionIdx:])
+				return
+			}
+			// add the variable name to the map, set group index to -1 to indicate it has not yet been determined
+			metrics[metricIdx].Variables[metrics[metricIdx].Expression[expressionIdx:][startVar+1:endVar]] = -1
+			expressionIdx += endVar + 1
+		}
+		if metrics[metricIdx].Evaluable, err = govaluate.NewEvaluableExpressionWithFunctions(metrics[metricIdx].Expression, evaluatorFunctions); err != nil {
+			log.Printf("%v : %s : %s", err, metrics[metricIdx].Name, metrics[metricIdx].Expression)
+			return
+		}
+	}
+	return
+}
+
+// transformConditional transforms if/else to ternary conditional (? :) so expression evaluator can handle it
 // simple:
 // from: <expression 1> if <condition> else <expression 2>
 // to:   <condition> ? <expression 1> : <expression 2>
@@ -105,7 +215,7 @@ func transformConditional(origIn string) (out string, err error) {
 	return
 }
 
-// true if string is in list of strings
+// stringInList confirms if string is in list of strings
 func stringInList(s string, l []string) bool {
 	for _, item := range l {
 		if item == s {
@@ -113,108 +223,4 @@ func stringInList(s string, l []string) bool {
 		}
 	}
 	return false
-}
-
-// load metrics from file
-func loadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics []string, metadata Metadata) (metrics []MetricDefinition, err error) {
-	var bytes []byte
-	if metricDefinitionOverridePath != "" {
-		if bytes, err = os.ReadFile(metricDefinitionOverridePath); err != nil {
-			return
-		}
-	} else {
-		if bytes, err = resources.ReadFile(filepath.Join("resources", fmt.Sprintf("%s_metrics.json", metadata.Microarchitecture))); err != nil {
-			return
-		}
-	}
-	var metricsInFile []MetricDefinition
-	if err = json.Unmarshal(bytes, &metricsInFile); err != nil {
-		return
-	}
-	// remove "metric_" prefix from metric names
-	for i := range metricsInFile {
-		metricsInFile[i].Name = strings.TrimPrefix(metricsInFile[i].Name, "metric_")
-	}
-	// if a list of metric names provided, reduce list to match
-	if len(selectedMetrics) > 0 {
-		// confirm provided metric names are valid (included in metrics defined in file)
-		for _, metricName := range selectedMetrics {
-			found := false
-			for _, metric := range metricsInFile {
-				if metricName == metric.Name {
-					found = true
-					break
-				}
-			}
-			if !found {
-				err = fmt.Errorf("provided metric name not found: %s", metricName)
-				return
-			}
-		}
-		// build list of metrics based on provided list of metric names
-		for _, metric := range metricsInFile {
-			if !stringInList(metric.Name, selectedMetrics) {
-				continue
-			}
-			metrics = append(metrics, metric)
-		}
-	} else {
-		metrics = metricsInFile
-	}
-	return
-}
-
-func configureMetrics(metrics []MetricDefinition, evaluatorFunctions map[string]govaluate.ExpressionFunction, metadata Metadata) (err error) {
-	// get constants as strings
-	tscFreq := fmt.Sprintf("%f", float64(metadata.TSCFrequencyHz))
-	tsc := fmt.Sprintf("%f", float64(metadata.TSC))
-	coresPerSocket := fmt.Sprintf("%f", float64(metadata.CoresPerSocket))
-	chasPerSocket := fmt.Sprintf("%f", float64(len(metadata.DeviceIDs["cha"])))
-	socketCount := fmt.Sprintf("%f", float64(metadata.SocketCount))
-	hyperThreadingOn := fmt.Sprintf("%t", metadata.ThreadsPerCore > 1)
-	threadsPerCore := fmt.Sprintf("%f", float64(metadata.ThreadsPerCore))
-	// configure each metric
-	for metricIdx := range metrics {
-		// transform if/else to ?/:
-		var transformed string
-		if transformed, err = transformConditional(metrics[metricIdx].Expression); err != nil {
-			return
-		}
-		if transformed != metrics[metricIdx].Expression {
-			if gCmdLineArgs.veryVerbose {
-				log.Printf("transformed %s to %s", metrics[metricIdx].Name, transformed)
-			}
-			metrics[metricIdx].Expression = transformed
-		}
-		// replace constants with their values
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SYSTEM_TSC_FREQ]", tscFreq)
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[TSC]", tsc)
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CORES_PER_SOCKET]", coresPerSocket)
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CHAS_PER_SOCKET]", chasPerSocket)
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SOCKET_COUNT]", socketCount)
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[HYPERTHREADING_ON]", hyperThreadingOn)
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[const_thread_count]", threadsPerCore)
-		// get a list of the variables in the expression
-		metrics[metricIdx].Variables = make(map[string]int)
-		expressionIdx := 0
-		for {
-			startVar := strings.IndexRune(metrics[metricIdx].Expression[expressionIdx:], '[')
-			if startVar == -1 { // no more vars in this expression
-				break
-			}
-			endVar := strings.IndexRune(metrics[metricIdx].Expression[expressionIdx:], ']')
-			if endVar == -1 {
-				err = fmt.Errorf("didn't find end of variable indicator (]) in expression: %s", metrics[metricIdx].Expression[expressionIdx:])
-				return
-			}
-			// add the variable name to the map, set group index to -1 to indicate it has not yet been determined
-			metrics[metricIdx].Variables[metrics[metricIdx].Expression[expressionIdx:][startVar+1:endVar]] = -1
-			expressionIdx += endVar + 1
-		}
-		if metrics[metricIdx].Evaluable, err = govaluate.NewEvaluableExpressionWithFunctions(metrics[metricIdx].Expression, evaluatorFunctions); err != nil {
-			log.Printf("%v : %s : %s", err, metrics[metricIdx].Name, metrics[metricIdx].Expression)
-			return
-		}
-	}
-	return
 }

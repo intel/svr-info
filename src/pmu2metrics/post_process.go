@@ -15,6 +15,30 @@ import (
 	"strings"
 )
 
+// PostProcess - generates formatted output from a CSV file containing metric values. Format
+// options are 'html' and 'csv'.  Pid is a required argument when the CSV file contains data
+// that was collected in process-mode and contains data for more than one process.  Cgroup
+// is a required argument when the CSV file contains data that was collected in cgroup-mode and
+// contains data for more than on cgroup. Note: pid and cgroup are mutually exclusive.
+func PostProcess(csvInputPath string, format string, pid string, cgroup string) (out string, err error) {
+	if pid != "" && cgroup != "" {
+		err = fmt.Errorf("optionally provide pid or cgroup, not both")
+		return
+	}
+	var metrics metricsFromCSV
+	if metrics, err = newMetricsFromCSV(csvInputPath, pid, cgroup); err != nil {
+		return
+	}
+	if format == "" || strings.ToLower(format) == "html" {
+		out, err = metrics.getHTML()
+	} else if strings.ToLower(format) == "csv" {
+		out, err = metrics.getCSV()
+	} else {
+		err = fmt.Errorf("unsupported post-processing format: %s", format)
+	}
+	return
+}
+
 type metricStats struct {
 	mean   float64
 	min    float64
@@ -43,6 +67,7 @@ type metricsFromCSV struct {
 	rows  []row
 }
 
+// newMetricsFromCSV - loads data from CSV
 func newMetricsFromCSV(csvPath string, pid string, cgroup string) (metrics metricsFromCSV, err error) {
 	var file *os.File
 	if file, err = os.Open(csvPath); err != nil {
@@ -110,6 +135,7 @@ func newMetricsFromCSV(csvPath string, pid string, cgroup string) (metrics metri
 	return
 }
 
+// getStats - calculate summary stats (min, max, mean, stddev) for each metric
 func (m *metricsFromCSV) getStats() (stats map[string]metricStats, err error) {
 	stats = make(map[string]metricStats)
 	for _, metricName := range m.names {
@@ -159,7 +185,8 @@ func (m *metricsFromCSV) getStats() (stats map[string]metricStats, err error) {
 	return
 }
 
-func (m *metricsFromCSV) generateHTML() (html string, err error) {
+// getHTML - generate a string containing HTML representing the metrics
+func (m *metricsFromCSV) getHTML() (html string, err error) {
 	var stats map[string]metricStats
 	if stats, err = m.getStats(); err != nil {
 		return
@@ -245,7 +272,8 @@ func (m *metricsFromCSV) generateHTML() (html string, err error) {
 	return
 }
 
-func (m *metricsFromCSV) generateCSV() (out string, err error) {
+// getCSV - generate CSV string representing the summary statistics of the metrics
+func (m *metricsFromCSV) getCSV() (out string, err error) {
 	var stats map[string]metricStats
 	if stats, err = m.getStats(); err != nil {
 		return
@@ -253,21 +281,6 @@ func (m *metricsFromCSV) generateCSV() (out string, err error) {
 	out = "metric,mean,min,max,stddev\n"
 	for _, name := range m.names {
 		out += fmt.Sprintf("%s,%f,%f,%f,%f\n", name, stats[name].mean, stats[name].min, stats[name].max, stats[name].stddev)
-	}
-	return
-}
-
-func postProcess(csvInputPath string, format string, pid string, cgroup string) (out string, err error) {
-	var metrics metricsFromCSV
-	if metrics, err = newMetricsFromCSV(csvInputPath, pid, cgroup); err != nil {
-		return
-	}
-	if format == "" || strings.ToLower(format) == "html" {
-		out, err = metrics.generateHTML()
-	} else if strings.ToLower(format) == "csv" {
-		out, err = metrics.generateCSV()
-	} else {
-		err = fmt.Errorf("unsupported post-processing format: %s", format)
 	}
 	return
 }
