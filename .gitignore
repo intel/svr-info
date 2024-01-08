@@ -1,54 +1,12 @@
-# make output
-/dist
-# apps
-src/orchestrator/orchestrator*
-src/orchestrator/resources/collector
-src/orchestrator/resources/collector_arm64
-src/orchestrator/resources/sshpass
-src/orchestrator/resources/reporter
-src/reporter/reporter*
-src/collector/collector
-src/collector/collector.exe
-src/collector/collector_arm64
-src/rdmsr/rdmsrx
-src/wrmsr/wrmsrx
-src/msrbusy/msrbusy
-src/pmu2metrics/pmu2metrics
-src/pmu2metrics/pmu2metrics-with-perf
-src/pmu2metrics/resources/perf
-src/calcfreq/calcfreq
-# src
-async-profiler
-cpuid
-dmidecode
-ethtool
-fio
-flamegraph
-ipmitool
-linux
-lshw
-lspci
-mlc
-pmu-checker
-spectre-meltdown-checker
-sshpass
-stress-ng
-sysstat
-src/async-profiler-*
-src/linux-*
-src/cpuid-*
-src/libcrypt*
-src/glibc*
-src/zlib*
-# build output in config
-collector_deps_a*
-# run/debug output
-src/collector/collector.log
-src/collector/collector.pid
-src/orchestrator/orchestrator_20*
-src/reporter/debug_out/*
-__debug_bin*.log
-# other
-src/orchestrator/targets
-src/pmu2metrics/sys
-src/pmu2metrics/scripts
+dist
+bin
+build.*
+cmd/orchestrator/targets
+cmd/orchestrator/orchestrator_20*
+cmd/orchestrator/resources/collector_deps_*
+cmd/orchestrator/resources/collector
+cmd/orchestrator/resources/collector_arm64
+cmd/orchestrator/resources/sshpass
+cmd/orchestrator/resources/reporter
+cmd/pmu2metrics/scripts
+cmd/reporter/debug_out/*
