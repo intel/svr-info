@@ -13,7 +13,7 @@ require (
 	github.com/intel/svr-info/internal/msr v0.0.0-00010101000000-000000000000
 	github.com/intel/svr-info/internal/progress v0.0.0-00010101000000-000000000000
 	github.com/intel/svr-info/internal/target v0.0.0-00010101000000-000000000000
-	github.com/xuri/excelize/v2 v2.8.0
+	github.com/xuri/excelize/v2 v2.8.1-0.20231031165218-b41a6cc3cd37
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	golang.org/x/term v0.16.0
 	golang.org/x/text v0.14.0
@@ -37,11 +37,11 @@ require (
 	github.com/src-d/gcfg v1.4.0 // indirect
 	github.com/xanzy/ssh-agent v0.2.1 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
-	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
+	github.com/xuri/nfp v0.0.0-20230919160717-d98342af3f05 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
-	golang.org/x/crypto v0.12.0 // indirect
-	golang.org/x/net v0.14.0 // indirect
+	golang.org/x/crypto v0.17.0 // indirect
+	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
 	gopkg.in/src-d/go-billy.v4 v4.3.2 // indirect
 	gopkg.in/src-d/go-git.v4 v4.13.1 // indirect
