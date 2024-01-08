@@ -398,8 +398,8 @@ func (app *App) runSubComponent() (exitCode int, err error) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(os.Stdout, stdout)
-	fmt.Fprintf(os.Stderr, stderr)
+	fmt.Fprint(os.Stdout, stdout)
+	fmt.Fprint(os.Stderr, stderr)
 	return
 }
 

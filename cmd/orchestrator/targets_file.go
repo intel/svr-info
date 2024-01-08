@@ -90,7 +90,6 @@ func (tf *TargetsFile) parseContent(content []byte) (targets []targetFromFile, e
 				err = core.FileExists(t.key)
 				if err != nil {
 					fileErrors = append(fileErrors, fmt.Sprintf("-targets %s : key file (%s) not a file, line %d\n", tf.path, t.key, lineNo))
-					return
 				}
 			}
 			t.pwd = tokens[i+4]
