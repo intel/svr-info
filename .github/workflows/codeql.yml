@@ -9,6 +9,9 @@ on:
   schedule:
     - cron: '36 18 * * 3'
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     name: Analyze
@@ -24,10 +27,10 @@ jobs:
         language: [ 'cpp', 'go' ]
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@1500a131381b66de0c52ac28abb13cd79f4b7ecc # v2.22.12
       with:
         languages: ${{ matrix.language }}
     - name: Build golang
@@ -41,6 +44,6 @@ jobs:
         cd src/calcfreq/
         make
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@1500a131381b66de0c52ac28abb13cd79f4b7ecc # v2.22.12
       with:
         category: "/language:${{matrix.language}}"
