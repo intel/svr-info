@@ -41,13 +41,8 @@ msrbusy: bin
 	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy ../cmd/msrbusy
 
 pmu2metrics: bin
-	rm -f cmd/pmu2metrics/resources/perf
+	-cp /prebuilt/bin/perf cmd/pmu2metrics/resources
 	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics ../cmd/pmu2metrics
-
-pmu2metrics-with-perf: bin
-	cp /prebuilt/bin/perf cmd/pmu2metrics/resources
-	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics-with-perf ../cmd/pmu2metrics
-	rm cmd/pmu2metrics/resources/perf
 
 calcfreq: bin
 	cd bin && gcc -D VERSION=\"$(VERSION)\" ../tools/calcfreq/calcfreq.c -lpthread -o calcfreq -static

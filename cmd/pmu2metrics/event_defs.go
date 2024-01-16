@@ -125,14 +125,18 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 		return
 	}
 	// short-circuit off-core response events
-	if event.Device == "cpu" && strings.HasPrefix(event.Name, "OCR") && isUncoreSupported(metadata) && !gCmdLineArgs.processMode && !gCmdLineArgs.cgroupMode {
+	if event.Device == "cpu" &&
+		strings.HasPrefix(event.Name, "OCR") &&
+		isUncoreSupported(metadata) &&
+		!(gCmdLineArgs.scope == ScopeProcess) &&
+		!(gCmdLineArgs.scope == ScopeCgroup) {
 		return
 	}
 	// exclude uncore events when
 	// - their corresponding device is not found
-	// - not in system-wide collection mode
+	// - not in system-wide collection scope
 	if event.Device != "cpu" && event.Device != "" {
-		if gCmdLineArgs.processMode || gCmdLineArgs.cgroupMode {
+		if gCmdLineArgs.scope == ScopeProcess || gCmdLineArgs.scope == ScopeCgroup {
 			collectable = false
 			return
 		}
@@ -161,8 +165,9 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 		collectable = false
 		return
 	}
-	// no cstate and power events in process mode or cgroup mode
-	if (gCmdLineArgs.processMode || gCmdLineArgs.cgroupMode) && (strings.Contains(event.Name, "cstate_") || strings.Contains(event.Name, "power/energy")) {
+	// no cstate and power events when collecting at process or cgroup scope
+	if (gCmdLineArgs.scope == ScopeProcess || gCmdLineArgs.scope == ScopeCgroup) &&
+		(strings.Contains(event.Name, "cstate_") || strings.Contains(event.Name, "power/energy")) {
 		collectable = false
 		return
 	}

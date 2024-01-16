@@ -30,42 +30,76 @@ type EventGroup struct {
 type EventFrame struct {
 	EventGroups []EventGroup
 	Timestamp   float64
+	Socket      string
+	CPU         string
 	Cgroup      string
 }
 
-// GetEventFrames organizes events received from perf into groups where event values
-// can be accessed by event name. There will be more than one frame if data was
-// collected for more than one cgroup.
-func GetEventFrames(rawEvents [][]byte) (eventFrames []EventFrame, err error) {
-	// parse and separate events by cgroup (may be empty)
-	cgroupEvents := make(map[string][]Event)
-	for _, rawEvent := range rawEvents {
-		var event Event
-		if event, err = parseEventJSON(rawEvent); err != nil {
-			err = fmt.Errorf("failed to parse perf event: %v", err)
-			return
-		}
-		cgroupEvents[event.Cgroup] = append(cgroupEvents[event.Cgroup], event)
+// Event represents the structure of an event output by perf stat...with
+// a few exceptions
+type Event struct {
+	Interval     float64 `json:"interval"`
+	CPU          string  `json:"cpu"`
+	CounterValue string  `json:"counter-value"`
+	Unit         string  `json:"unit"`
+	Cgroup       string  `json:"cgroup"`
+	Event        string  `json:"event"`
+	EventRuntime int     `json:"event-runtime"`
+	PcntRunning  float64 `json:"pcnt-running"`
+	Value        float64 // parsed value
+	Group        int     // event group index
+	Socket       string  // only relevant if granularity is socket
+}
+
+// GetEventFrames organizes raw events received from perf into one or more frames (groups of events) that
+// will be used for calculating metrics.
+//
+// The raw events received from perf will differ based on the scope of collection. Current options
+// are system-wide, process, cgroup(s). Cgroup scoped data is received intermixed, i.e., multiple
+// cgroups' data is represented in the rawEvents list. Process scoped data is received for only
+// one process at a time.
+//
+// The frames produced will differ based on the intended metric granularity. Current options are
+// system, socket, cpu (thread/logical CPU), but only when in system scope. Process and cgroup scope
+// only support system-level granularity.
+func GetEventFrames(rawEvents [][]byte, eventGroupDefinitions []GroupDefinition, scope Scope, granularity Granularity, metadata Metadata) (eventFrames []EventFrame, err error) {
+	// parse raw events into list of Event
+	var allEvents []Event
+	if allEvents, err = parseEvents(rawEvents, eventGroupDefinitions); err != nil {
+		return
 	}
-	// one EventFrame per cgroup
-	group := EventGroup{EventValues: make(map[string]float64)}
-	for cgroup, events := range cgroupEvents {
+	// coalesce events to one or more lists based on scope and granularity
+	var coalescedEvents [][]Event
+	if coalescedEvents, err = coalesceEvents(allEvents, scope, granularity, metadata); err != nil {
+		return
+	}
+	// create one EventFrame per list of Events
+	for _, events := range coalescedEvents {
+		// organize events into groups
+		group := EventGroup{EventValues: make(map[string]float64)}
 		var lastGroupID int
 		var eventFrame EventFrame
 		for eventIdx, event := range events {
 			if eventIdx == 0 {
-				lastGroupID = event.GroupID
-				eventFrame.Timestamp = event.Timestamp
-				eventFrame.Cgroup = cgroup
+				lastGroupID = event.Group
+				eventFrame.Timestamp = event.Interval
+				if gCmdLineArgs.granularity == GranularityCPU {
+					eventFrame.CPU = event.CPU
+				} else if gCmdLineArgs.granularity == GranularitySocket {
+					eventFrame.Socket = event.Socket
+				}
+				if gCmdLineArgs.scope == ScopeCgroup {
+					eventFrame.Cgroup = event.Cgroup
+				}
 			}
-			if event.GroupID != lastGroupID {
+			if event.Group != lastGroupID {
 				eventFrame.EventGroups = append(eventFrame.EventGroups, group)
 				group = EventGroup{EventValues: make(map[string]float64)}
-				lastGroupID = event.GroupID
+				lastGroupID = event.Group
 			}
-			group.GroupID = event.GroupID
-			group.Percentage = event.Percentage
-			group.EventValues[event.Name] = event.Value
+			group.GroupID = event.Group
+			group.Percentage = event.PcntRunning
+			group.EventValues[event.Event] = event.Value
 		}
 		// add the last group
 		eventFrame.EventGroups = append(eventFrame.EventGroups, group)
@@ -74,6 +108,132 @@ func GetEventFrames(rawEvents [][]byte) (eventFrames []EventFrame, err error) {
 			return
 		}
 		eventFrames = append(eventFrames, eventFrame)
+	}
+	return
+}
+
+// parseEvents parses the raw event data into a list of Event
+func parseEvents(rawEvents [][]byte, eventGroupDefinitions []GroupDefinition) (events []Event, err error) {
+	events = make([]Event, 0, len(rawEvents))
+	groupIdx := 0
+	eventIdx := -1
+	previousEvent := ""
+	for _, rawEvent := range rawEvents {
+		var event Event
+		if event, err = parseEventJSON(rawEvent); err != nil {
+			err = fmt.Errorf("failed to parse perf event: %v", err)
+			return
+		}
+		if event.Event != previousEvent {
+			eventIdx++
+			previousEvent = event.Event
+		}
+		if eventIdx == len(eventGroupDefinitions[groupIdx]) { // last event in group
+			groupIdx++
+			if groupIdx == len(eventGroupDefinitions) {
+				if gCmdLineArgs.scope == ScopeCgroup {
+					groupIdx = 0
+				} else {
+					err = fmt.Errorf("event group definitions not aligning with raw events")
+					return
+				}
+			}
+			eventIdx = 0
+		}
+		event.Group = groupIdx
+		events = append(events, event)
+	}
+	return
+}
+
+// stringIndexInList returns the index of the given string in the given list of
+// strings and error if not found
+func stringIndexInList(s string, l []string) (idx int, err error) {
+	var item string
+	for idx, item = range l {
+		if item == s {
+			return
+		}
+	}
+	err = fmt.Errorf("%s not found in %s", s, strings.Join(l, ", "))
+	return
+}
+
+// coalesceEvents separates the events into a number of event lists by granularity and scope
+func coalesceEvents(allEvents []Event, scope Scope, granularity Granularity, metadata Metadata) (coalescedEvents [][]Event, err error) {
+	if scope == ScopeSystem {
+		if granularity == GranularitySystem {
+			coalescedEvents = append(coalescedEvents, allEvents)
+			return
+		} else if granularity == GranularitySocket {
+			// one list of Events per Socket
+			newEvents := make([][]Event, metadata.SocketCount)
+			for i := 0; i < metadata.SocketCount; i++ {
+				newEvents[i] = make([]Event, 0, len(allEvents)/metadata.SocketCount)
+			}
+			// merge
+			prevSocket := -1
+			var socket int
+			var newEvent Event
+			for i, event := range allEvents {
+				var cpu int
+				if cpu, err = strconv.Atoi(event.CPU); err != nil {
+					return
+				}
+				socket = metadata.CPUSocketMap[cpu]
+				if socket != prevSocket {
+					if i != 0 {
+						newEvents[prevSocket] = append(newEvents[prevSocket], newEvent)
+					}
+					prevSocket = socket
+					newEvent = event
+					newEvent.Socket = fmt.Sprintf("%d", socket)
+					continue
+				}
+				newEvent.Value += event.Value
+			}
+			newEvents[socket] = append(newEvents[socket], newEvent)
+			coalescedEvents = append(coalescedEvents, newEvents...)
+			return
+		} else if granularity == GranularityCPU {
+			// create one list of Events per CPU
+			numCPUs := metadata.SocketCount * metadata.CoresPerSocket * metadata.ThreadsPerCore
+			newEvents := make([][]Event, numCPUs)
+			for i := 0; i < numCPUs; i++ {
+				newEvents[i] = make([]Event, 0, len(allEvents)/numCPUs)
+			}
+			for _, event := range allEvents {
+				var cpu int
+				if cpu, err = strconv.Atoi(event.CPU); err != nil {
+					return
+				}
+				newEvents[cpu] = append(newEvents[cpu], event)
+			}
+			coalescedEvents = append(coalescedEvents, newEvents...)
+		} else {
+			err = fmt.Errorf("unsupported granularity: %d", granularity)
+			return
+		}
+	} else if scope == ScopeProcess {
+		coalescedEvents = append(coalescedEvents, allEvents)
+		return
+	} else if scope == ScopeCgroup {
+		// expand events list to one list per cgroup
+		var allCgroupEvents [][]Event
+		var cgroups []string
+		for _, event := range allEvents {
+			var cgroupIdx int
+			if cgroupIdx, err = stringIndexInList(event.Cgroup, cgroups); err != nil {
+				cgroups = append(cgroups, event.Cgroup)
+				cgroupIdx = len(cgroups) - 1
+				allCgroupEvents = append(allCgroupEvents, []Event{})
+			}
+			allCgroupEvents[cgroupIdx] = append(allCgroupEvents[cgroupIdx], event)
+		}
+		coalescedEvents = append(coalescedEvents, allCgroupEvents...)
+	} else {
+		err = fmt.Errorf("unsupported scope: %d", scope)
+		return
 	}
 	return
 }
@@ -98,8 +258,8 @@ func GetEventFrames(rawEvents [][]byte) (eventFrames []EventFrame, err error) {
 // Note: uncore event names start with "UNC"
 // Note: we assume that uncore events are not mixed into groups that have other event types, e.g., cpu events
 func collapseUncoreGroupsInFrame(inFrame EventFrame) (outFrame EventFrame, err error) {
-	outFrame.Timestamp = inFrame.Timestamp
-	outFrame.Cgroup = inFrame.Cgroup
+	outFrame = inFrame
+	outFrame.EventGroups = []EventGroup{}
 	var idxUncoreMatches []int
 	for inGroupIdx, inGroup := range inFrame.EventGroups {
 		// skip groups that have been collapsed
@@ -144,7 +304,8 @@ func isMatchingGroup(groupA, groupB EventGroup) bool {
 	if len(groupA.EventValues) != len(groupB.EventValues) {
 		return false
 	}
-	var aNames, bNames []string
+	aNames := make([]string, 0, len(groupA.EventValues))
+	bNames := make([]string, 0, len(groupB.EventValues))
 	for eventAName := range groupA.EventValues {
 		parts := strings.Split(eventAName, ".")
 		newName := strings.Join(parts[:len(parts)-1], ".")
@@ -183,25 +344,14 @@ func collapseUncoreGroups(inGroups []EventGroup, firstIdx int, count int) (outGr
 	return
 }
 
-type Event struct {
-	Timestamp  float64 `json:"interval"`
-	ValueStr   string  `json:"counter-value"`
-	Value      float64
-	Units      string  `json:"unit"`
-	Cgroup     string  `json:"cgroup"`
-	Name       string  `json:"event"`
-	GroupID    int     `json:"event-runtime"`
-	Percentage float64 `json:"pcnt-running"`
-}
-
 // parseEventJSON parses JSON formatted event into struct
-// example: {"interval" : 5.005113019, "counter-value" : "22901873.000000", "unit" : "", "cgroup" : "...1cb2de.scope", "event" : "L1D.REPLACEMENT", "event-runtime" : 80081151765, "pcnt-running" : 6.00, "metric-value" : 0.000000, "metric-unit" : "(null)"}
+// example: {"interval" : 5.005113019, "cpu": "0", "counter-value" : "22901873.000000", "unit" : "", "cgroup" : "...1cb2de.scope", "event" : "L1D.REPLACEMENT", "event-runtime" : 80081151765, "pcnt-running" : 6.00, "metric-value" : 0.000000, "metric-unit" : "(null)"}
 func parseEventJSON(rawEvent []byte) (event Event, err error) {
 	if err = json.Unmarshal(rawEvent, &event); err != nil {
 		err = fmt.Errorf("unrecognized event format [%s]: %v", rawEvent, err)
 		return
 	}
-	if event.Value, err = strconv.ParseFloat(event.ValueStr, 64); err != nil {
+	if event.Value, err = strconv.ParseFloat(event.CounterValue, 64); err != nil {
 		event.Value = math.NaN()
 		err = nil
 		if gCmdLineArgs.verbose {

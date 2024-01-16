@@ -2,6 +2,9 @@
  * Copyright (C) 2023 Intel Corporation
  * SPDX-License-Identifier: MIT
  */
+//
+// metric generation type defintions and helper functions
+//
 package main
 
 import (
@@ -15,10 +18,114 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 )
 
+// Metric represents a metric (name, value) derived from perf events
 type Metric struct {
-	Name   string
-	Value  float64
-	Cgroup string
+	Name  string
+	Value float64
+}
+
+// MetricFrame represents the metrics values and associated metadata
+type MetricFrame struct {
+	Metrics    []Metric
+	Timestamp  float64
+	FrameCount int
+	Socket     string
+	CPU        string
+	Cgroup     string
+	PID        string
+	Cmd        string
+}
+
+// ProcessEvents is responsible for producing metrics from raw perf events
+func ProcessEvents(perfEvents [][]byte, eventGroupDefinitions []GroupDefinition, metricDefinitions []MetricDefinition, process Process, previousTimestamp float64, metadata Metadata) (metricFrames []MetricFrame, timeStamp float64, err error) {
+	var eventFrames []EventFrame
+	if eventFrames, err = GetEventFrames(perfEvents, eventGroupDefinitions, gCmdLineArgs.scope, gCmdLineArgs.granularity, metadata); err != nil { // arrange the events into groups
+		err = fmt.Errorf("failed to put perf events into groups: %v", err)
+		return
+	}
+	metricFrames = make([]MetricFrame, 0, len(eventFrames))
+	for _, eventFrame := range eventFrames {
+		timeStamp = eventFrame.Timestamp
+		var metricFrame MetricFrame
+		metricFrame.Metrics = make([]Metric, 0, len(metricDefinitions))
+		metricFrame.Timestamp = eventFrame.Timestamp
+		metricFrame.Socket = eventFrame.Socket
+		metricFrame.CPU = eventFrame.CPU
+		metricFrame.Cgroup = eventFrame.Cgroup
+		metricFrame.PID = process.pid
+		metricFrame.Cmd = process.cmd
+		// produce metrics from event groups
+		for _, metricDef := range metricDefinitions {
+			metric := Metric{Name: metricDef.Name, Value: math.NaN()}
+			var variables map[string]interface{}
+			if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
+				if gCmdLineArgs.verbose {
+					log.Printf("failed to get expression variable values: %v", err)
+				}
+				err = nil
+			} else {
+				var result interface{}
+				if result, err = evaluateExpression(metricDef, variables); err != nil {
+					if gCmdLineArgs.verbose {
+						log.Printf("failed to evaluate expression: %v", err)
+					}
+					err = nil
+				} else {
+					metric.Value = result.(float64)
+				}
+			}
+			metricFrame.Metrics = append(metricFrame.Metrics, metric)
+			if gCmdLineArgs.veryVerbose {
+				var prettyVars []string
+				for variableName := range variables {
+					prettyVars = append(prettyVars, fmt.Sprintf("%s=%f", variableName, variables[variableName]))
+				}
+				log.Printf("%s : %s : %s", metricDef.Name, metricDef.Expression, strings.Join(prettyVars, ", "))
+			}
+		}
+		metricFrames = append(metricFrames, metricFrame)
+	}
+	return
+}
+
+// GetEvaluatorFunctions defines functions that can be called in metric expressions
+func GetEvaluatorFunctions() (functions map[string]govaluate.ExpressionFunction) {
+	functions = make(map[string]govaluate.ExpressionFunction)
+	functions["max"] = func(args ...interface{}) (interface{}, error) {
+		var leftVal float64
+		var rightVal float64
+		switch t := args[0].(type) {
+		case int:
+			leftVal = float64(t)
+		case float64:
+			leftVal = t
+		}
+		switch t := args[1].(type) {
+		case int:
+			rightVal = float64(t)
+		case float64:
+			rightVal = t
+		}
+		return max(leftVal, rightVal), nil
+	}
+	functions["min"] = func(args ...interface{}) (interface{}, error) {
+		var leftVal float64
+		var rightVal float64
+		switch t := args[0].(type) {
+		case int:
+			leftVal = float64(t)
+		case float64:
+			leftVal = t
+		}
+		switch t := args[1].(type) {
+		case int:
+			rightVal = float64(t)
+		case float64:
+			rightVal = t
+		}
+		return min(leftVal, rightVal), nil
+	}
+	return
 }
 
 // lock to protect metric variable map that holds the event group where a variable value will be retrieved
@@ -110,46 +217,6 @@ func getExpressionVariableValues(metric MetricDefinition, frame EventFrame, prev
 	return
 }
 
-// define functions that can be called in metric expressions
-func getEvaluatorFunctions() (functions map[string]govaluate.ExpressionFunction) {
-	functions = make(map[string]govaluate.ExpressionFunction)
-	functions["max"] = func(args ...interface{}) (interface{}, error) {
-		var leftVal float64
-		var rightVal float64
-		switch t := args[0].(type) {
-		case int:
-			leftVal = float64(t)
-		case float64:
-			leftVal = t
-		}
-		switch t := args[1].(type) {
-		case int:
-			rightVal = float64(t)
-		case float64:
-			rightVal = t
-		}
-		return max(leftVal, rightVal), nil
-	}
-	functions["min"] = func(args ...interface{}) (interface{}, error) {
-		var leftVal float64
-		var rightVal float64
-		switch t := args[0].(type) {
-		case int:
-			leftVal = float64(t)
-		case float64:
-			leftVal = t
-		}
-		switch t := args[1].(type) {
-		case int:
-			rightVal = float64(t)
-		case float64:
-			rightVal = t
-		}
-		return min(leftVal, rightVal), nil
-	}
-	return
-}
-
 // function to call evaluator so that we can catch panics that come from the evaluator
 func evaluateExpression(metric MetricDefinition, variables map[string]interface{}) (result interface{}, err error) {
 	defer func() {
@@ -159,47 +226,6 @@ func evaluateExpression(metric MetricDefinition, variables map[string]interface{
 	}()
 	if result, err = metric.Evaluable.Evaluate(variables); err != nil {
 		err = fmt.Errorf("%v : %s : %s", err, metric.Name, metric.Expression)
-	}
-	return
-}
-
-func processEvents(perfEvents [][]byte, metricDefinitions []MetricDefinition, previousTimestamp float64, metadata Metadata) (metrics []Metric, timeStamp float64, err error) {
-	var eventFrames []EventFrame
-	if eventFrames, err = GetEventFrames(perfEvents); err != nil { // arrange the events into groups
-		err = fmt.Errorf("failed to put perf events into groups: %v", err)
-		return
-	}
-	for _, eventFrame := range eventFrames {
-		timeStamp = eventFrame.Timestamp
-		// produce metrics from event groups
-		for _, metricDef := range metricDefinitions {
-			metric := Metric{Name: metricDef.Name, Value: math.NaN(), Cgroup: eventFrame.Cgroup}
-			var variables map[string]interface{}
-			if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
-				if gCmdLineArgs.verbose {
-					log.Printf("failed to get expression variable values: %v", err)
-				}
-				err = nil
-			} else {
-				var result interface{}
-				if result, err = evaluateExpression(metricDef, variables); err != nil {
-					if gCmdLineArgs.verbose {
-						log.Printf("failed to evaluate expression: %v", err)
-					}
-					err = nil
-				} else {
-					metric.Value = result.(float64)
-				}
-			}
-			metrics = append(metrics, metric)
-			if gCmdLineArgs.veryVerbose {
-				var prettyVars []string
-				for variableName := range variables {
-					prettyVars = append(prettyVars, fmt.Sprintf("%s=%f", variableName, variables[variableName]))
-				}
-				log.Printf("%s : %s : %s", metricDef.Name, metricDef.Expression, strings.Join(prettyVars, ", "))
-			}
-		}
 	}
 	return
 }

@@ -27,16 +27,17 @@ import (
 // Metadata is the representation of the platform's state and capabilities
 type Metadata struct {
 	CoresPerSocket      int `yaml:"CoresPerSocket"`
-	DeviceIDs           map[string][]int
-	Microarchitecture   string `yaml:"Microarchitecture"`
+	CPUSocketMap        map[int]int
+	DeviceIDs           map[string][]int `yaml:"DeviceIDs"`
+	Microarchitecture   string           `yaml:"Microarchitecture"`
 	ModelName           string
-	PerfSupportedEvents string
-	RefCyclesSupported  bool
-	SocketCount         int `yaml:"SocketCount"`
-	ThreadsPerCore      int `yaml:"ThreadsPerCore"`
-	TMASupported        bool
-	TSC                 int `yaml:"TSC"`
-	TSCFrequencyHz      int `yaml:"TSCFrequencyHz"`
+	PerfSupportedEvents string `yaml:"PerfSupportedEvents"`
+	RefCyclesSupported  bool   `yaml:"RefCyclesSupported"`
+	SocketCount         int    `yaml:"SocketCount"`
+	ThreadsPerCore      int    `yaml:"ThreadsPerCore"`
+	TMASupported        bool   `yaml:"TMASupported"`
+	TSC                 int    `yaml:"TSC"`
+	TSCFrequencyHz      int    `yaml:"TSCFrequencyHz"`
 }
 
 // LoadMetadata - populates and returns a Metadata structure containing state of the
@@ -118,6 +119,8 @@ func LoadMetadata() (metadata Metadata, err error) {
 	} else {
 		metadata.ThreadsPerCore = 1
 	}
+	// CPUSocketMap
+	metadata.CPUSocketMap = createCPUSocketMap(metadata.CoresPerSocket, metadata.SocketCount, metadata.ThreadsPerCore == 2)
 	// System TSC Frequency
 	metadata.TSCFrequencyHz = GetTSCFreqMHz() * 1000000
 	// calculate TSC
@@ -149,7 +152,10 @@ func LoadMetadataFromFile(metadataFilePath string) (metadata Metadata, err error
 	if yamlData, err = os.ReadFile(metadataFilePath); err != nil {
 		return
 	}
-	err = yaml.UnmarshalStrict([]byte(yamlData), &metadata)
+	if err = yaml.UnmarshalStrict([]byte(yamlData), &metadata); err != nil {
+		return
+	}
+	metadata.CPUSocketMap = createCPUSocketMap(metadata.CoresPerSocket, metadata.SocketCount, metadata.ThreadsPerCore == 2)
 	return
 }
 
@@ -330,4 +336,30 @@ func getTMASupported() (supported bool, output string, err error) {
 	}
 	supported = !(vals["TOPDOWN.SLOTS"] == vals["PERF_METRICS.BAD_SPECULATION"])
 	return
+}
+
+// createCPUSocketMap creates a map from CPU number to socket number
+func createCPUSocketMap(coresPerSocket int, sockets int, hyperthreading bool) (cpuSocketMap map[int]int) {
+	// Create an empty map
+	cpuSocketMap = make(map[int]int)
+
+	// Calculate the total number of logical CPUs
+	totalCPUs := coresPerSocket * sockets
+	if hyperthreading {
+		totalCPUs *= 2 // hyperthreading doubles the number of logical CPUs
+	}
+	// Assign each CPU to a socket
+	for i := 0; i < totalCPUs; i++ {
+		// Assume that the CPUs are evenly distributed between the sockets
+		socket := i / coresPerSocket
+		if hyperthreading {
+			// With non-adjacent hyperthreading, the second logical CPU of each core is in the second half
+			if i >= totalCPUs/2 {
+				socket = (i - totalCPUs/2) / coresPerSocket
+			}
+		}
+		// Store the mapping
+		cpuSocketMap[i] = socket
+	}
+	return cpuSocketMap
 }

@@ -1145,9 +1145,9 @@ func (s *Source) getPMUMetrics() (orderedMetricNames []string, timeStamps []floa
 	// 1st col has timestamp
 	for colIdx := 0; colIdx < len(rows[0]); colIdx++ {
 		label := rows[0][colIdx]
-		// skip metrics with no name (can occur in some rate situations)
-		// skip PID and CMD -- not used in system mode
-		if label == "" || label == "PID" || label == "CMD" || label == "CID" {
+		// skip metrics with no name (can occur in some rare situations)
+		// svr-info runs pmu2metrics with system-level scope and granularity, skip irrelevant columns
+		if label == "" || label == "SKT" || label == "CPU" || label == "PID" || label == "CMD" || label == "CID" {
 			continue
 		}
 		if colIdx != 0 { // don't put timestamp column in the metric names list
@@ -1161,15 +1161,20 @@ func (s *Source) getPMUMetrics() (orderedMetricNames []string, timeStamps []floa
 				ts, err := strconv.ParseFloat(rows[rowIdx][colIdx], 64)
 				if err != nil {
 					log.Printf("failed to parse timestamp float value: %s", rows[rowIdx][colIdx])
-					break
+					ts = math.NaN()
 				}
 				timeStamps = append(timeStamps, ts)
 				continue
 			}
-			val, err := strconv.ParseFloat(rows[rowIdx][colIdx], 64)
-			if err != nil {
-				log.Printf("failed to parse metric float value: %s", rows[rowIdx][colIdx])
-				break
+			var val float64
+			if rows[rowIdx][colIdx] != "" {
+				val, err = strconv.ParseFloat(rows[rowIdx][colIdx], 64)
+				if err != nil {
+					log.Printf("failed to parse metric float value: %s", rows[rowIdx][colIdx])
+					val = math.NaN()
+				}
+			} else {
+				val = math.NaN()
 			}
 			sum += val
 			if val < metric.min {

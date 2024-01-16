@@ -50,38 +50,118 @@ if [ ! -f "$STRESSNG" ]; then
     exit 1
 fi
 
+# just a safety net, in case kill fails for some reason, * 4 to account for startup and processing
+SNG_TIMEOUT=$((DURATION * 4))
 
-# system wide test
-$STRESSNG --cpu 0 --cpu-load 50 >/dev/null 2>&1 &
+# system scope, system granularity test
+TESTNAME=system-system
+$STRESSNG --cpu 0 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
 SNGPID=$!
-sudo "$PMU2METRICS" -csv -t "$DURATION" 2>system-wide.log 1>system-wide.csv
+sleep 1
+sudo "$PMU2METRICS" -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
 if [[ -v PERFSPECT ]]; then
-    sudo "$PERFSPECT"/perf-collect --timeout "$DURATION" -o ./system-wide-ps.out 1>system-wide-psc.log 2>&1
+    sudo "$PERFSPECT"/perf-collect --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
 fi
 kill "$SNGPID"
-"$PMU2METRICS" --post-process system-wide.csv --format html 1>system-wide-stats.html 2>>system-wide.log
-"$PMU2METRICS" --post-process system-wide.csv --format csv 1>system-wide-stats.csv 2>>system-wide.log
+"$PMU2METRICS" --post-process "$TESTNAME".csv --format html 1>"$TESTNAME"-stats.html 2>>"$TESTNAME".log
+"$PMU2METRICS" --post-process "$TESTNAME".csv --format csv 1>"$TESTNAME"-stats.csv 2>>"$TESTNAME".log
 if [[ -v PERFSPECT ]]; then
-    "$PERFSPECT"/perf-postprocess -r ./system-wide-ps.out -o ./system-wide-ps.csv > system-wide-psp.log 2>&1
+    "$PERFSPECT"/perf-postprocess -r ./"$TESTNAME"-ps.out -o ./"$TESTNAME"-ps.csv >/dev/null 2>&1
 fi
 
-# per-process test
-$STRESSNG --cpu 0 --cpu-load 50 >/dev/null 2>&1 &
+# system scope, socket granularity test
+TESTNAME=system-socket
+$STRESSNG --cpu 0 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
 SNGPID=$!
-sudo "$PMU2METRICS" -per-process -pid "$SNGPID" -csv -t "$DURATION" 2>per-process.log 1>per-process.csv
-sudo "$PERFSPECT"/perf-collect --pid "$SNGPID" --timeout "$DURATION" -o ./per-process-ps.out 1>per-process-psc.log 2>&1
+sleep 1
+sudo "$PMU2METRICS" -granularity socket -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+if [[ -v PERFSPECT ]]; then
+    sudo "$PERFSPECT"/perf-collect --socket --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
+fi
 kill "$SNGPID"
-"$PMU2METRICS" --post-process per-process.csv --format html -pid "$SNGPID" 1>per-process-stats.html 2>>per-process.log
-"$PMU2METRICS" --post-process per-process.csv --format csv -pid "$SNGPID" 1>per-process-stats.csv 2>>per-process.log
-"$PERFSPECT"/perf-postprocess -r ./per-process-ps.out -o ./per-process-ps.csv >per-process-psp.log 2>&1
+"$PMU2METRICS" --post-process "$TESTNAME".csv --format csv 1>"$TESTNAME"-stats.csv 2>>"$TESTNAME".log
+if [[ -v PERFSPECT ]]; then
+    "$PERFSPECT"/perf-postprocess -r ./"$TESTNAME"-ps.out -o ./"$TESTNAME"-ps.csv > /dev/null 2>&1
+fi
 
-# per-cgroup test
+# system scope, cpu granularity test
+TESTNAME=system-cpu
+$STRESSNG --cpu 0 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
+SNGPID=$!
+sleep 1
+sudo "$PMU2METRICS" -granularity cpu -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+if [[ -v PERFSPECT ]]; then
+    sudo "$PERFSPECT"/perf-collect --cpu --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
+fi
+kill "$SNGPID"
+"$PMU2METRICS" --post-process "$TESTNAME".csv --format csv 1>"$TESTNAME"-stats.csv 2>>"$TESTNAME".log
+if [[ -v PERFSPECT ]]; then
+    "$PERFSPECT"/perf-postprocess -r ./"$TESTNAME"-ps.out -o ./"$TESTNAME"-ps.csv > /dev/null 2>&1
+fi
+
+# process scope test (hot pids)
+TESTNAME=process-hot
+$STRESSNG --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
+SNGPID=$!
+sleep 1
+sudo "$PMU2METRICS" --scope process -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+if [[ -v PERFSPECT ]]; then
+    sudo "$PERFSPECT"/perf-collect --pid --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
+fi
+kill "$SNGPID"
+"$PMU2METRICS" --post-process "$TESTNAME".csv --format csv 1>"$TESTNAME"-stats.csv 2>>"$TESTNAME".log
+if [[ -v PERFSPECT ]]; then
+    "$PERFSPECT"/perf-postprocess -r ./"$TESTNAME"-ps.out -o ./"$TESTNAME"-ps.csv >/dev/null 2>&1
+fi
+
+# process scope test (specify pids)
+TESTNAME=process-pids
+$STRESSNG --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
+SNGPID=$!
+sleep 1
+CHILDPIDS=$(pgrep -P $SNGPID | paste -sd ",")
+sudo "$PMU2METRICS" --scope process -pid "$CHILDPIDS" -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+if [[ -v PERFSPECT ]]; then
+    sudo "$PERFSPECT"/perf-collect --pid "$CHILDPIDS" --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
+fi
+kill "$SNGPID"
+"$PMU2METRICS" --post-process "$TESTNAME".csv --format csv 1>"$TESTNAME"-stats.csv 2>>"$TESTNAME".log
+if [[ -v PERFSPECT ]]; then
+    "$PERFSPECT"/perf-postprocess -r ./"$TESTNAME"-ps.out -o ./"$TESTNAME"-ps.csv >/dev/null 2>&1
+fi
+
+# cgroup scope test (hot cids)
+TESTNAME=cgroup-hot
 docker pull colinianking/stress-ng || true
 docker image prune -f || true
-SNGCID=$(docker run --rm --detach colinianking/stress-ng --cpu 0 --cpu-load 50)
-sudo "$PMU2METRICS" -per-cgroup -cid "$SNGCID" -csv -t "$DURATION" 2>per-cgroup.log 1>per-cgroup.csv
-sudo "$PERFSPECT"/perf-collect --cid "$SNGCID" --timeout "$DURATION" -o ./per-cgroup-ps.out 1>per-cgroup-psc.log 2>&1
-docker kill "$SNGCID"
-"$PMU2METRICS" --post-process per-cgroup.csv --format html -cid "$SNGCID" 1>per-cgroup-stats.html 2>>per-cgroup.log
-"$PMU2METRICS" --post-process per-cgroup.csv --format csv -cid "$SNGCID" 1>per-cgroup-stats.csv 2>>per-cgroup.log
-"$PERFSPECT"/perf-postprocess -r ./per-cgroup-ps.out -o ./per-cgroup-ps.csv >per-cgroup-psp.log 2>&1
+SNGCID1=$(docker run --rm --detach colinianking/stress-ng --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT")
+SNGCID2=$(docker run --rm --detach colinianking/stress-ng --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT")
+sleep 1
+sudo "$PMU2METRICS" --scope cgroup -count 2 -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+if [[ -v PERFSPECT ]]; then
+    sudo "$PERFSPECT"/perf-collect --cid "$SNGCID1","$SNGCID2" --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
+fi
+docker kill "$SNGCID1"
+docker kill "$SNGCID2"
+"$PMU2METRICS" --post-process "$TESTNAME".csv --format csv 1>"$TESTNAME"-stats.csv 2>>"$TESTNAME".log
+if [[ -v PERFSPECT ]]; then
+    "$PERFSPECT"/perf-postprocess -r ./"$TESTNAME"-ps.out -o ./"$TESTNAME"-ps.csv >/dev/null 2>&1
+fi
+
+# cgroup scope test (specify cids)
+TESTNAME=cgroup-cids
+docker pull colinianking/stress-ng || true
+docker image prune -f || true
+SNGCID1=$(docker run --rm --detach colinianking/stress-ng --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT")
+SNGCID2=$(docker run --rm --detach colinianking/stress-ng --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT")
+sleep 1
+sudo "$PMU2METRICS" --scope cgroup -cid "$SNGCID1","$SNGCID2" -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+if [[ -v PERFSPECT ]]; then
+    sudo "$PERFSPECT"/perf-collect --cid "$SNGCID1","$SNGCID2" --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
+fi
+docker kill "$SNGCID1"
+docker kill "$SNGCID2"
+"$PMU2METRICS" --post-process "$TESTNAME".csv --format csv 1>"$TESTNAME"-stats.csv 2>>"$TESTNAME".log
+if [[ -v PERFSPECT ]]; then
+    "$PERFSPECT"/perf-postprocess -r ./"$TESTNAME"-ps.out -o ./"$TESTNAME"-ps.csv >/dev/null 2>&1
+fi

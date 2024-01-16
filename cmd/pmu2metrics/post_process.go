@@ -2,6 +2,9 @@
  * Copyright (C) 2023 Intel Corporation
  * SPDX-License-Identifier: MIT
  */
+//
+// functions to create summary (mean,min,max,stddev) metrics from metrics CSV
+//
 package main
 
 import (
@@ -16,26 +19,30 @@ import (
 )
 
 // PostProcess - generates formatted output from a CSV file containing metric values. Format
-// options are 'html' and 'csv'.  Pid is a required argument when the CSV file contains data
-// that was collected in process-mode and contains data for more than one process.  Cgroup
-// is a required argument when the CSV file contains data that was collected in cgroup-mode and
-// contains data for more than on cgroup. Note: pid and cgroup are mutually exclusive.
-func PostProcess(csvInputPath string, format string, pid string, cgroup string) (out string, err error) {
-	if pid != "" && cgroup != "" {
-		err = fmt.Errorf("optionally provide pid or cgroup, not both")
+// options are 'html' and 'csv'.
+func PostProcess(csvInputPath string, format string) (out string, err error) {
+	var metrics []metricsFromCSV
+	if metrics, err = newMetricsFromCSV(csvInputPath); err != nil {
 		return
 	}
-	var metrics metricsFromCSV
-	if metrics, err = newMetricsFromCSV(csvInputPath, pid, cgroup); err != nil {
+	if format == "html" {
+		if len(metrics) > 1 {
+			err = fmt.Errorf("html format supported only for a single set of data, e.g., system scope and granularity, a single PID, or a single CID")
+			return
+		}
+		out, err = metrics[0].getHTML()
+		return
+	} else if format == "csv" {
+		for i, m := range metrics {
+			var oneOut string
+			if oneOut, err = m.getCSV(i == 0); err != nil {
+				return
+			}
+			out += oneOut
+		}
 		return
 	}
-	if format == "" || strings.ToLower(format) == "html" {
-		out, err = metrics.getHTML()
-	} else if strings.ToLower(format) == "csv" {
-		out, err = metrics.getCSV()
-	} else {
-		err = fmt.Errorf("unsupported post-processing format: %s", format)
-	}
+	err = fmt.Errorf("unsupported post-processing format: %s", format)
 	return
 }
 
@@ -48,14 +55,54 @@ type metricStats struct {
 
 type row struct {
 	timestamp float64
+	socket    string
+	cpu       string
 	pid       string
 	cmd       string
 	cgroup    string
 	metrics   map[string]float64
 }
 
+// newRow loads a row structure with given fields and field names
+func newRow(fields []string, names []string) (r row, err error) {
+	r.metrics = make(map[string]float64)
+	for fIdx, field := range fields {
+		if fIdx == Timestamp {
+			var ts float64
+			if ts, err = strconv.ParseFloat(field, 64); err != nil {
+				return
+			}
+			r.timestamp = ts
+		} else if fIdx == Socket {
+			r.socket = field
+		} else if fIdx == CPU {
+			r.cpu = field
+		} else if fIdx == Pid {
+			r.pid = field
+		} else if fIdx == Cmd {
+			r.cmd = field
+		} else if fIdx == Cgroup {
+			r.cgroup = field
+		} else {
+			// metrics
+			var v float64
+			if field != "" {
+				if v, err = strconv.ParseFloat(field, 64); err != nil {
+					return
+				}
+			} else {
+				v = math.NaN()
+			}
+			r.metrics[names[fIdx-FirstMetric]] = v
+		}
+	}
+	return
+}
+
 const (
 	Timestamp int = iota
+	Socket
+	CPU
 	Pid
 	Cmd
 	Cgroup
@@ -63,18 +110,24 @@ const (
 )
 
 type metricsFromCSV struct {
-	names []string
-	rows  []row
+	names        []string
+	rows         []row
+	groupByField string
+	groupByValue string
 }
 
-// newMetricsFromCSV - loads data from CSV
-func newMetricsFromCSV(csvPath string, pid string, cgroup string) (metrics metricsFromCSV, err error) {
+// newMetricsFromCSV - loads data from CSV. Returns a list of metrics, one per
+// scope unit or granularity unit, e.g., one per socket, or one per PID
+func newMetricsFromCSV(csvPath string) (metrics []metricsFromCSV, err error) {
 	var file *os.File
 	if file, err = os.Open(csvPath); err != nil {
 		return
 	}
 	reader := csv.NewReader(file)
-	firstMatchingCgroup := ""
+	groupByField := -1
+	var groupByValues []string
+	var metricNames []string
+	var nonMetricNames []string
 	for idx := 0; true; idx++ {
 		var fields []string
 		if fields, err = reader.Read(); err != nil {
@@ -90,46 +143,60 @@ func newMetricsFromCSV(csvPath string, pid string, cgroup string) (metrics metri
 		if idx == 0 {
 			// headers
 			for fIdx, field := range fields {
-				if fIdx < FirstMetric { // skip non-metrics
-					continue
+				if fIdx < FirstMetric {
+					nonMetricNames = append(nonMetricNames, field)
+				} else {
+					metricNames = append(metricNames, field)
 				}
-				metrics.names = append(metrics.names, field)
 			}
 			continue
 		}
-		r := row{}
-		r.metrics = make(map[string]float64)
-		for fIdx, field := range fields {
-			if fIdx == Timestamp {
-				var ts float64
-				if ts, err = strconv.ParseFloat(field, 64); err != nil {
-					return
-				}
-				r.timestamp = ts
-			} else if fIdx == Pid {
-				r.pid = field
-			} else if fIdx == Cmd {
-				r.cmd = field
-			} else if fIdx == Cgroup {
-				r.cgroup = field
-			} else {
-				// metrics
-				var v float64
-				if v, err = strconv.ParseFloat(field, 64); err != nil {
-					return
-				}
-				r.metrics[metrics.names[fIdx-FirstMetric]] = v
+		// Determine the scope and granularity of the captured data by looking
+		// at the first row of values. If none of these are set, then it's
+		// system scope and system granularity
+		if idx == 1 {
+			if fields[Socket] != "" {
+				groupByField = Socket
+			} else if fields[CPU] != "" {
+				groupByField = CPU
+			} else if fields[Pid] != "" {
+				groupByField = Pid
+			} else if fields[Cgroup] != "" {
+				groupByField = Cgroup
 			}
 		}
-		if r.pid == pid && strings.Contains(r.cgroup, cgroup) {
-			if firstMatchingCgroup == "" {
-				firstMatchingCgroup = r.cgroup
+		// Load row into a row structure
+		var r row
+		if r, err = newRow(fields, metricNames); err != nil {
+			return
+		}
+		// put the row into the associated list based on groupByField
+		if groupByField == -1 { // system scope/granularity
+			if len(metrics) == 0 {
+				metrics = append(metrics, metricsFromCSV{})
+				metrics[0].names = metricNames
 			}
-			if firstMatchingCgroup != r.cgroup {
-				err = fmt.Errorf("provided cgroup matches more than one cgroup in CSV data, be more specific")
-				return
+			metrics[0].rows = append(metrics[0].rows, r)
+		} else {
+			groupByValue := fields[groupByField]
+			var listIdx int
+			if listIdx, err = stringIndexInList(groupByValue, groupByValues); err != nil {
+				groupByValues = append(groupByValues, groupByValue)
+				metrics = append(metrics, metricsFromCSV{})
+				listIdx = len(metrics) - 1
+				metrics[listIdx].names = metricNames
+				if groupByField == Socket {
+					metrics[listIdx].groupByField = nonMetricNames[Socket]
+				} else if groupByField == CPU {
+					metrics[listIdx].groupByField = nonMetricNames[CPU]
+				} else if groupByField == Pid {
+					metrics[listIdx].groupByField = nonMetricNames[Pid]
+				} else if groupByField == Cgroup {
+					metrics[listIdx].groupByField = nonMetricNames[Cgroup]
+				}
+				metrics[listIdx].groupByValue = groupByValue
 			}
-			metrics.rows = append(metrics.rows, r)
+			metrics[listIdx].rows = append(metrics[listIdx].rows, r)
 		}
 	}
 	return
@@ -273,14 +340,23 @@ func (m *metricsFromCSV) getHTML() (html string, err error) {
 }
 
 // getCSV - generate CSV string representing the summary statistics of the metrics
-func (m *metricsFromCSV) getCSV() (out string, err error) {
+func (m *metricsFromCSV) getCSV(includeFieldNames bool) (out string, err error) {
 	var stats map[string]metricStats
 	if stats, err = m.getStats(); err != nil {
 		return
 	}
-	out = "metric,mean,min,max,stddev\n"
+	if includeFieldNames {
+		out = "metric,mean,min,max,stddev\n"
+		if m.groupByField != "" {
+			out = m.groupByField + "," + out
+		}
+	}
 	for _, name := range m.names {
-		out += fmt.Sprintf("%s,%f,%f,%f,%f\n", name, stats[name].mean, stats[name].min, stats[name].max, stats[name].stddev)
+		if m.groupByValue == "" {
+			out += fmt.Sprintf("%s,%f,%f,%f,%f\n", name, stats[name].mean, stats[name].min, stats[name].max, stats[name].stddev)
+		} else {
+			out += fmt.Sprintf("%s,%s,%f,%f,%f,%f\n", m.groupByValue, name, stats[name].mean, stats[name].min, stats[name].max, stats[name].stddev)
+		}
 	}
 	return
 }
