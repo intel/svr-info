@@ -306,7 +306,7 @@ commands:
           sar -n DEV "$interval" "$samples" > sar-network.out &
         fi
         if {{.ProfilePMU}}; then
-          pmu2metrics -v -csv -t $duration 1>pmu2metrics.out &
+          pmu2metrics -v --output csv -t $duration 1>pmu2metrics.out &
         fi
         if {{.ProfilePower}}; then
           turbostat -S -s PkgWatt,RAMWatt -q -i "$interval" -n "$samples" -o turbostat.out &

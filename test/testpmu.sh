@@ -58,7 +58,7 @@ TESTNAME=system-system
 $STRESSNG --cpu 0 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
 SNGPID=$!
 sleep 1
-sudo "$PMU2METRICS" -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+sudo "$PMU2METRICS" --output csv --timeout "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
 if [[ -v PERFSPECT ]]; then
     sudo "$PERFSPECT"/perf-collect --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
 fi
@@ -74,7 +74,7 @@ TESTNAME=system-socket
 $STRESSNG --cpu 0 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
 SNGPID=$!
 sleep 1
-sudo "$PMU2METRICS" -granularity socket -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+sudo "$PMU2METRICS" --granularity socket --output csv --timeout "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
 if [[ -v PERFSPECT ]]; then
     sudo "$PERFSPECT"/perf-collect --socket --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
 fi
@@ -89,7 +89,7 @@ TESTNAME=system-cpu
 $STRESSNG --cpu 0 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
 SNGPID=$!
 sleep 1
-sudo "$PMU2METRICS" -granularity cpu -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+sudo "$PMU2METRICS" --granularity cpu --output csv --timeout "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
 if [[ -v PERFSPECT ]]; then
     sudo "$PERFSPECT"/perf-collect --cpu --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
 fi
@@ -104,7 +104,7 @@ TESTNAME=process-hot
 $STRESSNG --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
 SNGPID=$!
 sleep 1
-sudo "$PMU2METRICS" --scope process -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+sudo "$PMU2METRICS" --scope process --output csv --timeout "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
 if [[ -v PERFSPECT ]]; then
     sudo "$PERFSPECT"/perf-collect --pid --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
 fi
@@ -120,7 +120,7 @@ $STRESSNG --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT" >/dev/null 2>&1 &
 SNGPID=$!
 sleep 1
 CHILDPIDS=$(pgrep -P $SNGPID | paste -sd ",")
-sudo "$PMU2METRICS" --scope process -pid "$CHILDPIDS" -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+sudo "$PMU2METRICS" --scope process --pid "$CHILDPIDS" --output csv --timeout "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
 if [[ -v PERFSPECT ]]; then
     sudo "$PERFSPECT"/perf-collect --pid "$CHILDPIDS" --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
 fi
@@ -137,7 +137,7 @@ docker image prune -f || true
 SNGCID1=$(docker run --rm --detach colinianking/stress-ng --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT")
 SNGCID2=$(docker run --rm --detach colinianking/stress-ng --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT")
 sleep 1
-sudo "$PMU2METRICS" --scope cgroup -count 2 -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+sudo "$PMU2METRICS" --scope cgroup --count 2 --output csv --timeout "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
 if [[ -v PERFSPECT ]]; then
     sudo "$PERFSPECT"/perf-collect --cid "$SNGCID1","$SNGCID2" --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
 fi
@@ -155,7 +155,7 @@ docker image prune -f || true
 SNGCID1=$(docker run --rm --detach colinianking/stress-ng --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT")
 SNGCID2=$(docker run --rm --detach colinianking/stress-ng --cpu 5 --cpu-load 50 --timeout "$SNG_TIMEOUT")
 sleep 1
-sudo "$PMU2METRICS" --scope cgroup -cid "$SNGCID1","$SNGCID2" -csv -t "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
+sudo "$PMU2METRICS" --scope cgroup --cid "$SNGCID1","$SNGCID2" --output csv --timeout "$DURATION" 2>"$TESTNAME".log 1>"$TESTNAME".csv
 if [[ -v PERFSPECT ]]; then
     sudo "$PERFSPECT"/perf-collect --cid "$SNGCID1","$SNGCID2" --timeout "$DURATION" -o ./"$TESTNAME"-ps.out 1>/dev/null 2>&1
 fi

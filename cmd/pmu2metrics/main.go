@@ -69,12 +69,11 @@ type CmdLineArgs struct {
 	inputCSVFilePath     string
 	postProcessingFormat string
 	// output format options
-	granularity Granularity
-	metricsList string
-	printWide   bool
-	printCSV    bool
-	verbose     bool
-	veryVerbose bool
+	granularity  Granularity
+	metricsList  string
+	outputFormat string
+	verbose      bool
+	veryVerbose  bool
 	// advanced options
 	eventFilePath     string
 	metricFilePath    string
@@ -151,7 +150,7 @@ func getPerfPath() (path string, tempDir string, err error) {
 // frameCount argument is used to control when the headers are printed, e.g., on the first frame
 // only.
 func printMetrics(metricFrame MetricFrame, frameCount int) {
-	if gCmdLineArgs.printCSV {
+	if gCmdLineArgs.outputFormat == "csv" {
 		if frameCount == 1 {
 			fmt.Print("TS,SKT,CPU,PID,CMD,CID,")
 			names := make([]string, 0, len(metricFrame.Metrics))
@@ -167,7 +166,7 @@ func printMetrics(metricFrame MetricFrame, frameCount int) {
 		}
 		fmt.Printf("%s\n", strings.ReplaceAll(strings.Join(values, ","), "NaN", ""))
 	} else {
-		if !gCmdLineArgs.printWide {
+		if gCmdLineArgs.outputFormat == "human" {
 			fmt.Println("--------------------------------------------------------------------------------------")
 			fmt.Printf("- Metrics captured at %s\n", gCollectionStartTime.Add(time.Second*time.Duration(int(metricFrame.Timestamp))).UTC())
 			if metricFrame.PID != "" {
@@ -578,161 +577,190 @@ func doWorkDebug(perfStatFilePath string, eventGroupDefinitions []GroupDefinitio
 	return
 }
 
+// validateArgs is responsible for checking the sanity of the provided command
+// line arguments
+func validateArgs() (err error) {
+	// collection options
+	//  timeout needs to be zero or greater than the print interval
+	if gCmdLineArgs.timeout != 0 && gCmdLineArgs.timeout*1000 < gCmdLineArgs.perfPrintInterval {
+		err = fmt.Errorf("--timeout must be greater than or equal to --interval")
+	}
+	//  confirm a valid scope
+	if gCmdLineArgs.scope == -1 {
+		err = fmt.Errorf("--scope supports three options: 'system', 'process', and 'cgroup'")
+		return
+	}
+	//  pids only when scope is process
+	if gCmdLineArgs.pidList != "" && gCmdLineArgs.scope != ScopeProcess {
+		err = fmt.Errorf("--pid only valid when --scope is process")
+		return
+	}
+	//  cids only when scope is cgroup
+	if gCmdLineArgs.cidList != "" && gCmdLineArgs.scope != ScopeCgroup {
+		err = fmt.Errorf("--cid only valid when --scope is cgroup")
+		return
+	}
+	//  filter only when scope is process or cgroup
+	if gCmdLineArgs.filter != "" && (gCmdLineArgs.scope != ScopeProcess && gCmdLineArgs.scope != ScopeCgroup) {
+		err = fmt.Errorf("--filter only valid when --scope is process or cgroup")
+		return
+	}
+	//  filter only when no pids/cids
+	if gCmdLineArgs.filter != "" && (gCmdLineArgs.pidList != "" || gCmdLineArgs.cidList != "") {
+		err = fmt.Errorf("--filter only valid when --pid and --cid are not specified")
+		return
+	}
+	//  count must be greater than 0
+	if gCmdLineArgs.count < 1 {
+		err = fmt.Errorf("--count must be one or more")
+		return
+	}
+	//  refresh must be greater than perf print intervaal
+	if gCmdLineArgs.refresh*1000 < gCmdLineArgs.perfPrintInterval {
+		err = fmt.Errorf("--refresh must be greater than or equal to --interval")
+	}
+	// output options
+	//  confirm a valid granularity
+	if gCmdLineArgs.granularity == -1 {
+		err = fmt.Errorf("--granularity supports three options: 'system', 'socket', and 'cpu'")
+		return
+	}
+	//  a granularity other than system is only valid when scope is system
+	if gCmdLineArgs.granularity != GranularitySystem && gCmdLineArgs.scope != ScopeSystem {
+		err = fmt.Errorf("--granularity is relevant only for system scope")
+	}
+	//  output format can be human, csv and wide
+	gCmdLineArgs.outputFormat = strings.ToLower(gCmdLineArgs.outputFormat)
+	if gCmdLineArgs.outputFormat != "csv" && gCmdLineArgs.outputFormat != "human" && gCmdLineArgs.outputFormat != "wide" {
+		err = fmt.Errorf("--output options are 'human', 'csv', and 'wide'")
+		return
+	}
+	// post-processing options
+	//  format applies to post-processing
+	if gCmdLineArgs.postProcessingFormat != "" && gCmdLineArgs.inputCSVFilePath == "" {
+		err = fmt.Errorf("--format only valid for post-processing, i.e., --post-process <csv> required")
+		return
+	}
+	//  format can be html or csv
+	if gCmdLineArgs.postProcessingFormat != "" && strings.ToLower(gCmdLineArgs.postProcessingFormat) != "html" && strings.ToLower(gCmdLineArgs.postProcessingFormat) != "csv" {
+		err = fmt.Errorf("--format options are html and csv")
+		return
+	}
+	// advanced options
+	//  minimum perf print interval
+	if gCmdLineArgs.perfPrintInterval < 0 {
+		err = fmt.Errorf("--interval value must be a positive integer")
+		return
+	}
+	//  minimum mux interval
+	if gCmdLineArgs.perfMuxInterval < 0 {
+		err = fmt.Errorf("--muxinterval value must be a positive integer")
+		return
+	}
+	// debugging options
+	//  if metadata file path is provided, then perf stat file needs to be provided...and vice versa
+	if (gCmdLineArgs.metadataFilePath != "" || gCmdLineArgs.perfStatFilePath != "") &&
+		(gCmdLineArgs.metadataFilePath == "" || gCmdLineArgs.perfStatFilePath == "") {
+		err = fmt.Errorf("-perfstat and -metadata options must both be specified")
+		return
+	}
+	return
+}
+
+// flagUsage called when a flag parsing error occurs or undefined flag is passed to the program
+func flagUsage() {
+	fmt.Println()
+	fmt.Printf("See '%s -h' for options.\n", filepath.Base(os.Args[0]))
+}
+
+// showArgumentError prints error found while validating arguments
+func showArgumentError(err error) {
+	fmt.Printf("Argument validation error: %v\n", err)
+	flagUsage()
+}
+
 // showUsage prints program usage and options to stdout
 func showUsage() {
-	fmt.Printf("\nusage: sudo %s [OPTIONS]\n", filepath.Base(os.Args[0]))
-	fmt.Println("\ndefault: Prints all available metrics at 5 second intervals in human readable format until interrupted by user.")
-	fmt.Println("         Note: Log messages are sent to stderr. Redirect to maintain clean console output. E.g.,")
-	fmt.Printf("               $ sudo %s 2>%s.log\n", filepath.Base(os.Args[0]), filepath.Base(os.Args[0]))
-	fmt.Print("\noptional arguments:")
-	usage := `
+	fmt.Printf("Usage:  sudo %s [OPTIONS]\n", filepath.Base(os.Args[0]))
+	fmt.Println()
+	fmt.Println("Prints system metrics at 5 second intervals until interrupted by user.")
+	fmt.Println("  Note: Log messages are printed to stderr. Redirect stderr to maintain clean console output, e.g.,")
+	fmt.Printf("  $ sudo %s 2>%s.log\n", filepath.Base(os.Args[0]), filepath.Base(os.Args[0]))
+	fmt.Println()
+	args := `Options
   -h, --help
-  	Print this usage message and exit.
+  	Show this usage message and exit.
   -V, --version
   	Show program version and exit.
-  --list
-  	Show metric names available on this platform and exit.
 
-Collection Options:
+Collection Options
   -t, --timeout <seconds>
   	Number of seconds to run (default: indefinitely).
   -s, --scope <option>
   	Specify the scope of collection. Options: 'system', 'process', 'cgroup' (default: system).
   -p, --pid <pids>
-  	Comma separated list of process ids. Only valid when collecting in process scope (default: None).
+  	Comma separated list of process ids. Only valid when collecting in process scope. If not provided while collecting at process scope, the currently most active processes will be monitored (default: None).
   -c, --cid <cids>
-  	Comma separated list of cids. Only valid when collecting at cgroup scope (default: None).
-  --filter <regex>
-  	Regular expression used to match process names or cgroup IDs (default: None).
-  --count <count>
+  	Comma separated list of cids. Only valid when collecting at cgroup scope. If not provided while collecting at cgroup scope, the currently most active cgroups will be monitored (default: None).
+  -F, --filter <regex>
+  	Regular expression used to match process names or cgroup IDs when --pid or --cid are not specified (default: None).
+  -n, --count <count>
   	The maximum number of processes or cgroups to monitor (default: 5).
-  --refresh <seconds>
-  	The number of seconds to run before refreshing the process or cgroup list, if not provided (default: 30).
+  -r, --refresh <seconds>
+  	The number of seconds to run before refreshing the "hot" process or cgroup list (default: 30).
 
-Output Options:
+Output Options
   -g, --granularity <option>
   	Specify the level of metric granularity. Only valid when collecting at system scope. Options: 'system', 'socket', or 'cpu' (default: system).
-  --metrics <metric names>
-  	Metric names to include in output. (Quoted and comma separated list.)
-  --csv
-  	CSV formatted output. Best for parsing. Required for HTML report generation.
-  --wide
-  	Wide formatted output. Best used when a small number of metrics are printed.
-  -v[v]
-  	Enable verbose, or very verbose (-vv) logging.
+  -o, --output <option>
+  	Specify the output format. Options are 'human', 'csv', and 'wide'. 'csv' is required for post-processing (default: human).
+  -[v]v, --[very]verbose
+  	Enable verbose, or very verbose (-vv) logging (Default: False).
 
-Post-processing Options:
-  --post-process <CSV file>
-  	Path to input csv file created from --csv output during collection. When specified, a report containing average metric values will be generated.
-  --format <option>
+Post-processing Options
+  -P, --post-process <CSV file>
+  	Path to a CSV file created during collection. Outputs a report containing summarized metric values (default: None).
+  -f, --format <option>
   	File format to generate when post-processing the collected CSV file. Options: 'html' or 'csv' (default: csv).
 
-Advanced Options:
+Advanced Options
+  -l, --list
+  	Show metric names available on this platform and exit (default: False).
+  -m, --metrics <metric names>
+  	A quoted and comma separated list of metric names to include in output. Use --list to view metric names. (default: all metrics).
   -e, --eventfile <path>
-  	Path to perf event definition file.
-  -m, --metricfile <path>
-  	Path to metric definition file.
+  	Path to perf event definition file (default: None).
+  -M, --metricfile <path>
+  	Path to metric definition file (default: None).
   -i, --interval <milliseconds>
   	Event collection interval in milliseconds (default: 5000).
   -x, --muxinterval <milliseconds>
   	Multiplexing interval in milliseconds (default: 125).`
-	fmt.Println(usage)
+	fmt.Println(args)
+	fmt.Println()
+	fmt.Println("Examples")
+	fmt.Println("  Metrics to screen and file in CSV format. Capture verbose logs in separate file.")
+	fmt.Printf("    $ sudo %[1]s --output csv --verbose 2 > %[1]s.log | tee %[1]s.csv\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Metrics with socket-level granularity to screen in CSV format.")
+	fmt.Printf("    $ sudo %[1]s --output csv --granularity socket 2 > %[1]s.log\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Metrics for \"hot\" processes to screen in CSV format.")
+	fmt.Printf("    $ sudo %[1]s --output csv --scope process 2 > %[1]s.log\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Metrics for specified process PIDs to screen in CSV format.")
+	fmt.Printf("    $ sudo %[1]s --output csv --scope process --pid 12345,67890 2 > %[1]s.log\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Specified Metrics to screen in wide format.")
+	fmt.Printf("    $ sudo %[1]s --output wide --metrics \"CPU utilization %%, TMA_Frontend_Bound(%%)\" 2 > %[1]s.log\n", filepath.Base(os.Args[0]))
 }
 
-// validateArgs is responsible for checking the sanity of the provided command
-// line arguments
-func validateArgs() (err error) {
-	if gCmdLineArgs.metadataFilePath != "" {
-		if gCmdLineArgs.perfStatFilePath == "" {
-			err = fmt.Errorf("-perfstat and -metadata options must both be specified")
-			return
-		}
-	}
-	if gCmdLineArgs.perfStatFilePath != "" {
-		if gCmdLineArgs.metadataFilePath == "" {
-			err = fmt.Errorf("-perfstat and -metadata options must both be specified")
-			return
-		}
-	}
-	if gCmdLineArgs.printCSV && gCmdLineArgs.printWide {
-		err = fmt.Errorf("-csv and -wide are mutually exclusive, choose one")
-		return
-	}
-	if gCmdLineArgs.scope == -1 {
-		err = fmt.Errorf("-scope supports three options: 'system', 'process', and 'cgroup'")
-		return
-	}
-	if gCmdLineArgs.granularity == -1 {
-		err = fmt.Errorf("-granularity supports three options: 'system', 'socket', and 'cpu'")
-		return
-	}
-	if gCmdLineArgs.granularity != GranularitySystem {
-		if gCmdLineArgs.scope != ScopeSystem {
-			err = fmt.Errorf("-granularity is relevant only for system scope")
-		}
-	}
-	if gCmdLineArgs.pidList != "" {
-		if gCmdLineArgs.inputCSVFilePath == "" && gCmdLineArgs.scope != ScopeProcess {
-			err = fmt.Errorf("-pid only valid when -scope is process or post-processing previously collected data")
-			return
-		}
-	}
-	if gCmdLineArgs.cidList != "" {
-		if gCmdLineArgs.inputCSVFilePath == "" && gCmdLineArgs.scope != ScopeCgroup {
-			err = fmt.Errorf("-cid only valid when -scope is cgroup or post-processing previously collected data")
-			return
-		}
-	}
-	if gCmdLineArgs.filter != "" && (gCmdLineArgs.scope != ScopeProcess && gCmdLineArgs.scope != ScopeCgroup) {
-		err = fmt.Errorf("-filter only valid when scope is process or cgroup")
-		return
-	}
-	if gCmdLineArgs.pidList != "" && gCmdLineArgs.filter != "" {
-		err = fmt.Errorf("-pid and -filter are mutually exclusive")
-		return
-	}
-	if gCmdLineArgs.cidList != "" && gCmdLineArgs.filter != "" {
-		err = fmt.Errorf("-cid and -filter are mutually exclusive")
-		return
-	}
-	if gCmdLineArgs.postProcessingFormat != "" && gCmdLineArgs.inputCSVFilePath == "" {
-		err = fmt.Errorf("--format only valid for post-processing, i.e., --post-process <csv> required")
-		return
-	}
-	if gCmdLineArgs.postProcessingFormat != "" && strings.ToLower(gCmdLineArgs.postProcessingFormat) != "html" && strings.ToLower(gCmdLineArgs.postProcessingFormat) != "csv" {
-		err = fmt.Errorf("'html' and 'csv' are valid options for post processing format")
-		return
-	}
-	if gCmdLineArgs.pidList != "" && gCmdLineArgs.inputCSVFilePath != "" {
-		pids := strings.Split(gCmdLineArgs.pidList, ",")
-		if len(pids) > 1 {
-			err = fmt.Errorf("can post-process only one PID at a time")
-			return
-		}
-		if _, err = strconv.Atoi(gCmdLineArgs.pidList); err != nil {
-			err = fmt.Errorf("invalid PID: %s", gCmdLineArgs.pidList)
-			return
-		}
-	}
-	if gCmdLineArgs.cidList != "" && gCmdLineArgs.inputCSVFilePath != "" {
-		cids := strings.Split(gCmdLineArgs.cidList, ",")
-		if len(cids) > 1 {
-			err = fmt.Errorf("can post-process only one Cgroup at a time")
-			return
-		}
-	}
-	return
-}
+// short options used:
+// c, e, f, F, g, h, i, l, m, M, n, o, p, P, r, s, t, v, vv, V, x.
 
 // configureArgs defines and parses the arguments accepted by the application
 func configureArgs() {
-	flag.Usage = func() { showUsage() } // override default usage output
+	flag.Usage = func() { flagUsage() } // override default usage output
 	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "")
 	flag.BoolVar(&gCmdLineArgs.showHelp, "help", false, "")
 	flag.BoolVar(&gCmdLineArgs.showVersion, "V", false, "")
 	flag.BoolVar(&gCmdLineArgs.showVersion, "version", false, "")
-	flag.BoolVar(&gCmdLineArgs.showMetricNames, "l", false, "")
-	flag.BoolVar(&gCmdLineArgs.showMetricNames, "list", false, "")
 	// collection options
 	flag.IntVar(&gCmdLineArgs.timeout, "t", 0, "")
 	flag.IntVar(&gCmdLineArgs.timeout, "timeout", 0, "")
@@ -743,33 +771,45 @@ func configureArgs() {
 	flag.StringVar(&gCmdLineArgs.pidList, "pid", "", "")
 	flag.StringVar(&gCmdLineArgs.cidList, "c", "", "")
 	flag.StringVar(&gCmdLineArgs.cidList, "cid", "", "")
+	flag.StringVar(&gCmdLineArgs.filter, "F", "", "")
 	flag.StringVar(&gCmdLineArgs.filter, "filter", "", "")
+	flag.IntVar(&gCmdLineArgs.count, "n", 5, "")
 	flag.IntVar(&gCmdLineArgs.count, "count", 5, "")
+	flag.IntVar(&gCmdLineArgs.refresh, "r", 30, "")
 	flag.IntVar(&gCmdLineArgs.refresh, "refresh", 30, "")
 	// output options
 	var granularity string
+	flag.StringVar(&granularity, "g", "system", "")
 	flag.StringVar(&granularity, "granularity", "system", "")
-	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
-	flag.BoolVar(&gCmdLineArgs.printCSV, "csv", false, "")
-	flag.BoolVar(&gCmdLineArgs.printWide, "wide", false, "")
+	flag.StringVar(&gCmdLineArgs.outputFormat, "o", "human", "")
+	flag.StringVar(&gCmdLineArgs.outputFormat, "output", "human", "")
 	flag.BoolVar(&gCmdLineArgs.verbose, "v", false, "")
+	flag.BoolVar(&gCmdLineArgs.verbose, "verbose", false, "")
 	flag.BoolVar(&gCmdLineArgs.veryVerbose, "vv", false, "")
+	flag.BoolVar(&gCmdLineArgs.veryVerbose, "veryverbose", false, "")
 	// post-processing options
+	flag.StringVar(&gCmdLineArgs.inputCSVFilePath, "P", "", "")
 	flag.StringVar(&gCmdLineArgs.inputCSVFilePath, "post-process", "", "")
+	flag.StringVar(&gCmdLineArgs.postProcessingFormat, "f", "", "")
 	flag.StringVar(&gCmdLineArgs.postProcessingFormat, "format", "", "")
 	// advanced options
+	flag.BoolVar(&gCmdLineArgs.showMetricNames, "l", false, "")
+	flag.BoolVar(&gCmdLineArgs.showMetricNames, "list", false, "")
+	flag.StringVar(&gCmdLineArgs.metricsList, "m", "", "")
+	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
+	flag.StringVar(&gCmdLineArgs.eventFilePath, "e", "", "")
+	flag.StringVar(&gCmdLineArgs.eventFilePath, "eventfile", "", "")
+	flag.StringVar(&gCmdLineArgs.metricFilePath, "M", "", "")
+	flag.StringVar(&gCmdLineArgs.metricFilePath, "metricfile", "", "")
 	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "i", 5000, "")
 	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "interval", 5000, "")
 	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "x", 125, "")
 	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "muxinterval", 125, "")
-	flag.StringVar(&gCmdLineArgs.eventFilePath, "e", "", "")
-	flag.StringVar(&gCmdLineArgs.eventFilePath, "eventfile", "", "")
-	flag.StringVar(&gCmdLineArgs.metricFilePath, "m", "", "")
-	flag.StringVar(&gCmdLineArgs.metricFilePath, "metricfile", "", "")
-	// debugging options
+	// debugging options (not shown in help/usage)
 	flag.StringVar(&gCmdLineArgs.metadataFilePath, "metadata", "", "")
 	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "perfstat", "", "")
 	flag.Parse()
+	// deal with scope and granularity
 	if strings.ToLower(scope) == ScopeOptions[ScopeSystem] {
 		gCmdLineArgs.scope = ScopeSystem
 	} else if strings.ToLower(scope) == ScopeOptions[ScopeProcess] {
@@ -803,8 +843,7 @@ func mainReturnWithCode() int {
 	configureArgs()
 	err := validateArgs()
 	if err != nil {
-		log.Printf("Invalid argument error: %v", err)
-		showUsage()
+		showArgumentError(err)
 		return exitError
 	}
 	if gCmdLineArgs.veryVerbose {
@@ -848,7 +887,7 @@ func mainReturnWithCode() int {
 			gCmdLineArgs.timeout = (qi + 1) * intervalSeconds
 		}
 	}
-	if !gCmdLineArgs.printCSV {
+	if gCmdLineArgs.outputFormat != "csv" {
 		fmt.Print("Loading.")
 	}
 	var metadata Metadata
@@ -870,7 +909,7 @@ func mainReturnWithCode() int {
 	if gCmdLineArgs.verbose {
 		log.Printf("%s", metadata)
 	}
-	if !gCmdLineArgs.printCSV {
+	if gCmdLineArgs.outputFormat != "csv" {
 		fmt.Print(".")
 	}
 	evaluatorFunctions := GetEvaluatorFunctions()
@@ -886,7 +925,7 @@ func mainReturnWithCode() int {
 		log.Printf("failed to load metric definitions: %v", err)
 		return exitError
 	}
-	if !gCmdLineArgs.printCSV {
+	if gCmdLineArgs.outputFormat != "csv" {
 		fmt.Print(".")
 	}
 	if gCmdLineArgs.showMetricNames {
@@ -905,7 +944,7 @@ func mainReturnWithCode() int {
 		log.Printf("failed to load event definitions: %v", err)
 		return exitError
 	}
-	if !gCmdLineArgs.printCSV {
+	if gCmdLineArgs.outputFormat != "csv" {
 		fmt.Print(".")
 	}
 	if gCmdLineArgs.perfStatFilePath != "" { // testing/debugging flow
@@ -942,7 +981,7 @@ func mainReturnWithCode() int {
 			}
 			defer SetNMIWatchdog(nmiWatchdog)
 		}
-		if !gCmdLineArgs.printCSV {
+		if gCmdLineArgs.outputFormat != "csv" {
 			fmt.Print(".")
 		}
 		var perfMuxIntervals map[string]int
@@ -955,7 +994,7 @@ func mainReturnWithCode() int {
 			return exitError
 		}
 		defer SetMuxIntervals(perfMuxIntervals)
-		if !gCmdLineArgs.printCSV {
+		if gCmdLineArgs.outputFormat != "csv" {
 			fmt.Print(".\n")
 			fmt.Printf("Reporting metrics in %d millisecond intervals...\n", gCmdLineArgs.perfPrintInterval)
 		}
