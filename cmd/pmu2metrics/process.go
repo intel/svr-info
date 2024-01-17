@@ -85,16 +85,20 @@ func GetHotProcesses(maxProcesses int, filter string) (processes []Process, err 
 	}
 	reProcess := regexp.MustCompile(psRegex)
 	for _, line := range strings.Split(psOutput, "\n") {
+		if line == "" {
+			continue
+		}
 		match := reProcess.FindStringSubmatch(line)
 		if match == nil {
-			log.Printf("Error regex not matching ps output: %s", line)
+			log.Printf("Unrecognized ps output format: %s", line)
 			continue
 		}
 		pid := match[1]
 		ppid := match[2]
 		comm := match[3]
 		cmd := match[4]
-		if (reFilter != nil && reFilter.MatchString(cmd)) || reFilter == nil {
+		// if a filter was provided, it must match the processes cmd and not match the name of this program
+		if (reFilter != nil && reFilter.MatchString(cmd) && !strings.Contains(cmd, filepath.Base(os.Args[0]))) || reFilter == nil {
 			processes = append(processes, Process{pid: pid, ppid: ppid, comm: comm, cmd: cmd})
 		}
 		if len(processes) == maxProcesses {
