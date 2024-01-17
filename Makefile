@@ -41,8 +41,11 @@ msrbusy: bin
 	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy ../cmd/msrbusy
 
 pmu2metrics: bin
+	rm -f cmd/pmu2metrics/resources/perf
+	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics_noperf ../cmd/pmu2metrics
 	-cp /prebuilt/bin/perf cmd/pmu2metrics/resources
 	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics ../cmd/pmu2metrics
+	rm -f cmd/pmu2metrics/resources/perf
 
 calcfreq: bin
 	cd bin && gcc -D VERSION=\"$(VERSION)\" ../tools/calcfreq/calcfreq.c -lpthread -o calcfreq -static
@@ -54,7 +57,7 @@ collector-deps-amd64: third_party calcfreq msrbusy msrread msrwrite pmu2metrics
 	cp bin/msrbusy $(TMPDIR)
 	cp bin/msrread $(TMPDIR)
 	cp bin/msrwrite $(TMPDIR)
-	cp bin/pmu2metrics $(TMPDIR)
+	cp bin/pmu2metrics_noperf $(TMPDIR)/pmu2metrics
 	cd $(TMPDIR) && tar -czf ../cmd/orchestrator/resources/collector_deps_amd64.tgz .
 	rm -rf $(TMPDIR)
 
@@ -79,9 +82,10 @@ dist-amd64: orchestrator
 	cp docs/guide/SvrInfoUserGuide.pdf dist/svr-info/USER_GUIDE.pdf
 	cp bin/orchestrator dist/svr-info/svr-info
 	mkdir -p dist/svr-info/tools
-	cp -R /prebuilt/bin/* dist/svr-info/tools
-	cp bin/* dist/svr-info/tools
-	rm dist/svr-info/tools/orchestrator
+	cp bin/collector dist/svr-info/tools
+	cp bin/collector_arm64 dist/svr-info/tools
+	cp bin/reporter dist/svr-info/tools
+	cp bin/pmu2metrics dist/svr-info/tools
 	cd dist && tar -czf $(TARBALL) svr-info
 	cd dist && md5sum $(TARBALL) > $(TARBALL).md5
 	rm -rf dist/svr-info
