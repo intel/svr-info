@@ -14,11 +14,14 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/syslog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -53,9 +56,8 @@ var ScopeOptions = []string{"system", "process", "cgroup"}
 
 // CmdLineArgs represents the program arguments provided by the user
 type CmdLineArgs struct {
-	showHelp        bool
-	showVersion     bool
-	showMetricNames bool
+	showHelp    bool
+	showVersion bool
 	// collection options
 	timeout int // seconds
 	// collection options
@@ -75,6 +77,8 @@ type CmdLineArgs struct {
 	verbose      bool
 	veryVerbose  bool
 	// advanced options
+	showMetricNames   bool
+	syslog            bool
 	eventFilePath     string
 	metricFilePath    string
 	perfPrintInterval int // milliseconds
@@ -685,7 +689,7 @@ func showUsage() {
 	fmt.Printf("Usage:  sudo %s [OPTIONS]\n", filepath.Base(os.Args[0]))
 	fmt.Println()
 	fmt.Println("Prints system metrics at 5 second intervals until interrupted by user.")
-	fmt.Println("Note: Metrics are printed to stdout, errors and log messages are printed to stderr.")
+	fmt.Println("Note: Metrics are printed to stdout. Log messages are printed to stderr or, optionally, sent to syslog.")
 	fmt.Println()
 	args := `Options
   -h, --help
@@ -726,6 +730,8 @@ Post-processing Options
 Advanced Options
   -l, --list
   	Show metric names available on this platform and exit (default: False).
+  -S, --syslog
+	Send logs to System Log daemon (default: False)
   -m, --metrics <metric names>
   	A quoted and comma separated list of metric names to include in output. Use --list to view metric names. (default: all metrics).
   -e, --eventfile <path>
@@ -761,7 +767,7 @@ Advanced Options
 }
 
 // short options used:
-// c, e, f, F, g, h, i, l, m, M, n, o, p, P, r, s, t, v, vv, V, x.
+// c, e, f, F, g, h, i, l, m, M, n, o, p, P, r, s, S, t, v, vv, V, x.
 
 // configureArgs defines and parses the arguments accepted by the application
 func configureArgs() {
@@ -804,6 +810,8 @@ func configureArgs() {
 	// advanced options
 	flag.BoolVar(&gCmdLineArgs.showMetricNames, "l", false, "")
 	flag.BoolVar(&gCmdLineArgs.showMetricNames, "list", false, "")
+	flag.BoolVar(&gCmdLineArgs.syslog, "S", false, "")
+	flag.BoolVar(&gCmdLineArgs.syslog, "syslog", false, "")
 	flag.StringVar(&gCmdLineArgs.metricsList, "m", "", "")
 	flag.StringVar(&gCmdLineArgs.metricsList, "metrics", "", "")
 	flag.StringVar(&gCmdLineArgs.eventFilePath, "e", "", "")
@@ -858,7 +866,19 @@ func mainReturnWithCode() int {
 	if gCmdLineArgs.veryVerbose {
 		gCmdLineArgs.verbose = true
 	}
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	if gCmdLineArgs.syslog {
+		// log to syslog (/var/log/syslog)
+		var logwriter *syslog.Writer
+		if logwriter, err = syslog.New(syslog.LOG_NOTICE, filepath.Base(os.Args[0])); err != nil {
+			log.Printf("Failed to connect system log daemon: %v", err)
+			return exitError
+		}
+		log.SetOutput(logwriter)
+		log.SetFlags(0) // syslog will add date/time stamp
+	} else {
+		// log to stderr
+		log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	}
 	if gCmdLineArgs.showHelp {
 		showUsage()
 		return exitNoError
@@ -873,7 +893,16 @@ func mainReturnWithCode() int {
 			gVersion,
 			strings.Join(os.Args[1:], " "),
 		)
+		defer log.Printf("Shutting down %s", filepath.Base(os.Args[0]))
 	}
+	sigChannel := make(chan os.Signal, 1)
+	signal.Notify(sigChannel, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChannel
+		if gCmdLineArgs.verbose {
+			log.Printf("Received signal: %v", sig)
+		}
+	}()
 	if gCmdLineArgs.inputCSVFilePath != "" {
 		var output string
 		format := gCmdLineArgs.postProcessingFormat
@@ -908,7 +937,7 @@ func mainReturnWithCode() int {
 	} else {
 		if metadata, err = LoadMetadata(); err != nil {
 			if os.Geteuid() != 0 {
-				fmt.Println("\nElevated permissions required, try again as root user or with sudo.")
+				log.Println("Elevated permissions required, try again as root user or with sudo.")
 				return exitError
 			}
 			log.Printf("failed to load metadata: %v", err)
@@ -964,7 +993,7 @@ func mainReturnWithCode() int {
 		}
 	} else {
 		if os.Geteuid() != 0 {
-			fmt.Println("\nElevated permissions required, try again as root user or with sudo.")
+			log.Println("Elevated permissions required, try again as root user or with sudo.")
 			return exitError
 		}
 		var perfPath, tempDir string
