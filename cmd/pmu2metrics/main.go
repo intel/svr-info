@@ -667,15 +667,16 @@ func validateArgs() (err error) {
 	return
 }
 
-// flagUsage called when a flag parsing error occurs or undefined flag is passed to the program
+// flagUsage is called when a flag parsing error occurs or undefined flag is passed to the program
 func flagUsage() {
-	fmt.Println()
-	fmt.Printf("See '%s -h' for options.\n", filepath.Base(os.Args[0]))
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, "See '%s -h' for options.\n", filepath.Base(os.Args[0]))
 }
 
 // showArgumentError prints error found while validating arguments
 func showArgumentError(err error) {
-	fmt.Printf("Argument validation error: %v\n", err)
+	out := fmt.Sprintf("Argument validation error: %v", err)
+	fmt.Fprintln(os.Stderr, out)
 	flagUsage()
 }
 
@@ -684,8 +685,7 @@ func showUsage() {
 	fmt.Printf("Usage:  sudo %s [OPTIONS]\n", filepath.Base(os.Args[0]))
 	fmt.Println()
 	fmt.Println("Prints system metrics at 5 second intervals until interrupted by user.")
-	fmt.Println("  Note: Log messages are printed to stderr. Redirect stderr to maintain clean console output, e.g.,")
-	fmt.Printf("  $ sudo %s 2>%s.log\n", filepath.Base(os.Args[0]), filepath.Base(os.Args[0]))
+	fmt.Println("Note: Metrics are printed to stdout, errors and log messages are printed to stderr.")
 	fmt.Println()
 	args := `Options
   -h, --help
@@ -739,16 +739,25 @@ Advanced Options
 	fmt.Println(args)
 	fmt.Println()
 	fmt.Println("Examples")
-	fmt.Println("  Metrics to screen and file in CSV format. Capture verbose logs in separate file.")
-	fmt.Printf("    $ sudo %[1]s --output csv --verbose 2 > %[1]s.log | tee %[1]s.csv\n", filepath.Base(os.Args[0]))
-	fmt.Println("  Metrics with socket-level granularity to screen in CSV format.")
-	fmt.Printf("    $ sudo %[1]s --output csv --granularity socket 2 > %[1]s.log\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Metrics to screen in human readable format.")
+	fmt.Printf("    $ sudo %[1]s\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Metrics to screen and file in CSV format.")
+	fmt.Printf("    $ sudo %[1]s --output csv | tee %[1]s.csv\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Metrics with socket-level granularity to screen in CSV format for 60 seconds.")
+	fmt.Printf("    $ sudo %[1]s --output csv --granularity socket --timeout 60\n", filepath.Base(os.Args[0]))
 	fmt.Println("  Metrics for \"hot\" processes to screen in CSV format.")
-	fmt.Printf("    $ sudo %[1]s --output csv --scope process 2 > %[1]s.log\n", filepath.Base(os.Args[0]))
+	fmt.Printf("    $ sudo %[1]s --output csv --scope process\n", filepath.Base(os.Args[0]))
 	fmt.Println("  Metrics for specified process PIDs to screen in CSV format.")
-	fmt.Printf("    $ sudo %[1]s --output csv --scope process --pid 12345,67890 2 > %[1]s.log\n", filepath.Base(os.Args[0]))
+	fmt.Printf("    $ sudo %[1]s --output csv --scope process --pid 12345,67890\n", filepath.Base(os.Args[0]))
 	fmt.Println("  Specified Metrics to screen in wide format.")
-	fmt.Printf("    $ sudo %[1]s --output wide --metrics \"CPU utilization %%, TMA_Frontend_Bound(%%)\" 2 > %[1]s.log\n", filepath.Base(os.Args[0]))
+	fmt.Printf("    $ sudo %[1]s --output wide --metrics \"CPU utilization %%, TMA_Frontend_Bound(%%)\"\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Metrics for the \"hottest\" process to screen in CSV format.")
+	fmt.Printf("    $ sudo %[1]s --output csv --scope process --count 1\n", filepath.Base(os.Args[0]))
+	fmt.Println("Post-processing Examples")
+	fmt.Println("  Create summary HTML report from system metrics CSV file.")
+	fmt.Printf("    $ %[1]s --post-process %[1]s.csv --format html >summary.html\n", filepath.Base(os.Args[0]))
+	fmt.Println("  Create summary CSV report from any metrics CSV file to screen and file.")
+	fmt.Printf("    $ %[1]s --post-process %[1]s.csv --format csv | tee summary.csv\n", filepath.Base(os.Args[0]))
 }
 
 // short options used:
