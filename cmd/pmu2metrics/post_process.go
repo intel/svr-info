@@ -245,7 +245,7 @@ func (m *metricsFromCSV) getStats() (stats map[string]metricStats, err error) {
 				squared := distance * distance
 				distanceSquaredSum += squared
 			}
-			stddev = distanceSquaredSum / float64(count)
+			stddev = math.Sqrt(distanceSquaredSum / float64(count))
 		}
 		stats[metricName] = metricStats{mean: mean, min: min, max: max, stddev: stddev}
 	}
