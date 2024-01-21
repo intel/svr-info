@@ -23,6 +23,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/intel/svr-info/internal/util"
 )
 
 // globals
@@ -150,27 +152,6 @@ func resourceExists(filename string) (exists bool) {
 	return
 }
 
-// getPerfPath returns the path to the perf executable that will be used to collect
-// events. If the perf binary is included in the embedded resources, it will be extracted
-// to a temporary directory and run from there, otherwise the system-installed perf will
-// be used.
-func getPerfPath() (path string, tempDir string, err error) {
-	if resourceExists("perf") {
-		if tempDir, err = os.MkdirTemp("", fmt.Sprintf("%s.tmp.", filepath.Base(os.Args[0]))); err != nil {
-			log.Printf("failed to create temporary directory: %v", err)
-			return
-		}
-		if err = extractExecutableResources(tempDir); err != nil {
-			log.Printf("failed to extract executable resources to %s: %v", "", err)
-			return
-		}
-		path = filepath.Join(tempDir, "perf")
-	} else {
-		path, err = exec.LookPath("perf")
-	}
-	return
-}
-
 // printMetrics prints one frame of metrics to stdout in the format requested by the user. The
 // frameCount argument is used to control when the headers are printed, e.g., on the first frame
 // only.
@@ -277,6 +258,27 @@ func printMetrics(metricFrame MetricFrame, frameCount int) {
 			fmt.Println(row)
 		}
 	}
+}
+
+// getPerfPath returns the path to the perf executable that will be used to collect
+// events. If the perf binary is included in the embedded resources, it will be extracted
+// to a temporary directory and run from there, otherwise the system-installed perf will
+// be used.
+func getPerfPath() (path string, tempDir string, err error) {
+	if resourceExists("perf") {
+		if tempDir, err = os.MkdirTemp("", fmt.Sprintf("%s.tmp.", filepath.Base(os.Args[0]))); err != nil {
+			log.Printf("failed to create temporary directory: %v", err)
+			return
+		}
+		if err = extractExecutableResources(tempDir); err != nil {
+			log.Printf("failed to extract executable resources to %s: %v", "", err)
+			return
+		}
+		path = filepath.Join(tempDir, "perf")
+	} else {
+		path, err = exec.LookPath("perf")
+	}
+	return
 }
 
 // getPerfCommandArgs assembles the arguments that will be passed to Linux perf
@@ -602,90 +604,6 @@ func doWorkDebug(perfStatFilePath string, eventGroupDefinitions []GroupDefinitio
 	return
 }
 
-// validateArgs is responsible for checking the sanity of the provided command
-// line arguments
-func validateArgs() (err error) {
-	// collection options
-	//  timeout needs to be zero or greater than the print interval
-	if gCmdLineArgs.timeout != 0 && gCmdLineArgs.timeout*1000 < gCmdLineArgs.perfPrintInterval {
-		err = fmt.Errorf("--timeout must be greater than or equal to --interval")
-	}
-	//  confirm a valid scope
-	if gCmdLineArgs.scope == -1 {
-		err = fmt.Errorf("--scope options are %s", strings.Join(ScopeOptions, ", "))
-		return
-	}
-	//  pids only when scope is process
-	if gCmdLineArgs.pidList != "" && gCmdLineArgs.scope != ScopeProcess {
-		err = fmt.Errorf("--pid only valid when --scope is process")
-		return
-	}
-	//  cids only when scope is cgroup
-	if gCmdLineArgs.cidList != "" && gCmdLineArgs.scope != ScopeCgroup {
-		err = fmt.Errorf("--cid only valid when --scope is cgroup")
-		return
-	}
-	//  filter only when scope is process or cgroup
-	if gCmdLineArgs.filter != "" && (gCmdLineArgs.scope != ScopeProcess && gCmdLineArgs.scope != ScopeCgroup) {
-		err = fmt.Errorf("--filter only valid when --scope is process or cgroup")
-		return
-	}
-	//  filter only when no pids/cids
-	if gCmdLineArgs.filter != "" && (gCmdLineArgs.pidList != "" || gCmdLineArgs.cidList != "") {
-		err = fmt.Errorf("--filter only valid when --pid and --cid are not specified")
-		return
-	}
-	//  count must be greater than 0
-	if gCmdLineArgs.count < 1 {
-		err = fmt.Errorf("--count must be one or more")
-		return
-	}
-	//  refresh must be greater than perf print intervaal
-	if gCmdLineArgs.refresh*1000 < gCmdLineArgs.perfPrintInterval {
-		err = fmt.Errorf("--refresh must be greater than or equal to --interval")
-	}
-	// output options
-	//  confirm a valid granularity
-	if gCmdLineArgs.granularity == -1 {
-		err = fmt.Errorf("--granularity options are %s", strings.Join(GranularityOptions, ", "))
-		return
-	}
-	//  a granularity other than system is only valid when scope is system
-	if gCmdLineArgs.granularity != GranularitySystem && gCmdLineArgs.scope != ScopeSystem {
-		err = fmt.Errorf("--granularity is relevant only for system scope")
-	}
-	//  confirm a valid output format
-	if gCmdLineArgs.outputFormat == -1 {
-		err = fmt.Errorf("--output options are %s", strings.Join(FormatOptions, ", "))
-		return
-	}
-	// post-processing options
-	//  confirm a valid summary format
-	if gCmdLineArgs.summaryFormat == -1 {
-		err = fmt.Errorf("--format options are %s", strings.Join(SummaryOptions, ", "))
-		return
-	}
-	// advanced options
-	//  minimum perf print interval
-	if gCmdLineArgs.perfPrintInterval < 0 {
-		err = fmt.Errorf("--interval value must be a positive integer")
-		return
-	}
-	//  minimum mux interval
-	if gCmdLineArgs.perfMuxInterval < 0 {
-		err = fmt.Errorf("--muxinterval value must be a positive integer")
-		return
-	}
-	// debugging options
-	//  if metadata file path is provided, then perf stat file needs to be provided...and vice versa
-	if (gCmdLineArgs.metadataFilePath != "" || gCmdLineArgs.perfStatFilePath != "") &&
-		(gCmdLineArgs.metadataFilePath == "" || gCmdLineArgs.perfStatFilePath == "") {
-		err = fmt.Errorf("-perfstat and -metadata options must both be specified")
-		return
-	}
-	return
-}
-
 // flagUsage is called when a flag parsing error occurs or undefined flag is passed to the program
 func flagUsage() {
 	fmt.Fprintln(os.Stderr)
@@ -788,7 +706,7 @@ Post-processing Examples
 // c, e, f, F, g, h, i, l, m, M, n, o, p, P, r, s, S, t, v, vv, V, x.
 
 // configureArgs defines and parses the arguments accepted by the application
-func configureArgs() {
+func configureArgs() (err error) {
 	flag.Usage = func() { flagUsage() } // override default usage output
 	flag.BoolVar(&gCmdLineArgs.showHelp, "h", false, "")
 	flag.BoolVar(&gCmdLineArgs.showHelp, "help", false, "")
@@ -846,49 +764,100 @@ func configureArgs() {
 	flag.StringVar(&gCmdLineArgs.metadataFilePath, "metadata", "", "")
 	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "perfstat", "", "")
 	flag.Parse()
-	// deal with string inputs that need to be converted to a type/enum
-	// scope
-	switch scope = strings.ToLower(scope); scope {
-	case ScopeOptions[ScopeSystem]:
-		gCmdLineArgs.scope = ScopeSystem
-	case ScopeOptions[ScopeProcess]:
-		gCmdLineArgs.scope = ScopeProcess
-	case ScopeOptions[ScopeCgroup]:
-		gCmdLineArgs.scope = ScopeCgroup
-	default:
-		gCmdLineArgs.scope = -1
+
+	// validate arguments
+
+	// collection options
+	//  timeout needs to be zero or greater than the print interval
+	if gCmdLineArgs.timeout != 0 && gCmdLineArgs.timeout*1000 < gCmdLineArgs.perfPrintInterval {
+		err = fmt.Errorf("--timeout must be greater than or equal to --interval")
+		return
 	}
-	// granularity
-	switch granularity = strings.ToLower(granularity); granularity {
-	case GranularityOptions[GranularitySystem]:
-		gCmdLineArgs.granularity = GranularitySystem
-	case GranularityOptions[GranularitySocket]:
-		gCmdLineArgs.granularity = GranularitySocket
-	case GranularityOptions[GranularityCPU]:
-		gCmdLineArgs.granularity = GranularityCPU
-	default:
-		gCmdLineArgs.granularity = -1
+	//  confirm a valid scope
+	var idx int
+	if idx, err = util.StringIndexInList(strings.ToLower(scope), ScopeOptions); err != nil {
+		err = fmt.Errorf("--scope options are %s", strings.Join(ScopeOptions, ", "))
+		return
+	} else {
+		gCmdLineArgs.scope = Scope(idx)
 	}
-	// format
-	switch format = strings.ToLower(format); format {
-	case FormatOptions[FormatHuman]:
-		gCmdLineArgs.outputFormat = FormatHuman
-	case FormatOptions[FormatCSV]:
-		gCmdLineArgs.outputFormat = FormatCSV
-	case FormatOptions[FormatWide]:
-		gCmdLineArgs.outputFormat = FormatWide
-	default:
-		gCmdLineArgs.outputFormat = -1
+	//  pids only when scope is process
+	if gCmdLineArgs.pidList != "" && gCmdLineArgs.scope != ScopeProcess {
+		err = fmt.Errorf("--pid only valid when --scope is process")
+		return
 	}
-	// summary
-	switch summary = strings.ToLower(summary); summary {
-	case SummaryOptions[SummaryCSV]:
-		gCmdLineArgs.summaryFormat = SummaryCSV
-	case SummaryOptions[SummaryHTML]:
-		gCmdLineArgs.summaryFormat = SummaryHTML
-	default:
-		gCmdLineArgs.summaryFormat = -1
+	//  cids only when scope is cgroup
+	if gCmdLineArgs.cidList != "" && gCmdLineArgs.scope != ScopeCgroup {
+		err = fmt.Errorf("--cid only valid when --scope is cgroup")
+		return
 	}
+	//  filter only when scope is process or cgroup
+	if gCmdLineArgs.filter != "" && (gCmdLineArgs.scope != ScopeProcess && gCmdLineArgs.scope != ScopeCgroup) {
+		err = fmt.Errorf("--filter only valid when --scope is process or cgroup")
+		return
+	}
+	//  filter only when no pids/cids
+	if gCmdLineArgs.filter != "" && (gCmdLineArgs.pidList != "" || gCmdLineArgs.cidList != "") {
+		err = fmt.Errorf("--filter only valid when --pid and --cid are not specified")
+		return
+	}
+	//  count must be greater than 0
+	if gCmdLineArgs.count < 1 {
+		err = fmt.Errorf("--count must be one or more")
+		return
+	}
+	//  refresh must be greater than perf print intervaal
+	if gCmdLineArgs.refresh*1000 < gCmdLineArgs.perfPrintInterval {
+		err = fmt.Errorf("--refresh must be greater than or equal to --interval")
+		return
+	}
+	// output options
+	//  confirm a valid granularity
+	if idx, err = util.StringIndexInList(strings.ToLower(granularity), GranularityOptions); err != nil {
+		err = fmt.Errorf("--granularity options are %s", strings.Join(GranularityOptions, ", "))
+		return
+	} else {
+		gCmdLineArgs.granularity = Granularity(idx)
+	}
+	//  a granularity other than system is only valid when scope is system
+	if gCmdLineArgs.granularity != GranularitySystem && gCmdLineArgs.scope != ScopeSystem {
+		err = fmt.Errorf("--granularity is relevant only for system scope")
+		return
+	}
+	//  confirm a valid output format
+	if idx, err = util.StringIndexInList(strings.ToLower(format), FormatOptions); err != nil {
+		err = fmt.Errorf("--output options are %s", strings.Join(FormatOptions, ", "))
+		return
+	} else {
+		gCmdLineArgs.outputFormat = Format(idx)
+	}
+	// post-processing options
+	//  confirm a valid summary format
+	if idx, err = util.StringIndexInList(strings.ToLower(summary), SummaryOptions); err != nil {
+		err = fmt.Errorf("--format options are %s", strings.Join(SummaryOptions, ", "))
+		return
+	} else {
+		gCmdLineArgs.summaryFormat = Summary(idx)
+	}
+	// advanced options
+	//  minimum perf print interval
+	if gCmdLineArgs.perfPrintInterval < 0 {
+		err = fmt.Errorf("--interval value must be a positive integer")
+		return
+	}
+	//  minimum mux interval
+	if gCmdLineArgs.perfMuxInterval < 0 {
+		err = fmt.Errorf("--muxinterval value must be a positive integer")
+		return
+	}
+	// debugging options
+	//  if metadata file path is provided, then perf stat file needs to be provided...and vice versa
+	if (gCmdLineArgs.metadataFilePath != "" || gCmdLineArgs.perfStatFilePath != "") &&
+		(gCmdLineArgs.metadataFilePath == "" || gCmdLineArgs.perfStatFilePath == "") {
+		err = fmt.Errorf("-perfstat and -metadata options must both be specified")
+		return
+	}
+	return
 }
 
 // The program will exit with one of these exit codes
@@ -901,8 +870,7 @@ const (
 // mainReturnWithCode is responsible for initialization and highest-level program
 // logic/flow
 func mainReturnWithCode() int {
-	configureArgs()
-	err := validateArgs()
+	err := configureArgs()
 	if err != nil {
 		showArgumentError(err)
 		return exitError
