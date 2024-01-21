@@ -160,6 +160,11 @@ void get_arch(int *family, int *model, int *stepping) {
     fclose(fp);
 }
 
+// VERSION is set in the Makefile
+#ifndef VERSION
+#define VERSION "dev"
+#endif
+
 void Version()
 {
     fprintf(stderr, "calcfreq %s\n", VERSION);
