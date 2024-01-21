@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/intel/svr-info/internal/core"
+	"github.com/intel/svr-info/internal/util"
 )
 
 type Target interface {
@@ -230,7 +230,7 @@ func (t *LocalTarget) CreateTempDirectory(rootDir string) (tempDir string, err e
 	if err != nil {
 		return
 	}
-	tempDir, err = core.AbsPath(temp)
+	tempDir, err = util.AbsPath(temp)
 	return
 }
 

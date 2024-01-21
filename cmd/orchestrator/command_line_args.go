@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/intel/svr-info/internal/core"
+	"github.com/intel/svr-info/internal/util"
 )
 
 type CmdLineArgs struct {
@@ -183,7 +184,7 @@ func (cmdLineArgs *CmdLineArgs) parse(name string, arguments []string) (err erro
 func argDirExists(dir string, label string) (err error) {
 	if dir != "" {
 		var path string
-		path, err = core.AbsPath(dir)
+		path, err = util.AbsPath(dir)
 		if err != nil {
 			return
 		}
@@ -314,13 +315,18 @@ func (cmdLineArgs *CmdLineArgs) validate() (err error) {
 	// -key
 	if cmdLineArgs.key != "" {
 		var path string
-		path, err = core.AbsPath(cmdLineArgs.key)
+		path, err = util.AbsPath(cmdLineArgs.key)
 		if err != nil {
 			return
 		}
-		err = core.FileExists(path)
+		var exists bool
+		exists, err = util.FileExists(path)
 		if err != nil {
 			err = fmt.Errorf("-key %s : %s", path, err.Error())
+			return
+		}
+		if !exists {
+			err = fmt.Errorf("-key %s : file does not exist", path)
 			return
 		}
 		if cmdLineArgs.ipAddress == "" || cmdLineArgs.user == "" {
@@ -331,13 +337,18 @@ func (cmdLineArgs *CmdLineArgs) validate() (err error) {
 	// -targets
 	if cmdLineArgs.targets != "" {
 		var path string
-		path, err = core.AbsPath(cmdLineArgs.targets)
+		path, err = util.AbsPath(cmdLineArgs.targets)
 		if err != nil {
 			return
 		}
-		err = core.FileExists(path)
+		var exists bool
+		exists, err = util.FileExists(path)
 		if err != nil {
 			err = fmt.Errorf("-targets %s : %s", path, err.Error())
+			return
+		}
+		if !exists {
+			err = fmt.Errorf("-targets %s : file does not exist", path)
 			return
 		}
 	}

@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/intel/svr-info/internal/core"
+	"github.com/intel/svr-info/internal/util"
 )
 
 type targetFromFile struct {
@@ -87,8 +87,11 @@ func (tf *TargetsFile) parseContent(content []byte) (targets []targetFromFile, e
 			// key, pwd, and sudo are all optional
 			t.key = tokens[i+3]
 			if t.key != "" {
-				err = core.FileExists(t.key)
+				var exists bool
+				exists, err = util.FileExists(t.key)
 				if err != nil {
+					fileErrors = append(fileErrors, fmt.Sprintf("-targets %s : failed to determine if key file (%s) is a file, line %d: %v\n", tf.path, t.key, lineNo, err))
+				} else if !exists {
 					fileErrors = append(fileErrors, fmt.Sprintf("-targets %s : key file (%s) not a file, line %d\n", tf.path, t.key, lineNo))
 				}
 			}

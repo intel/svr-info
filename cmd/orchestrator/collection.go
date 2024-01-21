@@ -16,8 +16,8 @@ import (
 	"text/template"
 
 	"github.com/intel/svr-info/internal/commandfile"
-	"github.com/intel/svr-info/internal/core"
 	"github.com/intel/svr-info/internal/target"
+	"github.com/intel/svr-info/internal/util"
 	"gopkg.in/yaml.v2"
 )
 
@@ -261,8 +261,13 @@ func (c *Collection) getExtrasFiles() (extras []string, err error) {
 		log.Printf("Failed to get path to extra files: %v", err)
 		return
 	}
-	err2 := core.DirectoryExists(extrasDir)
-	if err2 != nil {
+	var exists bool
+	exists, err = util.DirectoryExists(extrasDir)
+	if err != nil {
+		err = fmt.Errorf("failed to determine if extras directory exists: %v", err)
+		return
+	}
+	if !exists {
 		log.Printf("Extra collection files dir (%s) not found.", extrasDir)
 		return
 	}
@@ -377,8 +382,13 @@ func (c *Collection) Collect() (err error) {
 		log.Printf("Failed to get extras dir: %v", err)
 		return
 	}
-	err2 := core.DirectoryExists(extrasDir)
-	if err2 == nil {
+	var exists bool
+	exists, err = util.DirectoryExists(extrasDir)
+	if err != nil {
+		err = fmt.Errorf("failed to determine if extras directory exists: %v", err)
+		return
+	}
+	if exists {
 		var extraFilenames []string
 		extraFilenames, err = c.getExtrasFiles()
 		if err != nil {

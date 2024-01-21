@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/intel/svr-info/internal/util"
 	"golang.org/x/exp/slices"
 )
 
@@ -146,19 +147,6 @@ func parseEvents(rawEvents [][]byte, eventGroupDefinitions []GroupDefinition) (e
 	return
 }
 
-// stringIndexInList returns the index of the given string in the given list of
-// strings and error if not found
-func stringIndexInList(s string, l []string) (idx int, err error) {
-	var item string
-	for idx, item = range l {
-		if item == s {
-			return
-		}
-	}
-	err = fmt.Errorf("%s not found in %s", s, strings.Join(l, ", "))
-	return
-}
-
 // coalesceEvents separates the events into a number of event lists by granularity and scope
 func coalesceEvents(allEvents []Event, scope Scope, granularity Granularity, metadata Metadata) (coalescedEvents [][]Event, err error) {
 	if scope == ScopeSystem {
@@ -223,7 +211,7 @@ func coalesceEvents(allEvents []Event, scope Scope, granularity Granularity, met
 		var cgroups []string
 		for _, event := range allEvents {
 			var cgroupIdx int
-			if cgroupIdx, err = stringIndexInList(event.Cgroup, cgroups); err != nil {
+			if cgroupIdx, err = util.StringIndexInList(event.Cgroup, cgroups); err != nil {
 				cgroups = append(cgroups, event.Cgroup)
 				cgroupIdx = len(cgroups) - 1
 				allCgroupEvents = append(allCgroupEvents, []Event{})

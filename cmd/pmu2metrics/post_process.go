@@ -16,6 +16,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/intel/svr-info/internal/util"
 )
 
 // PostProcess - generates formatted output from a CSV file containing metric values. Format
@@ -180,7 +182,7 @@ func newMetricsFromCSV(csvPath string) (metrics []metricsFromCSV, err error) {
 		} else {
 			groupByValue := fields[groupByField]
 			var listIdx int
-			if listIdx, err = stringIndexInList(groupByValue, groupByValues); err != nil {
+			if listIdx, err = util.StringIndexInList(groupByValue, groupByValues); err != nil {
 				groupByValues = append(groupByValues, groupByValue)
 				metrics = append(metrics, metricsFromCSV{})
 				listIdx = len(metrics) - 1

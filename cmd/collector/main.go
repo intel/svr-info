@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/intel/svr-info/internal/commandfile"
-	"github.com/intel/svr-info/internal/core"
+	"github.com/intel/svr-info/internal/util"
 	"gopkg.in/yaml.v2"
 )
 
@@ -223,7 +223,7 @@ func mainReturnWithCode() int {
 			return 1
 		}
 	} else if flag.NArg() == 1 {
-		absFilename, err := core.AbsPath(flag.Arg(0))
+		absFilename, err := util.AbsPath(flag.Arg(0))
 		if err != nil {
 			log.Printf("Error: %v", err)
 			return 1

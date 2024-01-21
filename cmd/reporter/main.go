@@ -16,6 +16,7 @@ import (
 
 	"github.com/intel/svr-info/internal/core"
 	"github.com/intel/svr-info/internal/cpu"
+	"github.com/intel/svr-info/internal/util"
 )
 
 //go:embed resources
@@ -69,7 +70,7 @@ func init() {
 	if gCmdLineArgs.input != "" {
 		inputPaths := strings.Split(gCmdLineArgs.input, ",")
 		for _, inputPath := range inputPaths {
-			path, err := core.AbsPath(inputPath)
+			path, err := util.AbsPath(inputPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
@@ -91,7 +92,7 @@ func init() {
 	}
 	// -output
 	if gCmdLineArgs.output != "" {
-		path, err := core.AbsPath(gCmdLineArgs.output)
+		path, err := util.AbsPath(gCmdLineArgs.output)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)

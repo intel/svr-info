@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/intel/svr-info/internal/core"
 	"github.com/intel/svr-info/internal/progress"
 	"github.com/intel/svr-info/internal/target"
+	"github.com/intel/svr-info/internal/util"
 	"golang.org/x/exp/slices"
 	"golang.org/x/term"
 )
@@ -435,7 +435,7 @@ func mainReturnWithCode() int {
 	var outputDir string
 	if cmdLineArgs.output != "" {
 		var err error
-		outputDir, err = core.AbsPath(cmdLineArgs.output)
+		outputDir, err = util.AbsPath(cmdLineArgs.output)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			return retError
@@ -444,7 +444,7 @@ func mainReturnWithCode() int {
 		outputDirName := filepath.Base(os.Args[0]) + "_" + time.Now().Local().Format("2006-01-02_15-04-05")
 		var err error
 		// outputDir will be created in current working directory
-		outputDir, err = core.AbsPath(outputDirName)
+		outputDir, err = util.AbsPath(outputDirName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			return retError

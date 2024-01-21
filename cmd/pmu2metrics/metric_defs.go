@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Knetic/govaluate"
+	"github.com/intel/svr-info/internal/util"
 )
 
 type Variable struct {
@@ -68,7 +69,7 @@ func LoadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics 
 		}
 		// build list of metrics based on provided list of metric names
 		for _, metric := range metricsInFile {
-			if !stringInList(metric.Name, selectedMetrics) {
+			if !util.StringInList(metric.Name, selectedMetrics) {
 				continue
 			}
 			metrics = append(metrics, metric)
@@ -213,14 +214,4 @@ func transformConditional(origIn string) (out string, err error) {
 		out = fmt.Sprintf("%s%s%s ? %s : %s%s%s", expression0, space0, condition, expression1, expression2, space3, expression3)
 	}
 	return
-}
-
-// stringInList confirms if string is in list of strings
-func stringInList(s string, l []string) bool {
-	for _, item := range l {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
