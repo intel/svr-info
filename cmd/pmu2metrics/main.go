@@ -54,6 +54,27 @@ const (
 
 var ScopeOptions = []string{"system", "process", "cgroup"}
 
+// Format represents the format of the metric output
+type Format int
+
+const (
+	FormatHuman Format = iota
+	FormatCSV
+	FormatWide
+)
+
+var FormatOptions = []string{"human", "csv", "wide"}
+
+// Summary represents the format of the post-processed summary report
+type Summary int
+
+const (
+	SummaryCSV Summary = iota
+	SummaryHTML
+)
+
+var SummaryOptions = []string{"csv", "html"}
+
 // CmdLineArgs represents the program arguments provided by the user
 type CmdLineArgs struct {
 	showHelp    bool
@@ -68,12 +89,12 @@ type CmdLineArgs struct {
 	count   int
 	refresh int // seconds
 	// post-processing options
-	inputCSVFilePath     string
-	postProcessingFormat string
+	inputCSVFilePath string
+	summaryFormat    Summary
 	// output format options
 	granularity  Granularity
 	metricsList  string
-	outputFormat string
+	outputFormat Format
 	verbose      bool
 	veryVerbose  bool
 	// advanced options
@@ -154,7 +175,7 @@ func getPerfPath() (path string, tempDir string, err error) {
 // frameCount argument is used to control when the headers are printed, e.g., on the first frame
 // only.
 func printMetrics(metricFrame MetricFrame, frameCount int) {
-	if gCmdLineArgs.outputFormat == "csv" {
+	if gCmdLineArgs.outputFormat == FormatCSV {
 		if frameCount == 1 {
 			fmt.Print("TS,SKT,CPU,PID,CMD,CID,")
 			names := make([]string, 0, len(metricFrame.Metrics))
@@ -170,7 +191,7 @@ func printMetrics(metricFrame MetricFrame, frameCount int) {
 		}
 		fmt.Printf("%s\n", strings.ReplaceAll(strings.Join(values, ","), "NaN", ""))
 	} else {
-		if gCmdLineArgs.outputFormat == "human" {
+		if gCmdLineArgs.outputFormat == FormatHuman {
 			fmt.Println("--------------------------------------------------------------------------------------")
 			fmt.Printf("- Metrics captured at %s\n", gCollectionStartTime.Add(time.Second*time.Duration(int(metricFrame.Timestamp))).UTC())
 			if metricFrame.PID != "" {
@@ -591,7 +612,7 @@ func validateArgs() (err error) {
 	}
 	//  confirm a valid scope
 	if gCmdLineArgs.scope == -1 {
-		err = fmt.Errorf("--scope supports three options: 'system', 'process', and 'cgroup'")
+		err = fmt.Errorf("--scope options are %s", strings.Join(ScopeOptions, ", "))
 		return
 	}
 	//  pids only when scope is process
@@ -626,28 +647,22 @@ func validateArgs() (err error) {
 	// output options
 	//  confirm a valid granularity
 	if gCmdLineArgs.granularity == -1 {
-		err = fmt.Errorf("--granularity supports three options: 'system', 'socket', and 'cpu'")
+		err = fmt.Errorf("--granularity options are %s", strings.Join(GranularityOptions, ", "))
 		return
 	}
 	//  a granularity other than system is only valid when scope is system
 	if gCmdLineArgs.granularity != GranularitySystem && gCmdLineArgs.scope != ScopeSystem {
 		err = fmt.Errorf("--granularity is relevant only for system scope")
 	}
-	//  output format can be human, csv and wide
-	gCmdLineArgs.outputFormat = strings.ToLower(gCmdLineArgs.outputFormat)
-	if gCmdLineArgs.outputFormat != "csv" && gCmdLineArgs.outputFormat != "human" && gCmdLineArgs.outputFormat != "wide" {
-		err = fmt.Errorf("--output options are 'human', 'csv', and 'wide'")
+	//  confirm a valid output format
+	if gCmdLineArgs.outputFormat == -1 {
+		err = fmt.Errorf("--output options are %s", strings.Join(FormatOptions, ", "))
 		return
 	}
 	// post-processing options
-	//  format applies to post-processing
-	if gCmdLineArgs.postProcessingFormat != "" && gCmdLineArgs.inputCSVFilePath == "" {
-		err = fmt.Errorf("--format only valid for post-processing, i.e., --post-process <csv> required")
-		return
-	}
-	//  format can be html or csv
-	if gCmdLineArgs.postProcessingFormat != "" && strings.ToLower(gCmdLineArgs.postProcessingFormat) != "html" && strings.ToLower(gCmdLineArgs.postProcessingFormat) != "csv" {
-		err = fmt.Errorf("--format options are html and csv")
+	//  confirm a valid summary format
+	if gCmdLineArgs.summaryFormat == -1 {
+		err = fmt.Errorf("--format options are %s", strings.Join(SummaryOptions, ", "))
 		return
 	}
 	// advanced options
@@ -693,77 +708,80 @@ func showUsage() {
 	fmt.Println()
 	args := `Options
   -h, --help
-  	Show this usage message and exit.
+        Show this usage message and exit.
   -V, --version
-  	Show program version and exit.
+        Show program version and exit.
 
 Collection Options
   -t, --timeout <seconds>
-  	Number of seconds to run (default: indefinitely).
+        Number of seconds to run (default: indefinitely).
   -s, --scope <option>
-  	Specify the scope of collection. Options: 'system', 'process', 'cgroup' (default: system).
+        Specify the scope of collection. Options: %[1]s (default: system).
   -p, --pid <pids>
-  	Comma separated list of process ids. Only valid when collecting in process scope. If not provided while collecting at process scope, the currently most active processes will be monitored (default: None).
+        Comma separated list of process ids. Only valid when collecting in process scope. If not provided while collecting at process scope, the currently most active processes will be monitored (default: None).
   -c, --cid <cids>
-  	Comma separated list of cids. Only valid when collecting at cgroup scope. If not provided while collecting at cgroup scope, the currently most active cgroups will be monitored (default: None).
+        Comma separated list of cids. Only valid when collecting at cgroup scope. If not provided while collecting at cgroup scope, the currently most active cgroups will be monitored (default: None).
   -F, --filter <regex>
-  	Regular expression used to match process names or cgroup IDs when --pid or --cid are not specified (default: None).
+        Regular expression used to match process names or cgroup IDs when --pid or --cid are not specified (default: None).
   -n, --count <count>
-  	The maximum number of processes or cgroups to monitor (default: 5).
+        The maximum number of processes or cgroups to monitor (default: 5).
   -r, --refresh <seconds>
-  	The number of seconds to run before refreshing the "hot" process or cgroup list (default: 30).
+        The number of seconds to run before refreshing the "hot" process or cgroup list (default: 30).
 
 Output Options
   -g, --granularity <option>
-  	Specify the level of metric granularity. Only valid when collecting at system scope. Options: 'system', 'socket', or 'cpu' (default: system).
+        Specify the level of metric granularity. Only valid when collecting at system scope. Options: %[2]s (default: system).
   -o, --output <option>
-  	Specify the output format. Options are 'human', 'csv', and 'wide'. 'csv' is required for post-processing (default: human).
+        Specify the output format. Options: %[3]s. 'csv' is required for post-processing (default: human).
   -[v]v, --[very]verbose
-  	Enable verbose, or very verbose (-vv) logging (Default: False).
+        Enable verbose, or very verbose (-vv) logging (Default: False).
 
 Post-processing Options
   -P, --post-process <CSV file>
-  	Path to a CSV file created during collection. Outputs a report containing summarized metric values (default: None).
+        Path to a CSV file created during collection. Outputs a report containing summarized metric values (default: None).
   -f, --format <option>
-  	File format to generate when post-processing the collected CSV file. Options: 'html' or 'csv' (default: csv).
+        File format to generate when post-processing the collected CSV file. Options: %[4]s (default: csv).
 
 Advanced Options
   -l, --list
-  	Show metric names available on this platform and exit (default: False).
+        Show metric names available on this platform and exit (default: False).
   -S, --syslog
 	Send logs to System Log daemon (default: False)
   -m, --metrics <metric names>
-  	A quoted and comma separated list of metric names to include in output. Use --list to view metric names. (default: all metrics).
+        A quoted and comma separated list of metric names to include in output. Use --list to view metric names. (default: all metrics).
   -e, --eventfile <path>
-  	Path to perf event definition file (default: None).
+        Path to perf event definition file (default: None).
   -M, --metricfile <path>
-  	Path to metric definition file (default: None).
+        Path to metric definition file (default: None).
   -i, --interval <milliseconds>
-  	Event collection interval in milliseconds (default: 5000).
+        Event collection interval in milliseconds (default: 5000).
   -x, --muxinterval <milliseconds>
-  	Multiplexing interval in milliseconds (default: 125).`
-	fmt.Println(args)
+        Multiplexing interval in milliseconds (default: 125).
+`
+	fmt.Printf(args, strings.Join(ScopeOptions, ", "), strings.Join(GranularityOptions, ", "), strings.Join(FormatOptions, ", "), strings.Join(SummaryOptions, ", "))
 	fmt.Println()
-	fmt.Println("Examples")
-	fmt.Println("  Metrics to screen in human readable format.")
-	fmt.Printf("    $ sudo %[1]s\n", filepath.Base(os.Args[0]))
-	fmt.Println("  Metrics to screen and file in CSV format.")
-	fmt.Printf("    $ sudo %[1]s --output csv | tee %[1]s.csv\n", filepath.Base(os.Args[0]))
-	fmt.Println("  Metrics with socket-level granularity to screen in CSV format for 60 seconds.")
-	fmt.Printf("    $ sudo %[1]s --output csv --granularity socket --timeout 60\n", filepath.Base(os.Args[0]))
-	fmt.Println("  Metrics for \"hot\" processes to screen in CSV format.")
-	fmt.Printf("    $ sudo %[1]s --output csv --scope process\n", filepath.Base(os.Args[0]))
-	fmt.Println("  Metrics for specified process PIDs to screen in CSV format.")
-	fmt.Printf("    $ sudo %[1]s --output csv --scope process --pid 12345,67890\n", filepath.Base(os.Args[0]))
-	fmt.Println("  Specified Metrics to screen in wide format.")
-	fmt.Printf("    $ sudo %[1]s --output wide --metrics \"CPU utilization %%, TMA_Frontend_Bound(%%)\"\n", filepath.Base(os.Args[0]))
-	fmt.Println("  Metrics for the \"hottest\" process to screen in CSV format.")
-	fmt.Printf("    $ sudo %[1]s --output csv --scope process --count 1\n", filepath.Base(os.Args[0]))
-	fmt.Println("Post-processing Examples")
-	fmt.Println("  Create summary HTML report from system metrics CSV file.")
-	fmt.Printf("    $ %[1]s --post-process %[1]s.csv --format html >summary.html\n", filepath.Base(os.Args[0]))
-	fmt.Println("  Create summary CSV report from any metrics CSV file to screen and file.")
-	fmt.Printf("    $ %[1]s --post-process %[1]s.csv --format csv | tee summary.csv\n", filepath.Base(os.Args[0]))
+	examples := `Examples
+  Metrics to screen in human readable format.
+    $ sudo %[1]s
+  Metrics to screen and file in CSV format.
+    $ sudo %[1]s --output csv | tee %[1]s.csv
+  Metrics with socket-level granularity to screen in CSV format for 60 seconds.
+    $ sudo %[1]s --output csv --granularity socket --timeout 60
+  Metrics for "hot" processes to screen in CSV format.
+    $ sudo %[1]s --output csv --scope process
+  Metrics for specified process PIDs to screen in CSV format.
+    $ sudo %[1]s --output csv --scope process --pid 12345,67890
+  Specified Metrics to screen in wide format.
+    $ sudo %[1]s --output wide --metrics "CPU utilization %%, TMA_Frontend_Bound(%%)"
+  Metrics for the "hottest" process to screen in CSV format.
+    $ sudo %[1]s --output csv --scope process --count 1
+Post-processing Examples
+  Create summary HTML report from system metrics CSV file.
+    $ %[1]s --post-process %[1]s.csv --format html >summary.html
+  Create summary CSV report from any metrics CSV file to screen and file.
+    $ %[1]s --post-process %[1]s.csv --format csv | tee summary.csv
+`
+	fmt.Printf(examples, filepath.Base(os.Args[0]))
 }
 
 // short options used:
@@ -780,8 +798,8 @@ func configureArgs() {
 	flag.IntVar(&gCmdLineArgs.timeout, "t", 0, "")
 	flag.IntVar(&gCmdLineArgs.timeout, "timeout", 0, "")
 	var scope string
-	flag.StringVar(&scope, "s", "system", "")
-	flag.StringVar(&scope, "scope", "system", "")
+	flag.StringVar(&scope, "s", ScopeOptions[ScopeSystem], "")
+	flag.StringVar(&scope, "scope", ScopeOptions[ScopeSystem], "")
 	flag.StringVar(&gCmdLineArgs.pidList, "p", "", "")
 	flag.StringVar(&gCmdLineArgs.pidList, "pid", "", "")
 	flag.StringVar(&gCmdLineArgs.cidList, "c", "", "")
@@ -794,10 +812,11 @@ func configureArgs() {
 	flag.IntVar(&gCmdLineArgs.refresh, "refresh", 30, "")
 	// output options
 	var granularity string
-	flag.StringVar(&granularity, "g", "system", "")
-	flag.StringVar(&granularity, "granularity", "system", "")
-	flag.StringVar(&gCmdLineArgs.outputFormat, "o", "human", "")
-	flag.StringVar(&gCmdLineArgs.outputFormat, "output", "human", "")
+	flag.StringVar(&granularity, "g", GranularityOptions[GranularitySystem], "")
+	flag.StringVar(&granularity, "granularity", GranularityOptions[GranularitySystem], "")
+	var format string
+	flag.StringVar(&format, "o", FormatOptions[FormatHuman], "")
+	flag.StringVar(&format, "output", FormatOptions[FormatHuman], "")
 	flag.BoolVar(&gCmdLineArgs.verbose, "v", false, "")
 	flag.BoolVar(&gCmdLineArgs.verbose, "verbose", false, "")
 	flag.BoolVar(&gCmdLineArgs.veryVerbose, "vv", false, "")
@@ -805,8 +824,9 @@ func configureArgs() {
 	// post-processing options
 	flag.StringVar(&gCmdLineArgs.inputCSVFilePath, "P", "", "")
 	flag.StringVar(&gCmdLineArgs.inputCSVFilePath, "post-process", "", "")
-	flag.StringVar(&gCmdLineArgs.postProcessingFormat, "f", "", "")
-	flag.StringVar(&gCmdLineArgs.postProcessingFormat, "format", "", "")
+	var summary string
+	flag.StringVar(&summary, "f", SummaryOptions[SummaryCSV], "")
+	flag.StringVar(&summary, "format", SummaryOptions[SummaryCSV], "")
 	// advanced options
 	flag.BoolVar(&gCmdLineArgs.showMetricNames, "l", false, "")
 	flag.BoolVar(&gCmdLineArgs.showMetricNames, "list", false, "")
@@ -826,24 +846,48 @@ func configureArgs() {
 	flag.StringVar(&gCmdLineArgs.metadataFilePath, "metadata", "", "")
 	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "perfstat", "", "")
 	flag.Parse()
-	// deal with scope and granularity
-	if strings.ToLower(scope) == ScopeOptions[ScopeSystem] {
+	// deal with string inputs that need to be converted to a type/enum
+	// scope
+	switch scope = strings.ToLower(scope); scope {
+	case ScopeOptions[ScopeSystem]:
 		gCmdLineArgs.scope = ScopeSystem
-	} else if strings.ToLower(scope) == ScopeOptions[ScopeProcess] {
+	case ScopeOptions[ScopeProcess]:
 		gCmdLineArgs.scope = ScopeProcess
-	} else if strings.ToLower(scope) == ScopeOptions[ScopeCgroup] {
+	case ScopeOptions[ScopeCgroup]:
 		gCmdLineArgs.scope = ScopeCgroup
-	} else {
+	default:
 		gCmdLineArgs.scope = -1
 	}
-	if strings.ToLower(granularity) == GranularityOptions[GranularitySystem] {
+	// granularity
+	switch granularity = strings.ToLower(granularity); granularity {
+	case GranularityOptions[GranularitySystem]:
 		gCmdLineArgs.granularity = GranularitySystem
-	} else if strings.ToLower(granularity) == GranularityOptions[GranularitySocket] {
+	case GranularityOptions[GranularitySocket]:
 		gCmdLineArgs.granularity = GranularitySocket
-	} else if strings.ToLower(granularity) == GranularityOptions[GranularityCPU] {
+	case GranularityOptions[GranularityCPU]:
 		gCmdLineArgs.granularity = GranularityCPU
-	} else {
+	default:
 		gCmdLineArgs.granularity = -1
+	}
+	// format
+	switch format = strings.ToLower(format); format {
+	case FormatOptions[FormatHuman]:
+		gCmdLineArgs.outputFormat = FormatHuman
+	case FormatOptions[FormatCSV]:
+		gCmdLineArgs.outputFormat = FormatCSV
+	case FormatOptions[FormatWide]:
+		gCmdLineArgs.outputFormat = FormatWide
+	default:
+		gCmdLineArgs.outputFormat = -1
+	}
+	// summary
+	switch summary = strings.ToLower(summary); summary {
+	case SummaryOptions[SummaryCSV]:
+		gCmdLineArgs.summaryFormat = SummaryCSV
+	case SummaryOptions[SummaryHTML]:
+		gCmdLineArgs.summaryFormat = SummaryHTML
+	default:
+		gCmdLineArgs.summaryFormat = -1
 	}
 }
 
@@ -905,11 +949,7 @@ func mainReturnWithCode() int {
 	}()
 	if gCmdLineArgs.inputCSVFilePath != "" {
 		var output string
-		format := gCmdLineArgs.postProcessingFormat
-		if format == "" {
-			format = "csv" // default format is csv
-		}
-		if output, err = PostProcess(gCmdLineArgs.inputCSVFilePath, strings.ToLower(format)); err != nil {
+		if output, err = PostProcess(gCmdLineArgs.inputCSVFilePath, gCmdLineArgs.summaryFormat); err != nil {
 			log.Printf("Error while post-processing: %v", err)
 			return exitError
 		}
@@ -925,7 +965,7 @@ func mainReturnWithCode() int {
 			gCmdLineArgs.timeout = (qi + 1) * intervalSeconds
 		}
 	}
-	if gCmdLineArgs.outputFormat != "csv" {
+	if gCmdLineArgs.outputFormat != FormatCSV {
 		fmt.Print("Loading.")
 	}
 	var metadata Metadata
@@ -947,7 +987,7 @@ func mainReturnWithCode() int {
 	if gCmdLineArgs.verbose {
 		log.Printf("%s", metadata)
 	}
-	if gCmdLineArgs.outputFormat != "csv" {
+	if gCmdLineArgs.outputFormat != FormatCSV {
 		fmt.Print(".")
 	}
 	evaluatorFunctions := GetEvaluatorFunctions()
@@ -963,7 +1003,7 @@ func mainReturnWithCode() int {
 		log.Printf("failed to load metric definitions: %v", err)
 		return exitError
 	}
-	if gCmdLineArgs.outputFormat != "csv" {
+	if gCmdLineArgs.outputFormat != FormatCSV {
 		fmt.Print(".")
 	}
 	if gCmdLineArgs.showMetricNames {
@@ -982,7 +1022,7 @@ func mainReturnWithCode() int {
 		log.Printf("failed to load event definitions: %v", err)
 		return exitError
 	}
-	if gCmdLineArgs.outputFormat != "csv" {
+	if gCmdLineArgs.outputFormat != FormatCSV {
 		fmt.Print(".")
 	}
 	if gCmdLineArgs.perfStatFilePath != "" { // testing/debugging flow
@@ -1019,7 +1059,7 @@ func mainReturnWithCode() int {
 			}
 			defer SetNMIWatchdog(nmiWatchdog)
 		}
-		if gCmdLineArgs.outputFormat != "csv" {
+		if gCmdLineArgs.outputFormat != FormatCSV {
 			fmt.Print(".")
 		}
 		var perfMuxIntervals map[string]int
@@ -1032,7 +1072,7 @@ func mainReturnWithCode() int {
 			return exitError
 		}
 		defer SetMuxIntervals(perfMuxIntervals)
-		if gCmdLineArgs.outputFormat != "csv" {
+		if gCmdLineArgs.outputFormat != FormatCSV {
 			fmt.Print(".\n")
 			fmt.Printf("Reporting metrics in %d millisecond intervals...\n", gCmdLineArgs.perfPrintInterval)
 		}

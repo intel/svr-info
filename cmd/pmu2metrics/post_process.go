@@ -22,19 +22,19 @@ import (
 
 // PostProcess - generates formatted output from a CSV file containing metric values. Format
 // options are 'html' and 'csv'.
-func PostProcess(csvInputPath string, format string) (out string, err error) {
+func PostProcess(csvInputPath string, format Summary) (out string, err error) {
 	var metrics []metricsFromCSV
 	if metrics, err = newMetricsFromCSV(csvInputPath); err != nil {
 		return
 	}
-	if format == "html" {
+	if format == SummaryHTML {
 		if len(metrics) > 1 {
 			err = fmt.Errorf("html format supported only for a single set of data, e.g., system scope and granularity, a single PID, or a single CID")
 			return
 		}
 		out, err = metrics[0].getHTML()
 		return
-	} else if format == "csv" {
+	} else if format == SummaryCSV {
 		for i, m := range metrics {
 			var oneOut string
 			if oneOut, err = m.getCSV(i == 0); err != nil {
@@ -44,7 +44,7 @@ func PostProcess(csvInputPath string, format string) (out string, err error) {
 		}
 		return
 	}
-	err = fmt.Errorf("unsupported post-processing format: %s", format)
+	err = fmt.Errorf("unsupported post-processing format: %d", format)
 	return
 }
 
