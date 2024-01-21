@@ -54,7 +54,7 @@ func SetNMIWatchdog(setting string) (err error) {
 
 // findSysctl - gets a useable path to sysctl or error
 func findSysctl() (path string, err error) {
-	if path, err = util.FindInPath("sysctl"); err == nil {
+	if path, err = exec.LookPath("sysctl"); err == nil {
 		// found it
 		return
 	}

@@ -1,5 +1,5 @@
 /*
-Package core includes internal shared code.
+Package util includes utility/helper functions that may be useful to other modules.
 */
 /*
  * Copyright (C) 2023 Intel Corporation
@@ -72,20 +72,6 @@ func DirectoryExists(path string) (exists bool, err error) {
 		return
 	}
 	exists = true
-	return
-}
-
-// FindInPath returns the full path to a program or error if not found
-func FindInPath(program string) (fullPath string, err error) {
-	path := os.Getenv("PATH")
-	dirs := strings.Split(path, string(os.PathListSeparator))
-	for _, dir := range dirs {
-		fullPath = filepath.Join(dir, program)
-		if exists, _ := FileExists(fullPath); exists {
-			return
-		}
-	}
-	err = fmt.Errorf("%s not found in path: %s", program, path)
 	return
 }
 
