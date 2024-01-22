@@ -658,13 +658,13 @@ Post-processing Options
   -P, --post-process <CSV file>
         Path to a CSV file created during collection. Outputs a report containing summarized metric values (default: None).
   -f, --format <option>
-        File format to generate when post-processing the collected CSV file. Options: %[4]s (default: csv).
+        File format to generate when post-processing the collected CSV file. Options: %[4]s. The 'html' format is supported only when data's scope and granularity is 'system' (default: csv).
 
 Advanced Options
+  -S, --syslog
+        Send logs to System Log daemon (default: False)
   -l, --list
         Show metric names available on this platform and exit (default: False).
-  -S, --syslog
-	Send logs to System Log daemon (default: False)
   -m, --metrics <metric names>
         A quoted and comma separated list of metric names to include in output. Use --list to view metric names. (default: all metrics).
   -e, --eventfile <path>

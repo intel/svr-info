@@ -29,7 +29,7 @@ func PostProcess(csvInputPath string, format Summary) (out string, err error) {
 	}
 	if format == SummaryHTML {
 		if len(metrics) > 1 {
-			err = fmt.Errorf("html format supported only for a single set of data, e.g., system scope and granularity, a single PID, or a single CID")
+			err = fmt.Errorf("html format supported only when data's scope and granularity is 'system'")
 			return
 		}
 		out, err = metrics[0].getHTML()
