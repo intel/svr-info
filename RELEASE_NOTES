@@ -3,9 +3,25 @@ Intel® System Health Inspector (AKA svr-info)
 
 Fully Supported Platforms
 - Xeon Micro-Architectures: EMR,SPR,CPX,ICX,CLX,SKX,BDX,HSX
-- Core Micro-Architectures: TGL,RKL,CFL,KBL,SKL,BDW,HSW
 - Operating Systems: Ubuntu 16.04, 18.04, 20.04, 22.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
+
+2.9.0
+Features Added
+- Report CPU temperature when CPUs have been active when '-benchmark turbo' is run
+- Memory population chart for Dell SPR platform
+- Extend prefetchers field to include all known prefetchers
+
+Bugs Fixed
+- Slow report generation when an extremely deep call stack is captured with the -analyze option
+- LLC size mis-calculated on EMR MCC SKUs
+- Micro-architecture mis-identified on AWS m7i instances
+
+Known Issues
+- Frequency measurement benchmark not yet supported on GNR and SRF
+- The storage micro-benchmark may not run on CentOS due to OS locale settings.
+- CPU cache sizes are reported in aggregate on Ubuntu 20.04 and newer.
+- DRAM population and CPU frequencies may not be accurate on some public cloud IaaS VMs.
 
 2.8.0
 Bugs Fixed
