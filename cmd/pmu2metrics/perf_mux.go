@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // GetMuxIntervals - get a map of sysfs device file names to current mux value for the associated device
@@ -28,7 +29,7 @@ func GetMuxIntervals() (intervals map[string]int, err error) {
 			continue
 		}
 		var interval int
-		if interval, err = strconv.Atoi(string(contents)); err != nil {
+		if interval, err = strconv.Atoi(strings.TrimSpace(string(contents))); err != nil {
 			return
 		}
 		intervals[path] = interval
