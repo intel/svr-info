@@ -41,8 +41,7 @@ jobs:
     - name: Build c
       if: matrix.language == 'cpp'
       run: |
-        cd src/calcfreq/
-        make
+        make calcfreq
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@1500a131381b66de0c52ac28abb13cd79f4b7ecc # v2.22.12
       with:
