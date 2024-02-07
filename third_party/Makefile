@@ -51,7 +51,7 @@ endif
 	# gcc 4.8 doesn't support -Wimplicit-fallthrough option
 	cd cpuid && sed -i s/"-Wimplicit-fallthrough"/""/ Makefile
 	# modifies one line to short-circuit output due to potential infinite loop on some systems
-	cd cpuid && sed -i s/"(words\[WORD_EAX\] & 0xfff)"/0/ cpuid.c
+	cd cpuid && sed -i 11242s/"(words\[WORD_EAX\] & 0xfff)"/0/ cpuid.c
 	cd cpuid && make
 
 dmidecode:
