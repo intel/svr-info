@@ -6,6 +6,10 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 16.04, 18.04, 20.04, 22.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.9.1
+Bugs Fixed
+- Extremely long run time on some EMR virtual machines
+
 2.9.0
 Features Added
 - Report CPU temperature when CPUs have been active when '-benchmark turbo' is run
