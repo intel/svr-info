@@ -39,6 +39,7 @@ endif
 	tar -xf async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64.tar.gz && mv async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64 async-profiler
 endif
 
+# if you change the version, check the sed hacks below
 CPUID_VERSION := 20230614
 cpuid:
 ifeq ("$(wildcard cpuid)","")
@@ -49,6 +50,8 @@ endif
 endif	
 	# gcc 4.8 doesn't support -Wimplicit-fallthrough option
 	cd cpuid && sed -i s/"-Wimplicit-fallthrough"/""/ Makefile
+	# modifies one line to short-circuit output due to potential infinite loop on some systems
+	cd cpuid && sed -i s/"(words\[WORD_EAX\] & 0xfff)"/0/ cpuid.c
 	cd cpuid && make
 
 dmidecode:
