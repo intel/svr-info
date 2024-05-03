@@ -31,7 +31,7 @@ func getUserPath() string {
 	return strings.Join(verifiedPaths, ":")
 }
 
-func runCommand(label string, command string, superuser bool, superuserPassword string, binPath string, timeout int) (stdout string, stderr string, exitCode int, err error) {
+func runCommand(command string, superuser bool, superuserPassword string, binPath string, timeout int) (stdout string, stderr string, exitCode int, err error) {
 	// explicitly set PATH by pre-pending to command
 	cmdWithPath := command
 	if binPath != "" {

@@ -21,7 +21,7 @@ import (
 	texttemplate "text/template"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/intel/svr-info/internal/cpu"
+	"github.com/intel/svr-info/internal/cpudb"
 	"gopkg.in/yaml.v2"
 )
 
@@ -38,14 +38,14 @@ const noDataFound = "No data found."
 type ReportGeneratorHTML struct {
 	reports   []*Report
 	outputDir string
-	cpusInfo  *cpu.CPU
+	CPUdb     cpudb.CPUDB
 }
 
-func newReportGeneratorHTML(outputDir string, cpusInfo *cpu.CPU, configurationData *Report, insightData *Report, profileData *Report, benchmarkData *Report, analyzeData *Report) (rpt *ReportGeneratorHTML) {
+func newReportGeneratorHTML(outputDir string, CPUdb cpudb.CPUDB, configurationData *Report, insightData *Report, profileData *Report, benchmarkData *Report, analyzeData *Report) (rpt *ReportGeneratorHTML) {
 	rpt = &ReportGeneratorHTML{
 		reports:   []*Report{configurationData, benchmarkData, profileData, analyzeData, insightData}, // order matches const indexes defined above
 		outputDir: outputDir,
-		cpusInfo:  cpusInfo,
+		CPUdb:     CPUdb,
 	}
 	return
 }
@@ -102,10 +102,13 @@ func (r *ReportGeneratorHTML) getRefLabel(hostIndex int) (refLabel string) {
 	sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
 	capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
 	devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
-	uarch := getMicroArchitecture(r.cpusInfo, family, model, stepping, capid4, devices, sockets)
-	if uarch == "" {
-		log.Printf("Did not find a known architecture for %s:%s:%s", family, model, stepping)
+	var uarch string
+	cpu, err := r.CPUdb.GetCPU(family, model, stepping, capid4, sockets, devices)
+	if err != nil {
+		log.Printf("%v", err)
 		return
+	} else {
+		uarch = cpu.Architecture
 	}
 	refLabel = fmt.Sprintf("%s_%s", uarch, sockets)
 	return
@@ -276,7 +279,7 @@ func (r *ReportGen) renderSingleValueTable(table *Table, refData []*HostReferenc
  *	value			value			value		value
  *	value			value			value		value
  */
-func (r *ReportGen) renderMultiValueTable(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderMultiValueTable(table *Table) (out string) {
 	// include only the host in HostIndices
 	for _, hostIndex := range r.HostIndices {
 		// hostname above table if more than one hostname
@@ -366,7 +369,7 @@ type scatterChartTemplateStruct struct {
 	YaxisZero     string
 }
 
-func (r *ReportGen) renderFrequencyChart(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderFrequencyChart(table *Table) (out string) {
 	// one chart per host
 	for _, hostIndex := range r.HostIndices {
 		// add hostname only if more than one host or a single host with reference data
@@ -378,7 +381,7 @@ func (r *ReportGen) renderFrequencyChart(table *Table, refData []*HostReferenceD
 		// need at least one set of values
 		if len(hv.Values) > 0 {
 			var datasets []string
-			// spec
+			// non-avx:spec
 			formattedPoints := []string{}
 			for _, point := range table.AllHostValues[hostIndex].Values {
 				if point[1] != "" {
@@ -394,7 +397,7 @@ func (r *ReportGen) renderFrequencyChart(table *Table, refData []*HostReferenceD
 					Data  string
 					Color string
 				}{
-					Label: "spec",
+					Label: "non-avx:spec",
 					Data:  specValues,
 					Color: getColor(0),
 				})
@@ -403,7 +406,7 @@ func (r *ReportGen) renderFrequencyChart(table *Table, refData []*HostReferenceD
 				}
 				datasets = append(datasets, buf.String())
 			}
-			// measured
+			// non-avx
 			formattedPoints = []string{}
 			for _, point := range table.AllHostValues[hostIndex].Values {
 				if point[2] != "" {
@@ -419,7 +422,7 @@ func (r *ReportGen) renderFrequencyChart(table *Table, refData []*HostReferenceD
 					Data  string
 					Color string
 				}{
-					Label: "measured",
+					Label: "non-avx",
 					Data:  measuredValues,
 					Color: getColor(1),
 				})
@@ -428,6 +431,7 @@ func (r *ReportGen) renderFrequencyChart(table *Table, refData []*HostReferenceD
 				}
 				datasets = append(datasets, buf.String())
 			}
+
 			if len(datasets) > 0 {
 				sct := texttemplate.Must(texttemplate.New("scatterChartTemplate").Parse(scatterChartTemplate))
 				buf := new(bytes.Buffer)
@@ -447,9 +451,7 @@ func (r *ReportGen) renderFrequencyChart(table *Table, refData []*HostReferenceD
 				}
 				out += buf.String()
 				out += "\n"
-				if len(datasets) > 1 {
-					out += r.renderFrequencyTable(table, hostIndex)
-				}
+				out += r.renderFrequencyTable(table, hostIndex)
 			} else {
 				out += noDataFound
 			}
@@ -467,22 +469,34 @@ func (r *ReportGen) renderFrequencyTable(table *Table, hostIndex int) (out strin
 	for i := 0; i < len(hv.Values); i++ {
 		headers = append(headers, fmt.Sprintf("%d", i+1))
 	}
-	specRow := []string{"spec"}
-	measRow := []string{"measured"}
+	specRow := []string{"non-avx:spec"}
+	nonAvxRow := []string{"non-avx"}
+	avx128Row := []string{"avx128"}
+	avx256Row := []string{"avx256"}
+	avx512Row := []string{"avx512"}
 	for _, vals := range hv.Values {
 		specRow = append(specRow, vals[1])
-		measRow = append(measRow, vals[2])
+		nonAvxRow = append(nonAvxRow, vals[2])
+		avx128Row = append(avx128Row, vals[3])
+		avx256Row = append(avx256Row, vals[4])
+		avx512Row = append(avx512Row, vals[5])
 	}
 	rows = append(rows, specRow)
-	rows = append(rows, measRow)
+	rows = append(rows, nonAvxRow)
+	rows = append(rows, avx128Row)
+	rows = append(rows, avx256Row)
+	rows = append(rows, avx512Row)
 	valuesStyles := [][]string{}
+	valuesStyles = append(valuesStyles, []string{"font-weight:bold"})
+	valuesStyles = append(valuesStyles, []string{"font-weight:bold"})
+	valuesStyles = append(valuesStyles, []string{"font-weight:bold"})
 	valuesStyles = append(valuesStyles, []string{"font-weight:bold"})
 	valuesStyles = append(valuesStyles, []string{"font-weight:bold"})
 	out = renderHTMLTable(headers, rows, "pure-table pure-table-striped", valuesStyles)
 	return
 }
 
-func (r *ReportGen) renderAverageCPUUtilizationChart(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderAverageCPUUtilizationChart(table *Table) (out string) {
 	// one chart per host
 	for _, hostIndex := range r.HostIndices {
 		// add hostname only if more than one host or a single host with reference data
@@ -550,7 +564,7 @@ func (r *ReportGen) renderAverageCPUUtilizationChart(table *Table, refData []*Ho
 	return
 }
 
-func (r *ReportGen) renderCPUUtilizationChart(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderCPUUtilizationChart(table *Table) (out string) {
 	// one chart per host
 	for _, hostIndex := range r.HostIndices {
 		// add hostname only if more than one host or a single host with reference data
@@ -637,7 +651,7 @@ func (r *ReportGen) renderCPUUtilizationChart(table *Table, refData []*HostRefer
 	return
 }
 
-func (r *ReportGen) renderIRQRateChart(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderIRQRateChart(table *Table) (out string) {
 	// one chart per host
 	for _, hostIndex := range r.HostIndices {
 		// add hostname only if more than one host or a single host with reference data
@@ -719,7 +733,7 @@ func (r *ReportGen) renderIRQRateChart(table *Table, refData []*HostReferenceDat
 	return
 }
 
-func (r *ReportGen) renderDriveStatsChart(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderDriveStatsChart(table *Table) (out string) {
 	// one chart per host drive
 	for _, hostIndex := range r.HostIndices {
 		// add hostname only if more than one host or a single host with reference data
@@ -800,7 +814,7 @@ func (r *ReportGen) renderDriveStatsChart(table *Table, refData []*HostReference
 	return
 }
 
-func (r *ReportGen) renderNetworkStatsChart(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderNetworkStatsChart(table *Table) (out string) {
 	// one chart per host nic
 	for _, hostIndex := range r.HostIndices {
 		// add hostname only if more than one host or a single host with reference data
@@ -881,7 +895,7 @@ func (r *ReportGen) renderNetworkStatsChart(table *Table, refData []*HostReferen
 	return
 }
 
-func (r *ReportGen) renderMemoryStatsChart(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderMemoryStatsChart(table *Table) (out string) {
 	// one chart per host
 	for _, hostIndex := range r.HostIndices {
 		// add hostname only if more than one host or a single host with reference data
@@ -949,7 +963,7 @@ func (r *ReportGen) renderMemoryStatsChart(table *Table, refData []*HostReferenc
 	return
 }
 
-func (r *ReportGen) renderPowerStatsChart(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderPowerStatsChart(table *Table) (out string) {
 	// one chart per host
 	for _, hostIndex := range r.HostIndices {
 		// add hostname only if more than one host or a single host with reference data
@@ -1348,7 +1362,7 @@ func dimmDetails(dimm []string) (details string) {
 	return
 }
 
-func (r *ReportGen) renderDIMMPopulationTable(table *Table, refData []*HostReferenceData) (out string) {
+func (r *ReportGen) renderDIMMPopulationTable(table *Table) (out string) {
 	htmlColors := []string{"lightgreen", "orange", "aqua", "lime", "yellow", "beige", "magenta", "violet", "salmon", "pink"}
 	// a DIMM Population table for every host
 	for _, hostIndex := range r.HostIndices {
@@ -1479,33 +1493,33 @@ func (r *ReportGen) RenderDataTable(unsafeTable *Table, refData []*HostReference
 	table := &t
 	out := fmt.Sprintf("<h2 id=%s>%s</h2>\n", "\""+table.Name+"\"", table.Name)
 	if table.Name == "Core Frequency" {
-		out += r.renderFrequencyChart(table, refData)
+		out += r.renderFrequencyChart(table)
 	} else if table.Name == "Memory Bandwidth and Latency" {
 		out += r.renderBandwidthLatencyChart(table, refData)
 	} else if table.Name == "Memory NUMA Bandwidth" {
 		out += r.renderNumaBandwidthTable(table, refData)
 	} else if table.Name == "DIMM Population" {
-		out += r.renderDIMMPopulationTable(table, refData)
+		out += r.renderDIMMPopulationTable(table)
 	} else if table.Name == "Average CPU Utilization" {
-		out += r.renderAverageCPUUtilizationChart(table, refData)
+		out += r.renderAverageCPUUtilizationChart(table)
 	} else if table.Name == "CPU Utilization" {
-		out += r.renderCPUUtilizationChart(table, refData)
+		out += r.renderCPUUtilizationChart(table)
 	} else if table.Name == "IRQ Rate" {
-		out += r.renderIRQRateChart(table, refData)
+		out += r.renderIRQRateChart(table)
 	} else if table.Name == "Drive Stats" {
-		out += r.renderDriveStatsChart(table, refData)
+		out += r.renderDriveStatsChart(table)
 	} else if table.Name == "Network Stats" {
-		out += r.renderNetworkStatsChart(table, refData)
+		out += r.renderNetworkStatsChart(table)
 	} else if table.Name == "Memory Stats" {
-		out += r.renderMemoryStatsChart(table, refData)
+		out += r.renderMemoryStatsChart(table)
 	} else if table.Name == "Code Path Frequency" {
 		out += r.renderCodePathFrequency(table)
 	} else if table.Name == "Power Stats" {
-		out += r.renderPowerStatsChart(table, refData)
+		out += r.renderPowerStatsChart(table)
 	} else if isSingleValueTable(table) {
 		out += r.renderSingleValueTable(table, refData)
 	} else {
-		out += r.renderMultiValueTable(table, refData)
+		out += r.renderMultiValueTable(table)
 	}
 	return template.HTML(out)
 }

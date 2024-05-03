@@ -108,7 +108,7 @@ func renderExcelTable(tableHeaders []string, tableValues [][]string, f *excelize
 	return row
 }
 
-func (r *ReportGeneratorXLSX) renderSingleValueTable(table *Table, allHostValues []HostValues, f *excelize.File, reportSheetName string, row int, col int, noHeader bool) int {
+func (r *ReportGeneratorXLSX) renderSingleValueTable(allHostValues []HostValues, f *excelize.File, reportSheetName string, row int, col int, noHeader bool) int {
 	var tableHeaders []string
 	var tableValues [][]string
 
@@ -157,7 +157,7 @@ func (r *ReportGeneratorXLSX) renderSingleValueTable(table *Table, allHostValues
 	return renderExcelTable(tableHeaders, tableValues, f, reportSheetName, row, col, true)
 }
 
-func (r *ReportGeneratorXLSX) renderMultiValueTable(table *Table, allHostValues []HostValues, f *excelize.File, reportSheetName string, row int, col int) int {
+func (r *ReportGeneratorXLSX) renderMultiValueTable(allHostValues []HostValues, f *excelize.File, reportSheetName string, row int, col int) int {
 	// render one Excel table per host
 	for idx, hv := range allHostValues {
 		// if more than one host, put hostname above table
@@ -179,7 +179,7 @@ func (r *ReportGeneratorXLSX) renderMultiValueTable(table *Table, allHostValues 
 	return row
 }
 
-func (r *ReportGeneratorXLSX) renderNumaBandwidthTable(table *Table, allHostValues []HostValues, f *excelize.File, reportSheetName string, row int) int {
+func (r *ReportGeneratorXLSX) renderNumaBandwidthTable(allHostValues []HostValues, f *excelize.File, reportSheetName string, row int) int {
 	// render one Excel table per host
 	for idx, hv := range allHostValues {
 		// if more than one host, put hostname above table
@@ -211,7 +211,7 @@ func (r *ReportGeneratorXLSX) renderNumaBandwidthTable(table *Table, allHostValu
 	return row
 }
 
-func (r *ReportGeneratorXLSX) renderDIMMPopulationTable(table *Table, allHostValues []HostValues, f *excelize.File, reportSheetName string, row int) int {
+func (r *ReportGeneratorXLSX) renderDIMMPopulationTable(allHostValues []HostValues, f *excelize.File, reportSheetName string, row int) int {
 	// render one Excel table per host
 	for idx, hv := range allHostValues {
 		// if more than one host, put hostname above table
@@ -270,14 +270,14 @@ func (r *ReportGeneratorXLSX) fillSheet(f *excelize.File, reportSheetName string
 		}
 
 		if table.Name == "Memory NUMA Bandwidth" {
-			row = r.renderNumaBandwidthTable(table, allHostValues, f, reportSheetName, row)
+			row = r.renderNumaBandwidthTable(allHostValues, f, reportSheetName, row)
 		} else if table.Name == "DIMM Population" {
-			row = r.renderDIMMPopulationTable(table, allHostValues, f, reportSheetName, row)
+			row = r.renderDIMMPopulationTable(allHostValues, f, reportSheetName, row)
 		} else if isSingleValueTable(table) {
 			noHeader := briefReport && tableIdx != 0
-			row = r.renderSingleValueTable(table, allHostValues, f, reportSheetName, row, col, noHeader)
+			row = r.renderSingleValueTable(allHostValues, f, reportSheetName, row, col, noHeader)
 		} else {
-			row = r.renderMultiValueTable(table, allHostValues, f, reportSheetName, row, col)
+			row = r.renderMultiValueTable(allHostValues, f, reportSheetName, row, col)
 		}
 		if !briefReport { //no row between tables in brief report
 			row += 1

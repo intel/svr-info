@@ -134,8 +134,7 @@ rule TurboBoost {
 
 rule Hyperthreading {
 	when
-		Report.GetValue("Configuration", "CPU", "Hyperthreading") != "" &&
-		Report.GetValue("Configuration", "CPU", "Hyperthreading") != "Enabled"
+		Report.GetValue("Configuration", "CPU", "Hyperthreading") == "Disabled"
 	then
 		Report.AddInsight(
 			"Hyper-threading is not enabled.",

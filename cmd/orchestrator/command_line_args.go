@@ -109,7 +109,7 @@ advanced arguments:
   -targettemp DIR       path to temporary directory on target. Directory must exist. (default: system default)
   -printconfig          print the collector configuration file and exit (default: False)
   -noconfig             do not collect system configuration data. (default: False)
-  -cmd_timeout          the maximum number of seconds to wait for each data collection command (default: 300)
+  -cmd_timeout          the maximum number of seconds to wait for each data collection command (default: 1500)
   -reporter             run the the reporter sub-component with args
                         e.g., -reporter "-input /home/rex -output /home/rex -format html" (default: Nil)
   -collector            run the the collector sub-component with args
@@ -150,7 +150,7 @@ func (cmdLineArgs *CmdLineArgs) parse(name string, arguments []string) (err erro
 	flagSet.StringVar(&cmdLineArgs.targetTemp, "targettemp", "", "")
 	flagSet.BoolVar(&cmdLineArgs.printConfig, "printconfig", false, "")
 	flagSet.BoolVar(&cmdLineArgs.noConfig, "noconfig", false, "")
-	flagSet.IntVar(&cmdLineArgs.cmdTimeout, "cmd_timeout", 300, "")
+	flagSet.IntVar(&cmdLineArgs.cmdTimeout, "cmd_timeout", 1500, "")
 	flagSet.StringVar(&cmdLineArgs.format, "format", "html,xlsx,json", "")
 	flagSet.StringVar(&cmdLineArgs.benchmark, "benchmark", "", "")
 	flagSet.StringVar(&cmdLineArgs.profile, "profile", "", "")

@@ -384,7 +384,7 @@ func (s *Source) getBaseFrequency() (val string) {
 	return
 }
 
-func (s *Source) getMaxFrequency() (val string) {
+func (s *Source) getMaxFrequency(uarch string) (val string) {
 	/* get max frequency
 	 * 1st option) /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq
 	 * 2nd option) from MSR
@@ -399,7 +399,7 @@ func (s *Source) getMaxFrequency() (val string) {
 		}
 	}
 	if val == "" {
-		countFreqs, err := s.getSpecCountFrequencies()
+		countFreqs, err := s.getSpecCountFrequencies(uarch)
 		// the first entry is the max single-core frequency
 		if err == nil && len(countFreqs) > 0 && len(countFreqs[0]) > 1 {
 			val = countFreqs[0][1]
@@ -411,8 +411,8 @@ func (s *Source) getMaxFrequency() (val string) {
 	return
 }
 
-func (s *Source) getAllCoreMaxFrequency() (val string) {
-	countFreqs, err := s.getSpecCountFrequencies()
+func (s *Source) getAllCoreMaxFrequency(uarch string) (val string) {
+	countFreqs, err := s.getSpecCountFrequencies(uarch)
 	// the last entry is the max all-core frequency
 	if err == nil && len(countFreqs) > 0 && len(countFreqs[len(countFreqs)-1]) > 1 {
 		val = countFreqs[len(countFreqs)-1][1] + "GHz"
@@ -426,47 +426,55 @@ func (s *Source) getNUMACPUList() (val string) {
 	return
 }
 
-func (s *Source) getActiveIdleFrequency() (val string) {
-	hex := s.getCommandOutputLine("active idle mesh frequency")
-	if hex != "" {
-		parsed, err := strconv.ParseInt(hex, 16, 64)
-		if err == nil {
-			val = fmt.Sprintf("%.1fGHz", float64(parsed)/10)
+func (s *Source) getUncoreMaxFrequency(uArch string) (val string) {
+	var parsed int64
+	var err error
+	if strings.Contains(uArch, "SRF") || strings.Contains(uArch, "GNR") {
+		re := regexp.MustCompile(`Read bits \d+:\d+ value (\d+) from TPMI ID .* for entry 0`)
+		for _, line := range strings.Split(s.getCommandOutput("uncore max frequency tpmi"), "\n") {
+			match := re.FindStringSubmatch(line)
+			if len(match) > 0 {
+				parsed, err = strconv.ParseInt(match[1], 10, 64)
+				break
+			}
+
+		}
+	} else {
+		hex := s.getCommandOutputLine("uncore max frequency")
+		if hex != "" && hex != "0" {
+			parsed, err = strconv.ParseInt(hex, 16, 64)
 		}
 	}
+	if err != nil {
+		return
+	}
+	val = fmt.Sprintf("%.1fGHz", float64(parsed)/10)
 	return
 }
 
-func (s *Source) getActiveIdleUtilizationPoint() (val string) {
-	hex := s.getCommandOutputLine("active idle utilization point")
-	if hex != "" {
-		parsed, err := strconv.ParseInt(hex, 16, 64)
-		if err == nil {
-			val = fmt.Sprintf("%d", parsed)
-		}
-	}
-	return
-}
+func (s *Source) getUncoreMinFrequency(uArch string) (val string) {
+	var parsed int64
+	var err error
+	if strings.Contains(uArch, "SRF") || strings.Contains(uArch, "GNR") {
+		re := regexp.MustCompile(`Read bits \d+:\d+ value (\d+) from TPMI ID .* for entry 0`)
+		for _, line := range strings.Split(s.getCommandOutput("uncore min frequency tpmi"), "\n") {
+			match := re.FindStringSubmatch(line)
+			if len(match) > 0 {
+				parsed, err = strconv.ParseInt(match[1], 10, 64)
+				break
+			}
 
-func (s *Source) getUncoreMaxFrequency() (val string) {
-	hex := s.getCommandOutputLine("uncore max frequency")
-	if hex != "" && hex != "0" {
-		parsed, err := strconv.ParseInt(hex, 16, 64)
-		if err == nil {
-			val = fmt.Sprintf("%.1fGhz", float64(parsed)/10)
+		}
+	} else {
+		hex := s.getCommandOutputLine("uncore min frequency")
+		if hex != "" && hex != "0" {
+			parsed, err = strconv.ParseInt(hex, 16, 64)
 		}
 	}
-	return
-}
-
-func (s *Source) getUncoreMinFrequency() (val string) {
-	hex := s.getCommandOutputLine("uncore min frequency")
-	if hex != "" && hex != "0" {
-		parsed, err := strconv.ParseInt(hex, 16, 64)
-		if err == nil {
-			val = fmt.Sprintf("%.1fGHz", float64(parsed)/10)
-		}
+	if err != nil {
+		return
 	}
+	val = fmt.Sprintf("%.1fGHz", float64(parsed)/10)
 	return
 }
 
@@ -497,6 +505,10 @@ func (s *Source) getCacheWays(uArch string) (cacheWays []int64) {
 		wayCount = 15
 	} else if uArch == "EMR_XCC" {
 		wayCount = 20
+	} else if uArch == "SRF" {
+		wayCount = 12
+	} else if uArch == "GNR_X3" || uArch == "GNR_X2" || uArch == "GNR_X1" {
+		wayCount = 16
 	} else {
 		return
 	}
@@ -505,11 +517,14 @@ func (s *Source) getCacheWays(uArch string) (cacheWays []int64) {
 	for i := 0; i < wayCount; i++ {
 		cacheSize = (cacheSize << 1) | 1
 	}
-	var shift int64 = -1
+	var mask int64 = -1 // all bits set
 	for i := 0; i < wayCount; i++ {
+		// prepend the cache size to the list of ways
 		cacheWays = append([]int64{cacheSize}, cacheWays...)
-		shift = shift << 1
-		cacheSize = cacheSize & shift
+		// clear another low bit in mask
+		mask = mask << 1
+		// mask lower bits (however many bits are cleared in mask var)
+		cacheSize = cacheSize & mask
 	}
 	return
 }
@@ -663,29 +678,6 @@ func (s *Source) getPrefetchers(uarch string) (val string) {
 	return
 }
 
-/*
-....................	bit		default
-"BI to IFU",			2		0
-"EnableDBPForF",		3		0
-"DisFBThreadSlicing",	15		1
-"DISABLE_FASTGO",		27		0
-"SpecI2MEn",			30		1
-"DPT_DISABLE",			45		0
-*/
-func (s *Source) getFeatures() (vals []string) {
-	features := s.valFromRegexSubmatch("rdmsr 0x6d", `^([0-9a-fA-F]+)`)
-	if features != "" {
-		featureInt, err := strconv.ParseInt(features, 16, 64)
-		if err == nil {
-			for _, bit := range []int{2, 3, 15, 27, 30, 45} {
-				bitMask := int64(math.Pow(2, float64(bit)))
-				vals = append(vals, fmt.Sprintf("%d", bitMask&featureInt>>bit))
-			}
-		}
-	}
-	return
-}
-
 func (s *Source) getPPINs() (val string) {
 	ppins := s.getCommandOutputLines("rdmsr 0x4f")
 	uniquePpins := []string{}
@@ -702,23 +694,6 @@ func (s *Source) getPPINs() (val string) {
 		}
 	}
 	val = strings.Join(uniquePpins, ",")
-	return
-}
-
-func (s *Source) getHyperthreading() (val string) {
-	// lscpu on Alder Lake (hybrid cores) reports one thread per core even when hyper-threading is enabled, so
-	// use this approach to detect hyperthreading...
-	numCPUs, err1 := strconv.Atoi(s.valFromRegexSubmatch("lscpu", `^CPU\(.*:\s*(.+?)$`)) // logical CPUs
-	numSockets, err2 := strconv.Atoi(s.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`))
-	numCores, err3 := strconv.Atoi(s.valFromRegexSubmatch("lscpu", `^Core\(.*:\s*(.+?)$`)) // physical cores
-	if err1 != nil || err2 != nil || err3 != nil {
-		return
-	}
-	if numCPUs > numCores*numSockets {
-		val = "Enabled"
-	} else {
-		val = "Disabled"
-	}
 	return
 }
 
@@ -743,7 +718,7 @@ func convertMsrToDecimals(msr string) (decVals []int64, err error) {
 	return
 }
 
-func (s *Source) getSpecCountFrequencies() (countFreqs [][]string, err error) {
+func (s *Source) getSpecCountFrequencies(uarch string) (countFreqs [][]string, err error) {
 	hexCounts := s.valFromRegexSubmatch("rdmsr 0x1ae", `^([0-9a-fA-F]+)`)
 	hexFreqs := s.valFromRegexSubmatch("rdmsr 0x1ad", `^([0-9a-fA-F]+)`)
 	if hexCounts != "" && hexFreqs != "" {
@@ -751,6 +726,11 @@ func (s *Source) getSpecCountFrequencies() (countFreqs [][]string, err error) {
 		decCounts, err = convertMsrToDecimals(hexCounts)
 		if err != nil {
 			return
+		}
+		if strings.Contains(uarch, "SRF") {
+			for i, count := range decCounts[:] {
+				decCounts[i] = count * 4 // 4 cores per count
+			}
 		}
 		decFreqs, err = convertMsrToDecimals(hexFreqs)
 		if err != nil {
@@ -762,6 +742,73 @@ func (s *Source) getSpecCountFrequencies() (countFreqs [][]string, err error) {
 		}
 		for i, decCount := range decCounts {
 			countFreqs = append(countFreqs, []string{fmt.Sprintf("%d", decCount), fmt.Sprintf("%.1f", float64(decFreqs[i])/10.0)})
+		}
+	}
+	return
+}
+
+// Sample avx-turbo output
+// ...
+// Will test up to 64 CPUs
+// Cores | ID          | Description            | OVRLP3 | Mops | A/M-ratio | A/M-MHz | M/tsc-ratio
+// 1     | scalar_iadd | Scalar integer adds    |  1.000 | 3901 |      1.95 |    3900 |        1.00
+// 1     | avx128_fma  | 128-bit serial DP FMAs |  1.000 |  974 |      1.95 |    3900 |        1.00
+// 1     | avx256_fma  | 256-bit serial DP FMAs |  1.000 |  974 |      1.95 |    3900 |        1.00
+// 1     | avx512_fma  | 512-bit serial DP FMAs |  1.000 |  974 |      1.95 |    3900 |        1.00
+
+// Cores | ID          | Description            | OVRLP3 |       Mops |    A/M-ratio |    A/M-MHz | M/tsc-ratio
+// 2     | scalar_iadd | Scalar integer adds    |  1.000 | 3901, 3901 |  1.95,  1.95 | 3900, 3900 |  1.00, 1.00
+// 2     | avx128_fma  | 128-bit serial DP FMAs |  1.000 |  974,  974 |  1.95,  1.95 | 3900, 3900 |  1.00, 1.00
+// 2     | avx256_fma  | 256-bit serial DP FMAs |  1.000 |  974,  974 |  1.95,  1.95 | 3900, 3900 |  1.00, 1.00
+// 2     | avx512_fma  | 512-bit serial DP FMAs |  1.000 |  974,  974 |  1.95,  1.95 | 3900, 3900 |  1.00, 1.00
+
+// Cores | ID          | Description            | OVRLP3 |             Mops |           A/M-ratio |          A/M-MHz |      M/tsc-ratio
+// 3     | scalar_iadd | Scalar integer adds    |  1.000 | 3900, 3901, 3901 |  1.95,  1.95,  1.95 | 3900, 3900, 3900 | 1.00, 1.00, 1.00
+// 3     | avx128_fma  | 128-bit serial DP FMAs |  1.000 |  974,  975,  975 |  1.95,  1.95,  1.95 | 3900, 3900, 3900 | 1.00, 1.00, 1.00
+// 3     | avx256_fma  | 256-bit serial DP FMAs |  1.000 |  974,  975,  975 |  1.95,  1.95,  1.95 | 3900, 3900, 3900 | 1.00, 1.00, 1.00
+// 3     | avx512_fma  | 512-bit serial DP FMAs |  1.000 |  974,  975,  974 |  1.95,  1.95,  1.95 | 3900, 3900, 3900 | 1.00, 1.00, 1.00
+// ...
+func (s *Source) getAvxTurboFrequencies() (nonavxFreqs, avx128Freqs, avx256Freqs, avx512Freqs []float64, err error) {
+	started := false
+	for _, line := range s.getCommandOutputLines("avx-turbo") {
+		if strings.HasPrefix(line, "Cores | ID") {
+			started = true
+			continue
+		}
+		if !started {
+			continue
+		}
+		if line == "" {
+			started = false
+			continue
+		}
+		fields := strings.Split(line, "|")
+		if len(fields) < 7 {
+			err = fmt.Errorf("avx-turbo unable to measure frequencies")
+			return
+		}
+		freqs := strings.Split(fields[6], ",")
+		var sumFreqs float64
+		for _, freq := range freqs {
+			var f float64
+			f, err = strconv.ParseFloat(strings.TrimSpace(freq), 64)
+			if err != nil {
+				return
+			}
+			sumFreqs += f
+		}
+		avgFreq := sumFreqs / float64(len(freqs))
+		if strings.Contains(fields[1], "scalar_iadd") {
+			nonavxFreqs = append(nonavxFreqs, avgFreq/1000.0)
+		} else if strings.Contains(fields[1], "avx128_fma") {
+			avx128Freqs = append(avx128Freqs, avgFreq/1000.0)
+		} else if strings.Contains(fields[1], "avx256_fma") {
+			avx256Freqs = append(avx256Freqs, avgFreq/1000.0)
+		} else if strings.Contains(fields[1], "avx512_fma") {
+			avx512Freqs = append(avx512Freqs, avgFreq/1000.0)
+		} else {
+			err = fmt.Errorf("unexpected data from avx-turbo, unknown instruction type")
+			return
 		}
 	}
 	return
@@ -1060,6 +1107,9 @@ func (s *Source) getSystemFolded() (folded string) {
 		} else if header == "perf_fp" {
 			fpFolded = content
 		}
+	}
+	if dwarfFolded == "" && fpFolded == "" {
+		return
 	}
 	folded, err := mergeSystemFolded(fpFolded, dwarfFolded)
 	if err != nil {

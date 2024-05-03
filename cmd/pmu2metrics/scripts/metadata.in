@@ -1,0 +1,22 @@
+---
+CoresPerSocket: 64
+Microarchitecture: emr
+SocketCount: 2
+ThreadsPerCore: 2
+TSC: 512256000000
+TSCFrequencyHz: 2001000000
+RefCyclesSupported: true
+TMASupported: true
+PerfSupportedEvents: "instructions instructions:k cpu-cycles cpu-cycles:k ref-cycles ref-cycles:k cstate_pkg/c6-residency/ cstate_core/c6-residency/ power/energy-pkg/ power/energy-ram/"
+DeviceIDs:
+  iio_free_running: [0,1,2,3,4,5,6,7,8,9]
+  m2m: [0,1,2,3]
+  m2pcie: [0,1,2,3,4,5,6,7,8,9] 
+  m3upi: [0,1,2,3]
+  mdf: [0,1,10,11,12,13,2,3,4,5,6,7,8,9]
+  upi: [0,1,2]
+  iio: [0,1,2,3,4,5,6,7,8,9]
+  imc: [0,1,2,3,4,5,6,7]
+  imc_free_running: [0,1,2,3] 
+  irp: [0,1,2,3,4,5,6,7,8,9]
+  cha: [0,1,10,11,12,13,14,15,16,17,18,19,2,20,21,22,23,24,25,26,27,28,29,3,30,31,32,33,34,35,36,37,38,39,4,40,41,42,43,44,45,46,47,48,49,5,50,51,52,53,54,55,56,57,58,59,6,60,61,62,63,7,8,9]

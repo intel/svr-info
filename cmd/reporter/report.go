@@ -9,7 +9,7 @@ package main
 import (
 	"log"
 
-	"github.com/intel/svr-info/internal/cpu"
+	"github.com/intel/svr-info/internal/cpudb"
 )
 
 // Report ... all sources & tables that define a report
@@ -20,7 +20,7 @@ type Report struct {
 }
 
 // NewConfigurationReport -- includes all verbose tables
-func NewConfigurationReport(sources []*Source, cpusInfo *cpu.CPU) (report *Report) {
+func NewConfigurationReport(sources []*Source, CPUdb cpudb.CPUDB) (report *Report) {
 	report = &Report{
 		InternalName: "Configuration",
 		Sources:      sources,
@@ -39,18 +39,17 @@ func NewConfigurationReport(sources []*Source, cpusInfo *cpu.CPU) (report *Repor
 			newOperatingSystemTable(sources, Software),
 			newSoftwareTable(sources, Software),
 
-			newCPUTable(sources, cpusInfo, CPUCategory),
+			newCPUTable(sources, CPUdb, CPUCategory),
 			newISATable(sources, CPUCategory),
 			newAcceleratorTable(sources, CPUCategory),
-			newFeatureTable(sources, CPUCategory),
 
 			newPowerTable(sources, Power),
-			newUncoreTable(sources, Power),
+			newUncoreTable(sources, CPUdb, Power),
 		}...,
 	)
 
 	tableDIMM := newDIMMTable(sources, Memory)
-	tableDIMMPopulation := newDIMMPopulationTable(sources, tableDIMM, cpusInfo, Memory)
+	tableDIMMPopulation := newDIMMPopulationTable(sources, tableDIMM, CPUdb, Memory)
 
 	report.Tables = append(report.Tables,
 		[]*Table{
@@ -86,7 +85,7 @@ func NewConfigurationReport(sources []*Source, cpusInfo *cpu.CPU) (report *Repor
 	return
 }
 
-func NewBriefReport(sources []*Source, fullReport *Report, cpusInfo *cpu.CPU) (report *Report) {
+func NewBriefReport(sources []*Source, fullReport *Report, CPUdb cpudb.CPUDB) (report *Report) {
 	report = &Report{
 		InternalName: "Brief",
 		Sources:      sources,
@@ -120,7 +119,7 @@ func NewBriefReport(sources []*Source, fullReport *Report, cpusInfo *cpu.CPU) (r
 	return
 }
 
-func NewInsightsReport(sources []*Source, configReport, briefReport, profileReport, benchmarkReport *Report, analyzeReport *Report, cpusInfo *cpu.CPU) (report *Report) {
+func NewInsightsReport(sources []*Source, configReport, briefReport, profileReport, benchmarkReport *Report, analyzeReport *Report, CPUdb cpudb.CPUDB) (report *Report) {
 	report = &Report{
 		InternalName: "Recommendations",
 		Sources:      sources,
@@ -128,7 +127,7 @@ func NewInsightsReport(sources []*Source, configReport, briefReport, profileRepo
 	}
 	report.Tables = append(report.Tables,
 		[]*Table{
-			newInsightTable(sources, configReport, briefReport, profileReport, benchmarkReport, analyzeReport, cpusInfo),
+			newInsightTable(configReport, briefReport, profileReport, benchmarkReport, analyzeReport),
 		}...,
 	)
 	// TODO: remove check when code is stable
@@ -152,7 +151,7 @@ func NewProfileReport(sources []*Source) (report *Report) {
 	memStatsTable := newMemoryStatsTable(sources, NoCategory)
 	PMUMetricsTable := newPMUMetricsTable(sources, NoCategory)
 	powerStatsTable := newPowerStatsTable(sources, NoCategory)
-	summaryTable := newProfileSummaryTable(sources, NoCategory, averageCPUUtilizationTable, CPUUtilizationTable, IRQRateTable, driveStatsTable, netStatsTable, memStatsTable, PMUMetricsTable, powerStatsTable)
+	summaryTable := newProfileSummaryTable(sources, NoCategory, averageCPUUtilizationTable, driveStatsTable, netStatsTable, memStatsTable, PMUMetricsTable, powerStatsTable)
 	report.Tables = append(report.Tables,
 		[]*Table{
 			summaryTable,
@@ -191,7 +190,7 @@ func NewAnalyzeReport(sources []*Source) (report *Report) {
 	return
 }
 
-func NewBenchmarkReport(sources []*Source) (report *Report) {
+func NewBenchmarkReport(sources []*Source, CPUdb cpudb.CPUDB) (report *Report) {
 	report = &Report{
 		InternalName: "Performance",
 		Sources:      sources,
@@ -201,7 +200,7 @@ func NewBenchmarkReport(sources []*Source) (report *Report) {
 	report.Tables = append(report.Tables,
 		[]*Table{
 			newBenchmarkSummaryTable(sources, tableMemBandwidthLatency, NoCategory),
-			newFrequencyTable(sources, NoCategory),
+			newFrequencyTable(sources, CPUdb, NoCategory),
 			tableMemBandwidthLatency,
 			newMemoryNUMABandwidthTable(sources, NoCategory),
 		}...,

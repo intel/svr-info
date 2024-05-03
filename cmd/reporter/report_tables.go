@@ -9,7 +9,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -20,7 +19,7 @@ import (
 	"github.com/hyperjumptech/grule-rule-engine/builder"
 	"github.com/hyperjumptech/grule-rule-engine/engine"
 	"github.com/hyperjumptech/grule-rule-engine/pkg"
-	"github.com/intel/svr-info/internal/cpu"
+	"github.com/intel/svr-info/internal/cpudb"
 	"gopkg.in/yaml.v2"
 )
 
@@ -41,8 +40,8 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
-	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, HT On/Off?, Turbo On/Off?, NUMA xxx,  Integrated Accelerators Available [used]: xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>, WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW, score=?UNITS.\nTest by COMPANY as of <mm/dd/yy>.
-	template := "1-node, %sx %s, %s cores, HT %s, Turbo %s, NUMA %s, Integrated Accelerators Available [used]: %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s, WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW, score=?UNITS.\nTest by COMPANY as of %s."
+	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, HT On/Off?, Turbo On/Off?, NUMA xxx,  Integrated Accelerators Available [used]: xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of <mm/dd/yy>.
+	template := "1-node, %sx %s, %s cores, HT %s, Turbo %s, NUMA %s, Integrated Accelerators Available [used]: %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of %s."
 	var date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
 
 	for sourceIdx, source := range fullReport.Sources {
@@ -62,6 +61,8 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 			htOnOff = "On"
 		} else if hyperthreading == "Disabled" {
 			htOnOff = "Off"
+		} else if hyperthreading == "N/A" {
+			htOnOff = "N/A"
 		} else {
 			htOnOff = "?"
 		}
@@ -161,7 +162,7 @@ func newMemoryBandwidthLatencyTable(sources []*Source, category TableCategory) (
 			}
 			bandwidth = bandwidth / 1000
 			// insert into beginning of array (reverse order)
-			vals := []string{latency, fmt.Sprintf("%.1f", bandwidth)}
+			vals := []string{latency, fmt.Sprintf("%.3f", bandwidth)}
 			hostValues.Values = append([][]string{vals}, hostValues.Values...)
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
@@ -230,49 +231,73 @@ func newNetworkIRQTable(sources []*Source, category TableCategory) (table *Table
 	return
 }
 
-func newFrequencyTable(sources []*Source, category TableCategory) (table *Table) {
+func newFrequencyTable(sources []*Source, CPUdb cpudb.CPUDB, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "Core Frequency",
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
 	for _, source := range sources {
+		family := source.valFromRegexSubmatch("lscpu", `^CPU family.*:\s*([0-9]+)$`)
+		model := source.valFromRegexSubmatch("lscpu", `^Model.*:\s*([0-9]+)$`)
+		stepping := source.valFromRegexSubmatch("lscpu", `^Stepping.*:\s*(.+)$`)
+		sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
+		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
+		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
+		var microarchitecture string
+		cpu, err := CPUdb.GetCPU(family, model, stepping, capid4, sockets, devices)
+		if err != nil {
+			log.Print("failed to find cpu in CPU db")
+		} else {
+			microarchitecture = cpu.Architecture
+		}
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
 				"Core Count",
-				"Spec Frequency (GHz)",
-				"Measured Frequency (GHz)",
+				"Spec non-AVX Frequency (GHz)",
+				"Measured non-AVX Frequency (GHz)",
+				"Measured avx128 Frequency (GHz)",
+				"Measured avx256 Frequency (GHz)",
+				"Measured avx512 Frequency (GHz)",
 			},
 			Values: [][]string{},
 		}
 		type freq struct {
-			spec     float64
-			measured float64
+			spec           float64
+			avxTurboNonAvx float64
+			avxTurbo128    float64
+			avxTurbo256    float64
+			avxTurbo512    float64
 		}
 		vals := make(map[int]freq) // map core count to spec/measured frequencies
 
-		// get measured frequencies (these are optionally collected)
-		matches := source.valsArrayFromRegexSubmatch("Measure Turbo Frequencies", `^(\d+)-core turbo\s+(\d+) MHz`)
-		for _, countFreq := range matches {
-			mhz, err := strconv.Atoi(countFreq[1])
-			if err != nil {
-				log.Print(err)
-				return
+		// get frequencies measured by avx-turbo (optional)
+		nonavxFreqs, avx128Freqs, avx256Freqs, avx512Freqs, err := source.getAvxTurboFrequencies()
+		if err != nil {
+			log.Print(err)
+		} else {
+			for i := 1; i <= len(nonavxFreqs); i++ {
+				if _, ok := vals[i]; !ok {
+					vals[i] = freq{}
+				}
+				tempFreq := vals[i]
+				tempFreq.avxTurboNonAvx = nonavxFreqs[i-1]
+				if len(avx128Freqs) >= i {
+					tempFreq.avxTurbo128 = avx128Freqs[i-1]
+				}
+				if len(avx256Freqs) >= i {
+					tempFreq.avxTurbo256 = avx256Freqs[i-1]
+				}
+				if len(avx512Freqs) >= i {
+					tempFreq.avxTurbo512 = avx512Freqs[i-1]
+				}
+				vals[i] = tempFreq
 			}
-			ghz := math.Round(float64(mhz)/100.0) / 10
-			count, err := strconv.Atoi(countFreq[0])
-			if err != nil {
-				log.Print(err)
-				return
-			}
-			vals[count] = freq{}
-			x := vals[count]
-			x.measured = ghz
-			vals[count] = x
 		}
+
 		// get spec frequencies (these also may not be present)
-		countFreqs, err := source.getSpecCountFrequencies()
+		countFreqs, err := source.getSpecCountFrequencies(microarchitecture)
 		if err != nil {
 			log.Print(err)
 		} else {
@@ -300,15 +325,24 @@ func newFrequencyTable(sources []*Source, category TableCategory) (table *Table)
 		sort.Ints(valKeys)
 		// now go through the vals in sorted order
 		for _, k := range valKeys {
-			var count, spec, measured string
+			var count, spec, nonAvx, avx128, avx256, avx512 string
 			count = fmt.Sprintf("%d", k)
 			if vals[k].spec != 0 {
 				spec = fmt.Sprintf("%.1f", vals[k].spec)
 			}
-			if vals[k].measured != 0 {
-				measured = fmt.Sprintf("%.1f", vals[k].measured)
+			if vals[k].avxTurboNonAvx != 0 {
+				nonAvx = fmt.Sprintf("%.1f", vals[k].avxTurboNonAvx)
 			}
-			hostValues.Values = append(hostValues.Values, []string{count, spec, measured})
+			if vals[k].avxTurbo128 != 0 {
+				avx128 = fmt.Sprintf("%.1f", vals[k].avxTurbo128)
+			}
+			if vals[k].avxTurbo256 != 0 {
+				avx256 = fmt.Sprintf("%.1f", vals[k].avxTurbo256)
+			}
+			if vals[k].avxTurbo512 != 0 {
+				avx512 = fmt.Sprintf("%.1f", vals[k].avxTurbo512)
+			}
+			hostValues.Values = append(hostValues.Values, []string{count, spec, nonAvx, avx128, avx256, avx512})
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
@@ -663,29 +697,38 @@ func newSoftwareTable(sources []*Source, category TableCategory) (table *Table) 
 	return
 }
 
-func newUncoreTable(sources []*Source, category TableCategory) (table *Table) {
+func newUncoreTable(sources []*Source, CPUdb cpudb.CPUDB, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "Uncore",
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
 	for _, source := range sources {
+		family := source.valFromRegexSubmatch("lscpu", `^CPU family.*:\s*([0-9]+)$`)
+		model := source.valFromRegexSubmatch("lscpu", `^Model.*:\s*([0-9]+)$`)
+		stepping := source.valFromRegexSubmatch("lscpu", `^Stepping.*:\s*(.+)$`)
+		sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
+		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
+		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
+		var microarchitecture string
+		cpu, err := CPUdb.GetCPU(family, model, stepping, capid4, sockets, devices)
+		if err != nil {
+			log.Print("failed to find cpu in CPU db")
+		} else {
+			microarchitecture = cpu.Architecture
+		}
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
 				"CHA Count",
 				"Minimum Frequency",
 				"Maximum Frequency",
-				"Active Idle Frequency",
-				"Active Idle Utilization Point",
 			},
 			Values: [][]string{
 				{
 					source.getCHACount(),
-					source.getUncoreMinFrequency(),
-					source.getUncoreMaxFrequency(),
-					source.getActiveIdleFrequency(),
-					source.getActiveIdleUtilizationPoint(),
+					source.getUncoreMinFrequency(microarchitecture),
+					source.getUncoreMaxFrequency(microarchitecture),
 				},
 			},
 		}
@@ -694,7 +737,7 @@ func newUncoreTable(sources []*Source, category TableCategory) (table *Table) {
 	return
 }
 
-func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (table *Table) {
+func newCPUTable(sources []*Source, CPUdb cpudb.CPUDB, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "CPU",
 		Category:      category,
@@ -708,11 +751,13 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
 		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
 		coresPerSocket := source.valFromRegexSubmatch("lscpu", `^Core\(s\) per socket.*:\s*(.+?)$`)
-		microarchitecture := getMicroArchitecture(cpusInfo, family, model, stepping, capid4, devices, sockets)
-		channelCount, err := cpusInfo.GetMemoryChannels(microarchitecture)
-		channels := fmt.Sprintf("%d", channelCount)
-		if err != nil {
-			channels = "Unknown"
+		cpus := source.valFromRegexSubmatch("lscpu", `^CPU\(.*:\s*(.+?)$`)
+		var microarchitecture string
+		var channels string
+		cpu, err := CPUdb.GetCPU(family, model, stepping, capid4, sockets, devices)
+		if err == nil {
+			microarchitecture = cpu.Architecture
+			channels = fmt.Sprintf("%d", cpu.Channels)
 		}
 		virtualization := source.valFromRegexSubmatch("lscpu", `^Virtualization.*:\s*(.+?)$`)
 		var hostValues = HostValues{
@@ -754,11 +799,11 @@ func newCPUTable(sources []*Source, cpusInfo *cpu.CPU, category TableCategory) (
 					model,
 					stepping,
 					source.getBaseFrequency(),
-					source.getMaxFrequency(),
-					source.getAllCoreMaxFrequency(),
-					source.valFromRegexSubmatch("lscpu", `^CPU\(.*:\s*(.+?)$`),
+					source.getMaxFrequency(microarchitecture),
+					source.getAllCoreMaxFrequency(microarchitecture),
+					cpus,
 					source.valFromRegexSubmatch("lscpu", `^On-line CPU.*:\s*(.+?)$`),
-					source.getHyperthreading(),
+					getHyperthreading(CPUdb, family, model, stepping, sockets, cpus, coresPerSocket),
 					coresPerSocket,
 					sockets,
 					source.valFromRegexSubmatch("lscpu", `^NUMA node\(.*:\s*(.+?)$`),
@@ -818,24 +863,30 @@ func newISATable(sources []*Source, category TableCategory) (table *Table) {
 		Name     string
 		FullName string
 		CPUID    string
-		lscpu    string
 	}
 	isas := []ISA{
-		{"AES", "Advanced Encryption Standard New Instructions (AES-NI)", "AES instruction", "aes"},
-		{"AMX", "Advanced Matrix Extensions", "AMX-BF16: tile bfloat16 support", "amx_bf16"},
-		{"AVX512F", "AVX-512 Foundation", "AVX512F: AVX-512 foundation instructions", "avx512f"},
-		{"AVX512_BF16", "Vector Neural Network Instructions - BF16", "AVX512_BF16: bfloat16 instructions", "avx512_bf16"},
-		{"AVX512_FP16", "Advanced Vector Extensions 512 - FP16", "AVX512_FP16: fp16 support", "avx512_fp16"},
-		{"AVX512_VNNI", "Vector Neural Network Instructions", "AVX512_VNNI: neural network instructions", "avx512_vnni"},
-		{"CLDEMOTE", "Cache Line Demote", "CLDEMOTE supports cache line demote", "cldemote"},
-		{"ENQCMD", "Enqueue Command Instruction", "ENQCMD instruction", "enqcmd"},
-		{"MOVDIRI", "Move Doubleword as Direct Store", "MOVDIRI instruction", "movdiri"},
-		{"MOVDIR64B", "Move 64 Bytes as Direct Store", "MOVDIR64B instruction", "movdir64b"},
-		{"SERIALIZE", "SERIALIZE Instruction", "SERIALIZE instruction", "serialize"},
-		{"SHA_NI", "SHA1/SHA256 Instruction Extensions", "SHA instructions", "sha_ni"},
-		{"TSXLDTRK", "Transactional Synchronization Extensions", "TSXLDTRK: TSX suspend load addr tracking", "tsxldtrk"},
-		{"VAES", "Vector AES", "VAES instructions", "vaes"},
-		{"WAITPKG", "UMONITOR, UMWAIT, TPAUSE Instructions", "WAITPKG instructions", "waitpkg"},
+		{"AES", "Advanced Encryption Standard New Instructions (AES-NI)", "AES instruction"},
+		{"AMX", "Advanced Matrix Extensions", "AMX-BF16: tile bfloat16 support"},
+		{"AMX-COMPLEX", "AMX-COMPLEX Instruction", "AVX-COMPLEX instructions"},
+		{"AMX-FP16", "AMX-FP16 Instruction", "AMX-FP16: FP16 tile operations"},
+		{"AVX-IFMA", "AVX-IFMA Instruction", "AVX-IFMA: integer fused multiply add"},
+		{"AVX-NE-CONVERT", "AVX-NE-CONVERT Instruction", "AVX-NE-CONVERT instructions"},
+		{"AVX-VNNI-INT8", "AVX-VNNI-INT8 Instruction", "AVX-VNNI-INT8 instructions"},
+		{"AVX512F", "AVX-512 Foundation", "AVX512F: AVX-512 foundation instructions"},
+		{"AVX512_BF16", "Vector Neural Network Instructions - BF16", "AVX512_BF16: bfloat16 instructions"},
+		{"AVX512_FP16", "Advanced Vector Extensions 512 - FP16", "AVX512_FP16: fp16 support"},
+		{"AVX512_VNNI", "Vector Neural Network Instructions", "AVX512_VNNI: neural network instructions"},
+		{"CLDEMOTE", "Cache Line Demote", "CLDEMOTE supports cache line demote"},
+		{"CMPCCXADD", "Compare and Add if Condition is Met", "CMPccXADD instructions"},
+		{"ENQCMD", "Enqueue Command Instruction", "ENQCMD instruction"},
+		{"MOVDIRI", "Move Doubleword as Direct Store", "MOVDIRI instruction"},
+		{"MOVDIR64B", "Move 64 Bytes as Direct Store", "MOVDIR64B instruction"},
+		{"PREFETCHIT0/1", "PREFETCHIT0/1 Instruction", "PREFETCHIT0, PREFETCHIT1 instructions"},
+		{"SERIALIZE", "SERIALIZE Instruction", "SERIALIZE instruction"},
+		{"SHA_NI", "SHA1/SHA256 Instruction Extensions", "SHA instructions"},
+		{"TSXLDTRK", "Transactional Synchronization Extensions", "TSXLDTRK: TSX suspend load addr tracking"},
+		{"VAES", "Vector AES", "VAES instructions"},
+		{"WAITPKG", "UMONITOR, UMWAIT, TPAUSE Instructions", "WAITPKG instructions"},
 	}
 	for _, source := range sources {
 		var hostValues = HostValues{
@@ -844,28 +895,15 @@ func newISATable(sources []*Source, category TableCategory) (table *Table) {
 				"Name",
 				"Full Name",
 				"CPU Support",
-				"Kernel Support",
 			},
 		}
-		flags := source.valFromRegexSubmatch("lscpu", `^Flags.*:\s*(.*)$`)
 		cpuid := source.getCommandOutput("cpuid -1")
 		for _, isa := range isas {
-			var kernelSupport, cpuSupport string
+			var cpuSupport string
 			if cpuid != "" {
 				cpuSupport = yesIfTrue(source.valFromRegexSubmatch("cpuid -1", isa.CPUID+`\s*= (.+?)$`))
 			}
-			if flags != "" {
-				kernelSupport = "Yes"
-				match, err := regexp.MatchString(" "+isa.lscpu+" ", flags)
-				if err != nil {
-					log.Printf("regex match failed: %v", err)
-					return
-				}
-				if !match {
-					kernelSupport = "No"
-				}
-			}
-			hostValues.Values = append(hostValues.Values, []string{isa.Name, isa.FullName, cpuSupport, kernelSupport})
+			hostValues.Values = append(hostValues.Values, []string{isa.Name, isa.FullName, cpuSupport})
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
@@ -1291,7 +1329,7 @@ func newPCIeSlotsTable(sources []*Source, category TableCategory) (table *Table)
 	return
 }
 
-func newDIMMPopulationTable(sources []*Source, dimmTable *Table, cpusInfo *cpu.CPU, category TableCategory) (table *Table) {
+func newDIMMPopulationTable(sources []*Source, dimmTable *Table, CPUdb cpudb.CPUDB, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "DIMM Population",
 		Category:      category,
@@ -1316,34 +1354,33 @@ func newDIMMPopulationTable(sources []*Source, dimmTable *Table, cpusInfo *cpu.C
 		sockets := source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`)
 		capid4 := source.valFromRegexSubmatch("lspci bits", `^([0-9a-fA-F]+)`)
 		devices := source.valFromRegexSubmatch("lspci devices", `^([0-9]+)`)
-		uarch := getMicroArchitecture(cpusInfo, family, model, stepping, capid4, devices, sockets)
-		channels, err := cpusInfo.GetMemoryChannels(uarch)
+		cpu, err := CPUdb.GetCPU(family, model, stepping, capid4, sockets, devices)
 		if err != nil {
 			log.Printf("Failed to find CPU info: %v", err)
 		} else {
 			vendor := source.valFromDmiDecodeRegexSubmatch("0", `^\s*Vendor:\s*(.+?)$`)
 			sockets, _ := strconv.Atoi(source.valFromRegexSubmatch("lscpu", `^Socket\(.*:\s*(.+?)$`))
 			if strings.Contains(vendor, "Dell") {
-				err := deriveDIMMInfoDell(&hv.Values, sockets, channels)
+				err := deriveDIMMInfoDell(&hv.Values, cpu.Channels)
 				if err != nil {
 					log.Printf("%v", err)
 				}
 				success = err == nil
 			} else if vendor == "HPE" {
-				err := deriveDIMMInfoHPE(&hv.Values, sockets, channels)
+				err := deriveDIMMInfoHPE(&hv.Values, sockets, cpu.Channels)
 				if err != nil {
 					log.Printf("%v", err)
 				}
 				success = err == nil
 			} else if vendor == "Amazon EC2" {
-				err := deriveDIMMInfoEC2(&hv.Values, sockets, channels)
+				err := deriveDIMMInfoEC2(&hv.Values, cpu.Channels)
 				if err != nil {
 					log.Printf("%v", err)
 				}
 				success = err == nil
 			}
 			if !success {
-				err := deriveDIMMInfoOther(&hv.Values, sockets, channels)
+				err := deriveDIMMInfoOther(&hv.Values, cpu.Channels)
 				if err != nil {
 					log.Printf("%v", err)
 				}
@@ -2019,7 +2056,7 @@ func newPowerStatsTable(sources []*Source, category TableCategory) (table *Table
 	}
 	return
 }
-func newProfileSummaryTable(sources []*Source, category TableCategory, averageCPUUtilizationTable, CPUUtilizationTable, IRQRateTable, driveStatsTable, netStatsTable, memStatsTable, PMUMetricsTable, powerStatsTable *Table) (table *Table) {
+func newProfileSummaryTable(sources []*Source, category TableCategory, averageCPUUtilizationTable, driveStatsTable, netStatsTable, memStatsTable, PMUMetricsTable, powerStatsTable *Table) (table *Table) {
 	table = &Table{
 		Name:          "Summary",
 		Category:      category,
@@ -2061,30 +2098,6 @@ func newProfileSummaryTable(sources []*Source, category TableCategory, averageCP
 				},
 			},
 		}
-		table.AllHostValues = append(table.AllHostValues, hostValues)
-	}
-	return
-}
-
-func newFeatureTable(sources []*Source, category TableCategory) (table *Table) {
-	table = &Table{
-		Name:          "Feature",
-		Category:      category,
-		AllHostValues: []HostValues{},
-	}
-	for _, source := range sources {
-		var hostValues = HostValues{
-			Name: source.getHostname(),
-			ValueNames: []string{
-				"BI_2IFU_4_F_VICTIMS_EN",
-				"EnableDBPForF",
-				"FBThreadSlicing",
-				"DISABLE_FASTGO",
-				"SpecI2MEn",
-				"DPT_DISABLE",
-			},
-		}
-		hostValues.Values = append(hostValues.Values, source.getFeatures())
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
 	return
@@ -2152,7 +2165,7 @@ func newCodePathTable(sources []*Source, category TableCategory) (table *Table) 
 	return
 }
 
-func newInsightTable(sources []*Source, configReport, briefReport, profileReport, benchmarkReport *Report, analyzeReport *Report, cpusInfo *cpu.CPU) (table *Table) {
+func newInsightTable(configReport, briefReport, profileReport, benchmarkReport *Report, analyzeReport *Report) (table *Table) {
 	table = &Table{
 		Name:          "Insight",
 		Category:      NoCategory,

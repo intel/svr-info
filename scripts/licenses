@@ -1,0 +1,30 @@
+#!/bin/bash
+# run this script from the repo's root directory
+
+# creates licenses.csv containing list of dependencies and links to their licenses
+# example:
+# dario.cat/mergo,https://github.com/imdario/mergo/blob/v1.0.0/LICENSE,BSD-3-Clause
+# github.com/Knetic/govaluate,https://github.com/Knetic/govaluate/blob/v3.0.0/LICENSE,MIT
+# github.com/ProtonMail/go-crypto,https://github.com/ProtonMail/go-crypto/blob/3c4c8a2d2371/LICENSE,BSD-3-Clause
+
+# prerequisites:
+#  git clone https://github.com/google/go-licenses
+#  cd go-licenses
+#  go install
+
+internal_pkg_license () {
+    pushd "$2" || exit
+    go-licenses report . 1>>"$1"/licenses.csv 2>>"$1"/licenses.err
+    popd || exit
+}
+
+# run on packages in cmd dir
+go-licenses report ./cmd/... 1>licenses.csv 2>licenses.err
+
+# run on packages in internal dir
+for dir in internal/commandfile internal/core internal/cpudb internal/msr internal/progress internal/target internal/util; do
+    internal_pkg_license "$(pwd)" $dir
+done
+
+# remove warnings for internal packages
+sed -i '/svr-info\/internal/d' licenses.csv 

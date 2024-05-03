@@ -23,8 +23,6 @@ jobs:
       security-events: write
     strategy:
       fail-fast: false
-      matrix:
-        language: [ 'cpp', 'go' ]
     steps:
     - name: Checkout repository
       uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
@@ -32,16 +30,10 @@ jobs:
     - name: Initialize CodeQL
       uses: github/codeql-action/init@1500a131381b66de0c52ac28abb13cd79f4b7ecc # v2.22.12
       with:
-        languages: ${{ matrix.language }}
+        languages: go
     - name: Build golang
-      if: matrix.language == 'go'
       run: |
-        builder/build_docker_image
         builder/build
-    - name: Build c
-      if: matrix.language == 'cpp'
-      run: |
-        make calcfreq
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@1500a131381b66de0c52ac28abb13cd79f4b7ecc # v2.22.12
       with:

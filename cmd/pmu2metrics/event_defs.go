@@ -39,7 +39,7 @@ func LoadEventGroups(eventDefinitionOverridePath string, metadata Metadata) (gro
 			return
 		}
 	} else {
-		if file, err = resources.Open(filepath.Join("resources", fmt.Sprintf("%s_events.txt", metadata.Microarchitecture))); err != nil {
+		if file, err = resources.Open(filepath.Join("resources", fmt.Sprintf("%s_events.txt", strings.ToLower(metadata.Microarchitecture)[:3]))); err != nil {
 			return
 		}
 	}
