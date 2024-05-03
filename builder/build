@@ -1,10 +1,23 @@
 #!/usr/bin/env bash
-docker container run                                  \
-    --volume "$(pwd)"/builder/scripts:/scripts        \
-    --volume "$(pwd)":/workdir                        \
-    --volume "/home/$USER/.ssh":/home/$USER/.ssh      \
-    --user $(id -u):$(id -g)                          \
+
+# run this script from repo's root directory
+# set GITHUB_ACCESS_TOKEN environment variable to your token, if you want to build MLC
+
+TAG=v1
+
+# build third-party components image
+docker build -f third_party/build.Dockerfile --build-arg GITHUB_ACCESS_TOKEN="${GITHUB_ACCESS_TOKEN}" --tag svr-info-third-party:$TAG ./third_party
+
+# build go cmd builder image
+docker build -f cmd/build.Dockerfile --tag svr-info-cmd-builder:$TAG .
+
+# build svr-info release package builder image
+docker build -f builder/build.Dockerfile --build-arg TAG=$TAG --tag svr-info-builder:$TAG .
+
+# build svr-info release package
+docker run                                            \
+    --volume "$(pwd)":/localrepo                      \
+    -w /localrepo                                     \
     --rm                                              \
-    --name build_svr_info4                            \
-    svr_info_builder:v4                               \
-    build
+    svr-info-builder:$TAG                             \
+    make dist test

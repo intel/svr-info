@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/intel/svr-info/internal/cpu"
+	"github.com/intel/svr-info/internal/cpudb"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
@@ -211,6 +211,13 @@ func getDIMMSocketSlot(dimmType DIMMType, reBankLoc *regexp.Regexp, reLoc *regex
 			slot = 0
 			return
 		}
+	} else if dimmType == DIMMType15 {
+		match := reLoc.FindStringSubmatch(locator)
+		if match != nil {
+			socket, _ = strconv.Atoi(match[1])
+			slot, _ = strconv.Atoi(match[3])
+			return
+		}
 	}
 	err = fmt.Errorf("unrecognized bank locator and/or locator in dimm info: %s %s", bankLocator, locator)
 	return
@@ -235,6 +242,7 @@ const (
 	DIMMType12
 	DIMMType13
 	DIMMType14
+	DIMMType15
 )
 
 func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, reBankLoc *regexp.Regexp, reLoc *regexp.Regexp) {
@@ -375,10 +383,24 @@ func getDIMMParseInfo(bankLocator string, locator string) (dimmType DIMMType, re
 		dimmType = DIMMType14
 		return
 	}
+	/* FOREST CITY PLATFORM FOR SRF AND GNR
+	 * LOCATOR      BANK LOCATOR
+	 * CPU0 CH0/D0  BANK 0
+	 * CPU0 CH0/D1  BANK 0
+	 * CPU0 CH1/D0  BANK 1
+	 * CPU0 CH1/D1  BANK 1
+	 * ...
+	 * CPU0 CH7/D1  BANK 7
+	 */
+	reLoc = regexp.MustCompile(`CPU([\d]) CH([0-7])/D([0-1])`)
+	if reLoc.FindStringSubmatch(locator) != nil {
+		dimmType = DIMMType15
+		return
+	}
 	return
 }
 
-func deriveDIMMInfoOther(dimms *[][]string, numSockets int, channelsPerSocket int) (err error) {
+func deriveDIMMInfoOther(dimms *[][]string, channelsPerSocket int) (err error) {
 	previousSocket, channel := -1, 0
 	if len(*dimms) == 0 {
 		err = fmt.Errorf("no DIMMs")
@@ -448,11 +470,29 @@ func deriveDIMMInfoHPE(dimms *[][]string, numSockets int, channelsPerSocket int)
 	return
 }
 
+func getHyperthreading(CPUdb cpudb.CPUDB, family, model, stepping, sockets, cpus, coresPerSocket string) (hyperthreading string) {
+	numCPUs, err1 := strconv.Atoi(cpus) // logical CPUs
+	numSockets, err2 := strconv.Atoi(sockets)
+	numCores, err3 := strconv.Atoi(coresPerSocket) // physical cores
+	cpu, err4 := CPUdb.GetCPU(family, model, stepping, "", "", "")
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+		return // leave it blank, we don't have enough information
+	}
+	if cpu.Threads < 2 {
+		hyperthreading = "N/A" // CPU doesn't support hyperthreading
+	} else if numCPUs > numCores*numSockets {
+		hyperthreading = "Enabled"
+	} else {
+		hyperthreading = "Disabled"
+	}
+	return
+}
+
 /* as seen on 2 socket Dell systems...
 * "Bank Locator" for all DIMMs is "Not Specified" and "Locator" is A1-A12 and B1-B12.
 * A1 and A7 are channel 0, A2 and A8 are channel 1, etc.
  */
-func deriveDIMMInfoDell(dimms *[][]string, numSockets int, channelsPerSocket int) (err error) {
+func deriveDIMMInfoDell(dimms *[][]string, channelsPerSocket int) (err error) {
 	re := regexp.MustCompile(`([ABCD])([1-9]\d*)`)
 	for _, dimm := range *dimms {
 		if !strings.Contains(dimm[BankLocatorIdx], "Not Specified") {
@@ -511,7 +551,7 @@ func deriveDIMMInfoDell(dimms *[][]string, numSockets int, channelsPerSocket int
  * 		NODE 7			CPU1 Channel7 DIMM0
  * 		NODE 7			CPU1 Channel7 DIMM1
  */
-func deriveDIMMInfoEC2(dimms *[][]string, numSockets int, channelsPerSocket int) (err error) {
+func deriveDIMMInfoEC2(dimms *[][]string, channelsPerSocket int) (err error) {
 	c5bankLocRe := regexp.MustCompile(`NODE\s+([1-9])`)
 	c5locRe := regexp.MustCompile(`DIMM_(.)(.)`)
 	c6ibankLocRe := regexp.MustCompile(`NODE\s+(\d+)`)
@@ -673,14 +713,6 @@ func getInsightsRules() (rules []byte, err error) {
 	if err != nil {
 		err = fmt.Errorf("failed to read insights.grl, %v", err)
 		return
-	}
-	return
-}
-
-func getMicroArchitecture(cpusInfo *cpu.CPU, family, model, stepping, capid4, devices, sockets string) (uArch string) {
-	uArch, err := cpusInfo.GetMicroArchitecture(family, model, stepping, sockets, capid4, devices)
-	if err != nil && family == "6" {
-		uArch = "Unknown Intel"
 	}
 	return
 }

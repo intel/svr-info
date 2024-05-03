@@ -92,6 +92,9 @@ func (p *ProcessStacks) averageDepth(processName string) (average float64) {
 		total += len(strings.Split(stack, ";"))
 		count += 1
 	}
+	if count == 0 {
+		return
+	}
 	average = float64(total) / float64(count)
 	return
 }
@@ -140,6 +143,10 @@ func mergeSystemFolded(perfFp string, perfDwarf string) (merged string, err erro
 	}
 	fpSampleCount := fpStacks.totalSamples()
 	dwarfSampleCount := dwarfStacks.totalSamples()
+	if fpSampleCount == 0 || dwarfSampleCount == 0 {
+		err = fmt.Errorf("sample counts cannot be zero")
+		return
+	}
 	fpToDwarfScalingRatio := float64(fpSampleCount) / float64(dwarfSampleCount)
 	dwarfStacks.scaleCounts(fpToDwarfScalingRatio)
 

@@ -12,13 +12,13 @@ VERSION := $(VERSION_NUMBER)_$(COMMIT_DATE)_$(COMMIT_ID)
 TARBALL := svr-info.tgz
 
 default: dist
-.PHONY: clean default dist dist-amd64 test tools
+.PHONY: clean default dist dist-amd64 test third_party
 
 bin:
 	mkdir -p bin
 
 orchestrator: bin reporter collector collector-deps
-	cp /prebuilt/bin/sshpass cmd/orchestrator/resources/
+	-cp /prebuilt/third-party/sshpass cmd/orchestrator/resources/
 	cp bin/reporter cmd/orchestrator/resources/
 	cp bin/collector cmd/orchestrator/resources/
 	cp bin/collector_arm64 cmd/orchestrator/resources/
@@ -35,7 +35,7 @@ msrread: bin
 	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrread ../cmd/msrread
 
 msrwrite: bin
-	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrwrite ../cmd/msrread
+	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrwrite ../cmd/msrwrite
 
 msrbusy: bin
 	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o msrbusy ../cmd/msrbusy
@@ -43,17 +43,13 @@ msrbusy: bin
 pmu2metrics: bin
 	rm -f cmd/pmu2metrics/resources/perf
 	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics_noperf ../cmd/pmu2metrics
-	-cp /prebuilt/bin/perf cmd/pmu2metrics/resources
+	-cp /prebuilt/third-party/perf cmd/pmu2metrics/resources
 	cd bin && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '-s -w -X main.gVersion=$(VERSION)' -o pmu2metrics ../cmd/pmu2metrics
 	rm -f cmd/pmu2metrics/resources/perf
 
-calcfreq: bin
-	cd bin && gcc -D VERSION=\"$(VERSION)\" ../tools/calcfreq/calcfreq.c -lpthread -o calcfreq -static
-
-collector-deps-amd64: third_party calcfreq msrbusy msrread msrwrite pmu2metrics
+collector-deps-amd64: msrbusy msrread msrwrite pmu2metrics
 	$(eval TMPDIR := $(shell mktemp -d build.XXXXXX))
-	cp -R /prebuilt/bin/* $(TMPDIR)
-	cp bin/calcfreq $(TMPDIR)
+	-cp -R /prebuilt/third-party/* $(TMPDIR)
 	cp bin/msrbusy $(TMPDIR)
 	cp bin/msrread $(TMPDIR)
 	cp bin/msrwrite $(TMPDIR)
@@ -61,9 +57,9 @@ collector-deps-amd64: third_party calcfreq msrbusy msrread msrwrite pmu2metrics
 	cd $(TMPDIR) && tar -czf ../cmd/orchestrator/resources/collector_deps_amd64.tgz .
 	rm -rf $(TMPDIR)
 
-collector-deps-arm64: third_party
+collector-deps-arm64: 
 	$(eval TMPDIR := $(shell mktemp -d build.XXXXXX))
-	cp /prebuilt/bin/spectre-meltdown-checker.sh $(TMPDIR)
+	-cp /prebuilt/third-party/spectre-meltdown-checker.sh $(TMPDIR)
 	cd $(TMPDIR) && tar -czf ../cmd/orchestrator/resources/collector_deps_arm64.tgz .
 	rm -rf $(TMPDIR)
 
@@ -85,12 +81,12 @@ dist-amd64: orchestrator
 	cp bin/collector dist/svr-info/tools
 	cp bin/collector_arm64 dist/svr-info/tools
 	cp bin/reporter dist/svr-info/tools
-	cp bin/pmu2metrics dist/svr-info/tools
+	cp bin/pmu2metrics dist/svr-info/tools/pmu2metrics
 	cd dist && tar -czf $(TARBALL) svr-info
 	cd dist && md5sum $(TARBALL) > $(TARBALL).md5
 	rm -rf dist/svr-info
 
-dist: dist-amd64 third_party
+dist: dist-amd64
 	cp /prebuilt/oss_source.* dist
 
 clean:
@@ -101,7 +97,7 @@ test:
 	# test packages
 	cd internal/commandfile && go test -v -vet=all .
 	cd internal/core && go test -v -vet=all .
-	cd internal/cpu && go test -v -vet=all .
+	cd internal/cpudb && go test -v -vet=all .
 	# these tests require access to MSRs which we don't have on WSL2 and may not have on build machine 
 	# cd internal/msr && go test -v -vet=all .
 	cd internal/progress && go test -v -vet=all .

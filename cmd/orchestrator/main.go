@@ -147,9 +147,16 @@ func (app *App) getCollections(targets []target.Target, statusUpdate progress.Mu
 		go doCollection(collection, ch, statusUpdate)
 	}
 	// wait for all collections to complete collecting
+	collections = make([]*Collection, len(targets))
 	for range targets {
 		collection := <-ch
-		collections = append(collections, collection)
+		// find the collection's target in the list of targets so that we can keep the order the same
+		for i, target := range targets {
+			if target.GetName() == collection.target.GetName() {
+				collections[i] = collection
+				break
+			}
+		}
 	}
 	return
 }
@@ -269,7 +276,7 @@ func archiveOutputDir(outputDir string, collections []*Collection, reportFilePat
 	return
 }
 
-func cleanupOutputDir(outputDir string, collections []*Collection, reportFilePaths []string) (err error) {
+func cleanupOutputDir(outputDir string, collections []*Collection) (err error) {
 	var filesToRemove []string
 	for _, collection := range collections {
 		hostname := collection.target.GetName()
@@ -331,7 +338,7 @@ func (app *App) doWork() (err error) {
 		return err
 	}
 	if !app.args.debug {
-		err = cleanupOutputDir(app.outputDir, collections, reportFilePaths)
+		err = cleanupOutputDir(app.outputDir, collections)
 		if err != nil {
 			return err
 		}

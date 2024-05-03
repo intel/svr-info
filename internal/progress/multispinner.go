@@ -10,7 +10,6 @@ package progress
 import (
 	"fmt"
 	"os"
-	"sort"
 	"time"
 
 	"golang.org/x/term"
@@ -21,13 +20,14 @@ var spinChars []string = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯
 type MultiSpinnerUpdateFunc func(string, string) error
 
 type spinnerState struct {
+	label       string
 	status      string
 	statusIsNew bool
 	spinIndex   int
 }
 
 type MultiSpinner struct {
-	spinners map[string]*spinnerState
+	spinners []spinnerState
 	ticker   *time.Ticker
 	done     chan bool
 	spinning bool
@@ -35,17 +35,19 @@ type MultiSpinner struct {
 
 func NewMultiSpinner() *MultiSpinner {
 	ms := MultiSpinner{}
-	ms.spinners = make(map[string]*spinnerState)
 	ms.done = make(chan bool)
 	return &ms
 }
 
 func (ms *MultiSpinner) AddSpinner(label string) (err error) {
-	if _, ok := ms.spinners[label]; ok {
-		err = fmt.Errorf("spinner with label %s already exists", label)
-		return
+	// make sure label is unique
+	for _, spinner := range ms.spinners {
+		if spinner.label == label {
+			err = fmt.Errorf("spinner with label %s already exists", label)
+			return
+		}
 	}
-	ms.spinners[label] = &spinnerState{"?", false, 0}
+	ms.spinners = append(ms.spinners, spinnerState{label, "?", false, 0})
 	return
 }
 
@@ -65,15 +67,16 @@ func (ms *MultiSpinner) Finish() {
 }
 
 func (ms *MultiSpinner) Status(label string, status string) (err error) {
-	if spinner, ok := ms.spinners[label]; ok {
-		if status != spinner.status {
-			spinner.statusIsNew = true
-			spinner.status = status
+	for spinnerIdx, spinner := range ms.spinners {
+		if spinner.label == label {
+			if status != spinner.status {
+				ms.spinners[spinnerIdx].status = status
+				ms.spinners[spinnerIdx].statusIsNew = true
+			}
+			return
 		}
-	} else {
-		err = fmt.Errorf("did not find spinner with label %s", label)
-		return
 	}
+	err = fmt.Errorf("did not find spinner with label %s", label)
 	return
 }
 
@@ -89,21 +92,15 @@ func (ms *MultiSpinner) onTick() {
 }
 
 func (ms *MultiSpinner) draw(goUp bool) {
-	var spinnerLabels []string
-	for k := range ms.spinners {
-		spinnerLabels = append(spinnerLabels, k)
-	}
-	sort.Strings(spinnerLabels)
-	for _, label := range spinnerLabels {
-		spinner := ms.spinners[label]
+	for i, spinner := range ms.spinners {
 		if !term.IsTerminal(int(os.Stderr.Fd())) && !spinner.statusIsNew {
-			return
+			continue
 		}
-		fmt.Fprintf(os.Stderr, "%-20s  %s  %-40s\n", label, spinChars[spinner.spinIndex], spinner.status)
-		spinner.statusIsNew = false
-		spinner.spinIndex += 1
-		if spinner.spinIndex >= len(spinChars) {
-			spinner.spinIndex = 0
+		fmt.Fprintf(os.Stderr, "%-20s  %s  %-40s\n", spinner.label, spinChars[spinner.spinIndex], spinner.status)
+		ms.spinners[i].statusIsNew = false
+		ms.spinners[i].spinIndex += 1
+		if ms.spinners[i].spinIndex >= len(spinChars) {
+			ms.spinners[i].spinIndex = 0
 		}
 	}
 	if goUp && term.IsTerminal(int(os.Stderr.Fd())) {

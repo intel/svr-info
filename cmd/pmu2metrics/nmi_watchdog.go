@@ -9,13 +9,42 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os/exec"
 
 	"github.com/intel/svr-info/internal/util"
 )
 
-// GetNMIWatchdog - gets the kernel.nmi_watchdog configuration value (0 or 1)
-func GetNMIWatchdog() (setting string, err error) {
+// EnableNMIWatchdog - sets the kernel.nmi_watchdog value to "1"
+func EnableNMIWatchdog() (err error) {
+	if gCmdLineArgs.verbose {
+		log.Print("enabling NMI watchdog")
+	}
+	err = setNMIWatchdog("1")
+	return
+}
+
+// DisableNMIWatchdog - sets the kernel.nmi_watchdog value to "0"
+func DisableNMIWatchdog() (err error) {
+	if gCmdLineArgs.verbose {
+		log.Print("disabling NMI watchdog")
+	}
+	err = setNMIWatchdog("0")
+	return
+}
+
+// NMIWatchdogEnabled - reads the kernel.nmi_watchdog value. If it is "1", returns true
+func NMIWatchdogEnabled() (enabled bool, err error) {
+	var setting string
+	if setting, err = getNMIWatchdog(); err != nil {
+		return
+	}
+	enabled = setting == "1"
+	return
+}
+
+// getNMIWatchdog - gets the kernel.nmi_watchdog configuration value (0 or 1)
+func getNMIWatchdog() (setting string, err error) {
 	// sysctl kernel.nmi_watchdog
 	// kernel.nmi_watchdog = [0|1]
 	var sysctl string
@@ -32,8 +61,8 @@ func GetNMIWatchdog() (setting string, err error) {
 	return
 }
 
-// SetNMIWatchdog -sets the kernel.nmi_watchdog configuration value
-func SetNMIWatchdog(setting string) (err error) {
+// setNMIWatchdog -sets the kernel.nmi_watchdog configuration value
+func setNMIWatchdog(setting string) (err error) {
 	// sysctl kernel.nmi_watchdog=[0|1]
 	var sysctl string
 	if sysctl, err = findSysctl(); err != nil {

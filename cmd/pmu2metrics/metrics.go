@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"strings"
 	"sync"
 
@@ -38,6 +39,12 @@ type MetricFrame struct {
 
 // ProcessEvents is responsible for producing metrics from raw perf events
 func ProcessEvents(perfEvents [][]byte, eventGroupDefinitions []GroupDefinition, metricDefinitions []MetricDefinition, process Process, previousTimestamp float64, metadata Metadata) (metricFrames []MetricFrame, timeStamp float64, err error) {
+	if gCmdLineArgs.rawFilePath != "" {
+		if err = writeEventsToFile(gCmdLineArgs.rawFilePath, perfEvents); err != nil {
+			log.Printf("failed to write events to raw file: %v", err)
+			return
+		}
+	}
 	var eventFrames []EventFrame
 	if eventFrames, err = GetEventFrames(perfEvents, eventGroupDefinitions, gCmdLineArgs.scope, gCmdLineArgs.granularity, metadata); err != nil { // arrange the events into groups
 		err = fmt.Errorf("failed to put perf events into groups: %v", err)
@@ -59,14 +66,14 @@ func ProcessEvents(perfEvents [][]byte, eventGroupDefinitions []GroupDefinition,
 			metric := Metric{Name: metricDef.Name, Value: math.NaN()}
 			var variables map[string]interface{}
 			if variables, err = getExpressionVariableValues(metricDef, eventFrame, previousTimestamp, metadata); err != nil {
-				if gCmdLineArgs.verbose {
+				if gCmdLineArgs.veryVerbose {
 					log.Printf("failed to get expression variable values: %v", err)
 				}
 				err = nil
 			} else {
 				var result interface{}
 				if result, err = evaluateExpression(metricDef, variables); err != nil {
-					if gCmdLineArgs.verbose {
+					if gCmdLineArgs.veryVerbose {
 						log.Printf("failed to evaluate expression: %v", err)
 					}
 					err = nil
@@ -226,6 +233,25 @@ func evaluateExpression(metric MetricDefinition, variables map[string]interface{
 	}()
 	if result, err = metric.Evaluable.Evaluate(variables); err != nil {
 		err = fmt.Errorf("%v : %s : %s", err, metric.Name, metric.Expression)
+	}
+	return
+}
+
+// write json formatted events to raw file
+func writeEventsToFile(path string, events [][]byte) (err error) {
+	var rawFile *os.File
+	if rawFile, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644); err != nil {
+		log.Printf("failed to open raw file for writing, %v", err)
+		return
+	}
+	defer rawFile.Close()
+
+	for _, rawEvent := range events {
+		rawEvent = append(rawEvent, []byte("\n")...)
+		if _, err = rawFile.Write(rawEvent); err != nil {
+			log.Printf("failed to write event to raw file: %v", err)
+			return
+		}
 	}
 	return
 }

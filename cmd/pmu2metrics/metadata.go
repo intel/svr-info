@@ -11,6 +11,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log"
@@ -21,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/intel/svr-info/internal/cpudb"
 	"gopkg.in/yaml.v2"
 )
 
@@ -42,14 +44,14 @@ type Metadata struct {
 
 // LoadMetadata - populates and returns a Metadata structure containing state of the
 // system.
-func LoadMetadata() (metadata Metadata, err error) {
+func LoadMetadata(perfPath string) (metadata Metadata, err error) {
 	// reduce startup time by running the three perf commands in their own threads while
 	// the rest of the metadata is being collected
 	slowFuncChannel := make(chan error)
 	// perf list
 	go func() {
 		var err error
-		if metadata.PerfSupportedEvents, err = getPerfSupportedEvents(); err != nil {
+		if metadata.PerfSupportedEvents, err = getPerfSupportedEvents(perfPath); err != nil {
 			err = fmt.Errorf("failed to load perf list: %v", err)
 		}
 		slowFuncChannel <- err
@@ -58,7 +60,7 @@ func LoadMetadata() (metadata Metadata, err error) {
 	go func() {
 		var err error
 		var output string
-		if metadata.RefCyclesSupported, output, err = getRefCyclesSupported(); err != nil {
+		if metadata.RefCyclesSupported, output, err = getRefCyclesSupported(perfPath); err != nil {
 			err = fmt.Errorf("failed to determine if ref_cycles is supported: %v", err)
 		}
 		if !metadata.RefCyclesSupported && gCmdLineArgs.verbose {
@@ -70,7 +72,7 @@ func LoadMetadata() (metadata Metadata, err error) {
 	go func() {
 		var err error
 		var output string
-		if metadata.TMASupported, output, err = getTMASupported(); err != nil {
+		if metadata.TMASupported, output, err = getTMASupported(perfPath); err != nil {
 			err = fmt.Errorf("failed to determine if TMA is supported: %v", err)
 		}
 		if !metadata.TMASupported && gCmdLineArgs.verbose {
@@ -102,7 +104,7 @@ func LoadMetadata() (metadata Metadata, err error) {
 	}
 	// Core Count (per socket)
 	metadata.CoresPerSocket, err = strconv.Atoi(cpuInfo[0]["cpu cores"])
-	if err != nil {
+	if err != nil || metadata.CoresPerSocket == 0 {
 		err = fmt.Errorf("failed to retrieve cores per socket: %v", err)
 		return
 	}
@@ -132,10 +134,12 @@ func LoadMetadata() (metadata Metadata, err error) {
 	// Model Name
 	metadata.ModelName = cpuInfo[0]["model name"]
 	// CPU microarchitecture
-	if metadata.Microarchitecture, err = getMicroarchitecture(cpuInfo[0]["cpu family"], cpuInfo[0]["model"], cpuInfo[0]["stepping"]); err != nil {
-		err = fmt.Errorf("failed to retrieve microarchitecture: %v", err)
+	var cpu cpudb.CPU
+	cpu, err = cpudb.NewCPUDB().GetCPU(cpuInfo[0]["cpu family"], cpuInfo[0]["model"], cpuInfo[0]["stepping"], "", "", "")
+	if err != nil {
 		return
 	}
+	metadata.Microarchitecture = cpu.Architecture
 	return
 }
 
@@ -153,6 +157,10 @@ func LoadMetadataFromFile(metadataFilePath string) (metadata Metadata, err error
 		return
 	}
 	if err = yaml.UnmarshalStrict([]byte(yamlData), &metadata); err != nil {
+		return
+	}
+	if metadata.CoresPerSocket == 0 || metadata.SocketCount == 0 {
+		err = fmt.Errorf("cores per socket and socket count cannot be zero")
 		return
 	}
 	metadata.CPUSocketMap = createCPUSocketMap(metadata.CoresPerSocket, metadata.SocketCount, metadata.ThreadsPerCore == 2)
@@ -190,46 +198,25 @@ func (md Metadata) String() string {
 	return out
 }
 
-// getMicroarchitecture - gets microarchitecture abbreviated label given the provided
-// family, model, and stepping. An error occurs when no matching microarchitecture is found.
-func getMicroarchitecture(sFamily, sModel, sStepping string) (arch string, err error) {
-	var family, model, stepping int
-	if family, err = strconv.Atoi(sFamily); err != nil {
-		err = fmt.Errorf("failed to retrieve cpu family: %v", err)
+// WriteJSONToFile writes the metadata structure (minus perf's supported events) to the filename provided
+// Note that the file will be truncated.
+func (md Metadata) WriteJSONToFile(path string) (err error) {
+	var rawFile *os.File
+	if rawFile, err = os.OpenFile(gCmdLineArgs.rawFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644); err != nil {
+		log.Printf("failed to open raw file for writing, %v", err)
 		return
 	}
-	if model, err = strconv.Atoi(sModel); err != nil {
-		err = fmt.Errorf("failed to retrieve model: %v", err)
+	defer rawFile.Close()
+	var out []byte
+	mdCopy := md
+	mdCopy.PerfSupportedEvents = ""
+	if out, err = json.Marshal(mdCopy); err != nil {
+		log.Printf("failed to marshal metadata structure, %v", err)
 		return
 	}
-	if stepping, err = strconv.Atoi(sStepping); err != nil {
-		err = fmt.Errorf("failed to retrieve stepping: %v", err)
-		return
-	}
-	if family != 6 {
-		err = fmt.Errorf("non-Intel CPU detected: family=%d", family)
-		return
-	}
-	if model == 79 && stepping == 1 {
-		arch = "bdx"
-	} else if model == 85 {
-		if stepping == 4 {
-			arch = "skx"
-		} else if stepping >= 5 {
-			arch = "clx"
-		}
-	} else if model == 106 && stepping >= 4 {
-		arch = "icx"
-	} else if model == 143 && stepping >= 3 {
-		arch = "spr"
-	} else if model == 207 {
-		arch = "emr"
-	} else if model == 175 {
-		arch = "srf"
-	} else if model == 173 {
-		arch = "gnr"
-	} else {
-		err = fmt.Errorf("unrecognized Intel architecture: model=%d, stepping=%d", model, stepping)
+	out = append(out, []byte("\n")...)
+	if _, err = rawFile.Write(out); err != nil {
+		log.Printf("failed to write metadata json to file, %v", err)
 		return
 	}
 	return
@@ -250,7 +237,10 @@ func getUncoreDeviceIDs() (IDs map[string][]int, err error) {
 		if match == nil {
 			continue
 		}
-		id, _ := strconv.Atoi(match[2])
+		var id int
+		if id, err = strconv.Atoi(match[2]); err != nil {
+			return
+		}
 		IDs[match[1]] = append(IDs[match[1]], id)
 	}
 	return
@@ -280,8 +270,8 @@ func getCPUInfo() (cpuInfo []map[string]string, err error) {
 
 // getPerfSupportedEvents - returns a string containing the output from
 // 'perf list'
-func getPerfSupportedEvents() (supportedEvents string, err error) {
-	cmd := exec.Command("perf", "list")
+func getPerfSupportedEvents(perfPath string) (supportedEvents string, err error) {
+	cmd := exec.Command(perfPath, "list")
 	var bytes []byte
 	if bytes, err = cmd.Output(); err != nil {
 		return
@@ -291,8 +281,8 @@ func getPerfSupportedEvents() (supportedEvents string, err error) {
 }
 
 // getRefCyclesSupported() - checks if the ref-cycles event is supported by perf
-func getRefCyclesSupported() (supported bool, output string, err error) {
-	cmd := exec.Command("perf", "stat", "-a", "-e", "ref-cycles", "sleep", ".1")
+func getRefCyclesSupported(perfPath string) (supported bool, output string, err error) {
+	cmd := exec.Command(perfPath, "stat", "-a", "-e", "ref-cycles", "sleep", ".1")
 	var outBuffer, errBuffer bytes.Buffer
 	cmd.Stderr = &errBuffer
 	cmd.Stdout = &outBuffer
@@ -305,8 +295,8 @@ func getRefCyclesSupported() (supported bool, output string, err error) {
 }
 
 // getTMASupported - checks if the TMA events are supported by perf
-func getTMASupported() (supported bool, output string, err error) {
-	cmd := exec.Command("perf", "stat", "-a", "-e", "'{cpu/event=0x00,umask=0x04,period=10000003,name='TOPDOWN.SLOTS'/,cpu/event=0x00,umask=0x81,period=10000003,name='PERF_METRICS.BAD_SPECULATION'/}'", "sleep", ".1")
+func getTMASupported(perfPath string) (supported bool, output string, err error) {
+	cmd := exec.Command(perfPath, "stat", "-a", "-e", "'{cpu/event=0x00,umask=0x04,period=10000003,name='TOPDOWN.SLOTS'/,cpu/event=0x00,umask=0x81,period=10000003,name='PERF_METRICS.BAD_SPECULATION'/}'", "sleep", ".1")
 	var outBuffer, errBuffer bytes.Buffer
 	cmd.Stderr = &errBuffer
 	cmd.Stdout = &outBuffer
@@ -321,16 +311,14 @@ func getTMASupported() (supported bool, output string, err error) {
 	output = errBuffer.String()
 	vals := make(map[string]float64)
 	lines := strings.Split(output, "\n")
+	// example line: "         784333932      TOPDOWN.SLOTS                                                        (59.75%)"
+	re := regexp.MustCompile(`\s+(\d+)\s+(\w*\.*\w*)\s+.*`)
 	for _, line := range lines {
-		if strings.Contains(line, "TOPDOWN.SLOTS") || strings.Contains(line, "PERF_METRICS.BAD_SPECULATION") {
-			fields := strings.Split(strings.TrimSpace(line), " ")
-			if len(fields) >= 2 {
-				var val float64
-				val, err = strconv.ParseFloat(strings.Replace(fields[0], ",", "", -1), 64)
-				if err != nil {
-					return
-				}
-				vals[fields[len(fields)-1]] = val
+		match := re.FindStringSubmatch(line)
+		if match != nil {
+			vals[match[2]], err = strconv.ParseFloat(match[1], 64)
+			if err != nil {
+				return
 			}
 		}
 	}

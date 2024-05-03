@@ -100,7 +100,7 @@ func runConfigCommand(cmd commandfile.Command, args commandfile.Arguments, sudo 
 	} else {
 		result["superuser"] = "false"
 	}
-	stdout, stderr, exitCode, err := runCommand(cmd.Label, cmd.Command, cmd.Superuser, sudo, args.Binpath, args.Timeout)
+	stdout, stderr, exitCode, err := runCommand(cmd.Command, cmd.Superuser, sudo, args.Binpath, args.Timeout)
 	if err != nil {
 		log.Printf("Error: %v Stderr: %s, Exit Code: %d", err, stderr, exitCode)
 	}

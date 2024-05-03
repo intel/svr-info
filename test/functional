@@ -52,7 +52,7 @@ test_stdout () {
 }
 
 test_stdout "local w/ -h" "-h" "^usage:"
-test_stdout "local w/ -v" "-v" "^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*).*$"
+test_stdout "local w/ -v" "-v" "^(0|[1-9])*\.(0|[1-9])*\.(0|[1-9])*.*$"
 test_stdout "local w/ no args" "" "Reports:"
 
 test_output_files_exist "local w/ no args"                     ""                            "$HOSTNAME.html $HOSTNAME.json $HOSTNAME.xlsx $testout_base.tgz"

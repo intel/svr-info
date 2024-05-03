@@ -5,11 +5,12 @@
 #
 
 default: tools
-.PHONY: default tools
+.PHONY: default tools async-profiler avx-turbo cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc pcm perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat
 
-tools: async-profiler cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat
+tools: async-profiler avx-turbo cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci mlc pcm perf spectre-meltdown-checker sshpass stress-ng sysstat turbostat
 	mkdir -p bin
 	cp -R async-profiler bin/
+	cp avx-turbo/avx-turbo bin/
 	cp cpuid/cpuid bin/
 	cp dmidecode/dmidecode bin/
 	cp ethtool/ethtool bin/
@@ -20,6 +21,7 @@ tools: async-profiler cpuid dmidecode ethtool fio flamegraph ipmitool lshw lspci
 	cp lspci/lspci bin/
 	cp lspci/pci.ids.gz bin/
 	-cp mlc/mlc bin/
+	cp pcm/build/bin/pcm-tpmi bin/
 	cp linux/tools/perf/perf bin/
 	cp spectre-meltdown-checker/spectre-meltdown-checker.sh bin/
 	cp sshpass/sshpass bin/
@@ -39,8 +41,21 @@ endif
 	tar -xf async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64.tar.gz && mv async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64 async-profiler
 endif
 
+# if you change the commit, check the sed hacks below
+AVXTURBO_COMMIT := 4a04a45
+avx-turbo:
+ifeq ("$(wildcard avx-turbo)","")
+	git clone https://github.com/travisdowns/avx-turbo.git
+else
+	cd avx-turbo && git checkout master && git pull
+endif
+	cd avx-turbo && git checkout $(AVXTURBO_COMMIT)
+	cd avx-turbo && sed -i 281s/"read_msr_cur_cpu(MSR_IA32_MPERF/read_msr(1, MSR_IA32_MPERF"/ avx-turbo.cpp
+	cd avx-turbo && sed -i 282s/"read_msr_cur_cpu(MSR_IA32_APERF/read_msr(1, MSR_IA32_APERF"/ avx-turbo.cpp
+	cd avx-turbo && make
+
 # if you change the version, check the sed hacks below
-CPUID_VERSION := 20230614
+CPUID_VERSION := 20240409
 cpuid:
 ifeq ("$(wildcard cpuid)","")
 ifeq ("$(wildcard cpuid-$(CPUID_VERSION).src.tar.gz)","")
@@ -50,8 +65,6 @@ endif
 endif	
 	# gcc 4.8 doesn't support -Wimplicit-fallthrough option
 	cd cpuid && sed -i s/"-Wimplicit-fallthrough"/""/ Makefile
-	# modifies one line to short-circuit output due to potential infinite loop on some systems
-	cd cpuid && sed -i 11242s/"(words\[WORD_EAX\] & 0xfff)"/0/ cpuid.c
 	cd cpuid && make
 
 dmidecode:
@@ -128,16 +141,26 @@ endif
 
 mlc:
 ifeq ("$(wildcard mlc)","")
-	-if [ ${CI} = true ]; then\
-		git clone https://${CELINE_ACCESS_TOKEN}@github.com/intel-innersource/applications.benchmarking.cpu-micros.mlc.git mlc; \
-	else\
-		git clone git@github.com:intel-innersource/applications.benchmarking.cpu-micros.mlc.git mlc; \
-	fi
+ifndef GITHUB_ACCESS_TOKEN
+	-git clone git@github.com:intel-innersource/applications.benchmarking.cpu-micros.mlc.git mlc
+else
+	-git clone https://${GITHUB_ACCESS_TOKEN}@github.com/intel-innersource/applications.benchmarking.cpu-micros.mlc.git mlc
+endif
 else
 	cd mlc && git checkout master && git pull
 endif
 	-cd mlc && git checkout v3.11
 	-cd mlc && make version && STATIC="-static" make
+
+pcm:
+ifeq ("$(wildcard pcm)","")
+	git clone --recursive https://github.com/intel/pcm.git
+else
+	cd pcm && git checkout master && git pull
+endif
+	mkdir -p pcm/build
+	cd pcm/build &&	cmake ..
+	cd pcm/build && cmake --build .
 
 perf: linux-source
 	cd linux/tools/perf && make LDFLAGS=-static
@@ -202,6 +225,7 @@ reset:
 	cd ipmitool && git clean -fdx && git reset --hard
 	cd lshw && git clean -fdx && git reset --hard
 	cd lspci && git clean -fdx && git reset --hard
+	cd pcm && git clean -fdx && git reset --hard
 	-cd mlc && git clean -fdx && git reset --hard
 	cd linux/tools/perf && make clean
 	cd spectre-meltdown-checker
@@ -220,5 +244,5 @@ libcrypt.tar.gz:
 libs: glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 
 oss-source: reset libs
-	tar --exclude-vcs -czf oss_source.tgz async-profiler/ cpuid/ dmidecode/ ethtool/ fio/ flamegraph/ ipmitool/ lshw/ lspci/ linux/tools/perf spectre-meltdown-checker/ sshpass/ stress-ng/ sysstat/ linux/tools/power/x86/turbostat glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
+	tar --exclude-vcs -czf oss_source.tgz async-profiler/ cpuid/ dmidecode/ ethtool/ fio/ flamegraph/ ipmitool/ lshw/ lspci/ pcm/ linux/tools/perf spectre-meltdown-checker/ sshpass/ stress-ng/ sysstat/ linux/tools/power/x86/turbostat glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 	md5sum oss_source.tgz > oss_source.tgz.md5

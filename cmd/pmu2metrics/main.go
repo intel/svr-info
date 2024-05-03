@@ -106,6 +106,7 @@ type CmdLineArgs struct {
 	metricFilePath    string
 	perfPrintInterval int // milliseconds
 	perfMuxInterval   int // milliseconds
+	rawFilePath       string
 	// debugging options
 	metadataFilePath string
 	perfStatFilePath string
@@ -282,7 +283,7 @@ func getPerfPath() (path string, tempDir string, err error) {
 }
 
 // getPerfCommandArgs assembles the arguments that will be passed to Linux perf
-func getPerfCommandArgs(pid string, cgroups []string, timeout int, eventGroups []GroupDefinition, metadata Metadata) (args []string, err error) {
+func getPerfCommandArgs(pid string, cgroups []string, timeout int, eventGroups []GroupDefinition) (args []string, err error) {
 	// -I: print interval in ms
 	// -j: json formatted event output
 	args = append(args, "stat", "-I", fmt.Sprintf("%d", gCmdLineArgs.perfPrintInterval), "-j")
@@ -316,10 +317,10 @@ func getPerfCommandArgs(pid string, cgroups []string, timeout int, eventGroups [
 
 // getPerfCommands is responsible for assembling the command(s) that will be
 // executed to collect event data
-func getPerfCommands(perfPath string, eventGroups []GroupDefinition, metadata Metadata) (processes []Process, perfCommands []*exec.Cmd, err error) {
+func getPerfCommands(perfPath string, eventGroups []GroupDefinition) (processes []Process, perfCommands []*exec.Cmd, err error) {
 	if gCmdLineArgs.scope == ScopeSystem {
 		var args []string
-		if args, err = getPerfCommandArgs("", []string{}, gCmdLineArgs.timeout, eventGroups, metadata); err != nil {
+		if args, err = getPerfCommandArgs("", []string{}, gCmdLineArgs.timeout, eventGroups); err != nil {
 			err = fmt.Errorf("failed to assemble perf args: %v", err)
 			return
 		}
@@ -347,7 +348,7 @@ func getPerfCommands(perfPath string, eventGroups []GroupDefinition, metadata Me
 		}
 		for _, process := range processes {
 			var args []string
-			if args, err = getPerfCommandArgs(process.pid, []string{}, timeout, eventGroups, metadata); err != nil {
+			if args, err = getPerfCommandArgs(process.pid, []string{}, timeout, eventGroups); err != nil {
 				err = fmt.Errorf("failed to assemble perf args: %v", err)
 				return
 			}
@@ -370,7 +371,7 @@ func getPerfCommands(perfPath string, eventGroups []GroupDefinition, metadata Me
 			return
 		}
 		var args []string
-		if args, err = getPerfCommandArgs("", cgroups, -1, eventGroups, metadata); err != nil {
+		if args, err = getPerfCommandArgs("", cgroups, -1, eventGroups); err != nil {
 			err = fmt.Errorf("failed to assemble perf args: %v", err)
 			return
 		}
@@ -500,7 +501,7 @@ func doWork(perfPath string, eventGroupDefinitions []GroupDefinition, metricDefi
 		var perfCommands []*exec.Cmd
 		var processes []Process
 		// One perf command when in system or cgroup scope and one or more perf commands when in process scope.
-		if processes, perfCommands, err = getPerfCommands(perfPath, eventGroupDefinitions, metadata); err != nil {
+		if processes, perfCommands, err = getPerfCommands(perfPath, eventGroupDefinitions); err != nil {
 			break
 		}
 		beginTimestamp := time.Now()
@@ -675,6 +676,8 @@ Advanced Options
         Event collection interval in milliseconds (default: 5000).
   -x, --muxinterval <milliseconds>
         Multiplexing interval in milliseconds (default: 125).
+  -R, --raw <output file name>
+        Write metadata and raw perf event data to this file (default: None).
 `
 	fmt.Printf(args, strings.Join(ScopeOptions, ", "), strings.Join(GranularityOptions, ", "), strings.Join(FormatOptions, ", "), strings.Join(SummaryOptions, ", "))
 	fmt.Println()
@@ -703,7 +706,7 @@ Post-processing Examples
 }
 
 // short options used:
-// c, e, f, F, g, h, i, l, m, M, n, o, p, P, r, s, S, t, v, vv, V, x.
+// c, e, f, F, g, h, i, l, m, M, n, o, p, P, r, R, s, S, t, v, vv, V, x.
 
 // configureArgs defines and parses the arguments accepted by the application
 func configureArgs() (err error) {
@@ -760,6 +763,8 @@ func configureArgs() (err error) {
 	flag.IntVar(&gCmdLineArgs.perfPrintInterval, "interval", 5000, "")
 	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "x", 125, "")
 	flag.IntVar(&gCmdLineArgs.perfMuxInterval, "muxinterval", 125, "")
+	flag.StringVar(&gCmdLineArgs.rawFilePath, "R", "", "")
+	flag.StringVar(&gCmdLineArgs.rawFilePath, "raw", "", "")
 	// debugging options (not shown in help/usage)
 	flag.StringVar(&gCmdLineArgs.metadataFilePath, "metadata", "", "")
 	flag.StringVar(&gCmdLineArgs.perfStatFilePath, "perfstat", "", "")
@@ -881,7 +886,7 @@ func mainReturnWithCode() int {
 	if gCmdLineArgs.syslog {
 		// log to syslog (/var/log/syslog)
 		var logwriter *syslog.Writer
-		if logwriter, err = syslog.New(syslog.LOG_NOTICE, filepath.Base(os.Args[0])); err != nil {
+		if logwriter, err = syslog.New(syslog.LOG_NOTICE|syslog.LOG_USER, filepath.Base(os.Args[0])); err != nil {
 			log.Printf("Failed to connect system log daemon: %v", err)
 			return exitError
 		}
@@ -899,14 +904,12 @@ func mainReturnWithCode() int {
 		fmt.Println(gVersion)
 		return exitNoError
 	}
-	if gCmdLineArgs.verbose {
-		log.Printf("Starting up %s, version: %s, arguments: %s",
-			filepath.Base(os.Args[0]),
-			gVersion,
-			strings.Join(os.Args[1:], " "),
-		)
-		defer log.Printf("Shutting down %s", filepath.Base(os.Args[0]))
-	}
+	log.Printf("Starting up %s, version: %s, arguments: %s",
+		filepath.Base(os.Args[0]),
+		gVersion,
+		strings.Join(os.Args[1:], " "),
+	)
+	defer log.Printf("Shutting down %s", filepath.Base(os.Args[0]))
 	sigChannel := make(chan os.Signal, 1)
 	signal.Notify(sigChannel, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -936,6 +939,17 @@ func mainReturnWithCode() int {
 	if gCmdLineArgs.outputFormat != FormatCSV {
 		fmt.Print("Loading.")
 	}
+	var perfPath, tempDir string
+	if perfPath, tempDir, err = getPerfPath(); err != nil {
+		log.Printf("failed to find perf: %v", err)
+		return exitError
+	}
+	if tempDir != "" {
+		defer os.RemoveAll(tempDir)
+	}
+	if gCmdLineArgs.verbose {
+		log.Printf("Using perf at %s.", perfPath)
+	}
 	var metadata Metadata
 	if gCmdLineArgs.metadataFilePath != "" { // testing/debugging flow
 		if metadata, err = LoadMetadataFromFile(gCmdLineArgs.metadataFilePath); err != nil {
@@ -943,7 +957,7 @@ func mainReturnWithCode() int {
 			return exitError
 		}
 	} else {
-		if metadata, err = LoadMetadata(); err != nil {
+		if metadata, err = LoadMetadata(perfPath); err != nil {
 			if os.Geteuid() != 0 {
 				log.Println("Elevated permissions required, try again as root user or with sudo.")
 				return exitError
@@ -952,8 +966,12 @@ func mainReturnWithCode() int {
 			return exitError
 		}
 	}
-	if gCmdLineArgs.verbose {
-		log.Printf("%s", metadata)
+	log.Printf("%s", metadata)
+	if gCmdLineArgs.rawFilePath != "" {
+		if err = metadata.WriteJSONToFile(gCmdLineArgs.rawFilePath); err != nil {
+			log.Printf("failed to write metadata to file: %v", err)
+			return exitError
+		}
 	}
 	if gCmdLineArgs.outputFormat != FormatCSV {
 		fmt.Print(".")
@@ -1004,28 +1022,22 @@ func mainReturnWithCode() int {
 			log.Println("Elevated permissions required, try again as root user or with sudo.")
 			return exitError
 		}
-		var perfPath, tempDir string
-		if perfPath, tempDir, err = getPerfPath(); err != nil {
-			log.Printf("failed to find perf: %v", err)
-			return exitError
-		}
-		if tempDir != "" {
-			defer os.RemoveAll(tempDir)
-		}
-		if gCmdLineArgs.verbose {
-			log.Printf("Using perf at %s.", perfPath)
-		}
-		var nmiWatchdog string
-		if nmiWatchdog, err = GetNMIWatchdog(); err != nil {
+		var nmiWatchdogEnabled bool
+		if nmiWatchdogEnabled, err = NMIWatchdogEnabled(); err != nil {
 			log.Printf("failed to retrieve NMI watchdog status: %v", err)
 			return exitError
 		}
-		if nmiWatchdog != "0" {
-			if err = SetNMIWatchdog("0"); err != nil {
-				log.Printf("failed to set NMI watchdog status: %v", err)
+		if nmiWatchdogEnabled {
+			if err = DisableNMIWatchdog(); err != nil {
+				log.Printf("failed to disable NMI watchdog: %v", err)
 				return exitError
 			}
-			defer SetNMIWatchdog(nmiWatchdog)
+			defer func() {
+				err = EnableNMIWatchdog()
+				if err != nil {
+					log.Printf("failed to enable NMI watchdog: %v", err)
+				}
+			}()
 		}
 		if gCmdLineArgs.outputFormat != FormatCSV {
 			fmt.Print(".")

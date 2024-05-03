@@ -1,0 +1,272 @@
+##########
+# CPUS - used to lookup architecture and channels by family, model, and stepping
+#    The model and stepping fields will be interpreted as regular expressions
+#    An empty stepping field means 'any' stepping
+
+##########
+# Intel Core CPUs
+##########
+#  Haswell
+- architecture: HSW
+  family: 6
+  model: (50|69|70)
+  stepping:
+  channels: 2
+  threads: 2
+
+#  Broadwell
+- architecture: BDW
+  family: 6
+  model: (61|71)
+  stepping:
+  channels: 2
+  threads: 2
+
+#  Skylake
+- architecture: SKL
+  family: 6
+  model: (78|94)
+  stepping:
+  channels: 2
+  threads: 2
+
+#  Kabylake
+- architecture: KBL
+  family: 6
+  model: (142|158)
+  stepping: 9
+  channels: 2
+  threads: 2
+
+#  Coffelake
+- architecture: CFL
+  family: 6
+  model: (142|158)
+  stepping: (10|11|12|13)
+  channels: 2
+  threads: 2
+
+#  Rocket Lake
+- architecture: RKL
+  family: 6
+  model: 167
+  stepping:
+  channels: 2
+  threads: 2
+
+#  Tiger Lake
+- architecture: TGL
+  family: 6
+  model: (140|141)
+  stepping:
+  channels: 2
+  threads: 2
+
+#  Alder Lake
+- architecture: ADL
+  family: 6
+  model: (151|154)
+  stepping:
+  channels: 2
+  threads: 2
+
+##########
+# Intel Xeon CPUs
+##########
+#  Haswell
+- architecture: HSX
+  family: 6
+  model: 63
+  stepping:
+  channels: 4
+  threads: 2
+
+#  Broadwell
+- architecture: BDX
+  family: 6
+  model: (79|86)
+  stepping:
+  channels: 4
+  threads: 2
+
+#  Skylake
+- architecture: SKX
+  family: 6
+  model: 85
+  stepping: (0|1|2|3|4)
+  channels: 6
+  threads: 2
+
+#  Cascadelake
+- architecture: CLX
+  family: 6
+  model: 85
+  stepping: (5|6|7)
+  channels: 6
+  threads: 2
+
+#  Cooperlake
+- architecture: CPX
+  family: 6
+  model: 85
+  stepping: 11
+  channels: 6
+  threads: 2
+
+#  Icelake
+- architecture: ICX
+  family: 6
+  model: (106|108)
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Sapphire Rapids - generic
+- architecture: SPR
+  family: 6
+  model: 143
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Sapphire Rapids MCC
+- architecture: SPR_MCC
+  family: 6
+  model: 143
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Sapphire Rapids XCC
+- architecture: SPR_XCC
+  family: 6
+  model: 143
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Emerald Rapids - generic
+- architecture: EMR
+  family: 6
+  model: 207
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Emerald Rapids MCC
+- architecture: EMR_MCC
+  family: 6
+  model: 207
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Emerald Rapids XCC
+- architecture: EMR_XCC
+  family: 6
+  model: 207
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Sierra Forest
+- architecture: SRF
+  family: 6
+  model: 175
+  stepping:
+  channels: 8
+  threads: 1
+
+#  Granite Rapids - generic
+- architecture: GNR
+  family: 6
+  model: 173
+  stepping:
+  channels:
+  threads: 2
+
+#  Granite Rapids - SP (MCC/LCC)
+- architecture: GNR_X1
+  family: 6
+  model: 173
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Granite Rapids - SP (XCC)
+- architecture: GNR_X2
+  family: 6
+  model: 173
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Granite Rapids - AP (UCC)
+- architecture: GNR_X3
+  family: 6
+  model: 173
+  stepping:
+  channels: 12
+  threads: 2
+
+##########
+# AMD CPUs
+##########
+#  Naples
+- architecture: Zen
+  family: 23
+  model: 1
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Rome
+- architecture: Zen2
+  family: 23
+  model: 49
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Milan
+- architecture: Zen3
+  family: 25
+  model: 1
+  stepping:
+  channels: 8
+  threads: 2
+
+#  Genoa
+- architecture: Zen4
+  family: 25
+  model: 17
+  stepping:
+  channels: 12
+  threads: 2
+
+#  Bergamo
+- architecture: Zen4C
+  family: 25
+  model: 160
+  stepping:
+  channels: 12
+  threads: 2
+
+##########
+# ARM CPUs
+#########
+#  AWS Graviton 2
+- architecture: Neoverse N1
+  family:
+  model: 1
+  stepping: r3p1
+  channels: 8
+  threads: 1
+
+#  AWS Graviton 3
+- architecture: Neoverse V1
+  family:
+  model: 1
+  stepping: r1p1
+  channels: 8
+  threads: 1

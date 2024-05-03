@@ -342,7 +342,7 @@ func parseEventJSON(rawEvent []byte) (event Event, err error) {
 	if event.Value, err = strconv.ParseFloat(event.CounterValue, 64); err != nil {
 		event.Value = math.NaN()
 		err = nil
-		if gCmdLineArgs.verbose {
+		if gCmdLineArgs.veryVerbose {
 			log.Printf("failed to parse event value: %s", rawEvent)
 		}
 	}

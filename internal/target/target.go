@@ -366,16 +366,6 @@ func (t *RemoteTarget) RemoveDirectory(targetDir string) (err error) {
 	return
 }
 
-func (t *LocalTarget) GetHost() (host string) {
-	host = t.host
-	return
-}
-
-func (t *RemoteTarget) GetHost() (host string) {
-	host = t.host
-	return
-}
-
 func (t *LocalTarget) GetName() (host string) {
 	host = t.host //local target host and name are same field
 	return

@@ -76,7 +76,7 @@ func customizeCommandYAML(cmdTemplate []byte, cmdLineArgs *CmdLineArgs, targetBi
 		if cmd.Label == "lspci -vmm" {
 			cmd.Command = fmt.Sprintf("lspci -i %s -vmm", filepath.Join(targetBinDir, "pci.ids.gz"))
 		}
-		optionalCommands := []string{"Memory MLC Bandwidth", "Memory MLC Loaded Latency Test", "stress-ng cpu methods", "Measure Turbo Frequencies", "CPU Turbo Test", "CPU Idle", "fio", "profile", "analyze"}
+		optionalCommands := []string{"Memory MLC Bandwidth", "Memory MLC Loaded Latency Test", "stress-ng cpu methods", "avx-turbo", "CPU Turbo Test", "CPU Idle", "fio", "profile", "analyze"}
 		if !stringInList(cmd.Label, optionalCommands) {
 			if !cmdLineArgs.noConfig {
 				cmd.Run = true
@@ -87,7 +87,7 @@ func customizeCommandYAML(cmdTemplate []byte, cmdLineArgs *CmdLineArgs, targetBi
 				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "memory") || strings.Contains(cmdLineArgs.benchmark, "all")
 			} else if cmd.Label == "stress-ng cpu methods" {
 				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "cpu") || strings.Contains(cmdLineArgs.benchmark, "all")
-			} else if cmd.Label == "Measure Turbo Frequencies" {
+			} else if cmd.Label == "avx-turbo" {
 				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "frequency") || strings.Contains(cmdLineArgs.benchmark, "all")
 			} else if cmd.Label == "CPU Turbo Test" || cmd.Label == "CPU Idle" {
 				cmd.Run = strings.Contains(cmdLineArgs.benchmark, "turbo") || strings.Contains(cmdLineArgs.benchmark, "all")

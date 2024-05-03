@@ -191,6 +191,14 @@ commands:
     superuser: true
     modprobe: msr
     parallel: true
+  - label: uncore max frequency tpmi
+    command: pcm-tpmi 2 0x18 -d -b 8:14
+    superuser: true
+    parallel: true
+  - label: uncore min frequency tpmi
+    command: pcm-tpmi 2 0x18 -d -b 15:21
+    superuser: true
+    parallel: true
   - label: active idle utilization point
     command: |-
         msrwrite 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
@@ -434,17 +442,10 @@ commands:
             printf "%s " "$method"
             stress-ng --cpu 0 -t 1 --cpu-method "$method" --metrics-brief 2>&1 | tail -1 | awk '{print $9}'
         done
-  - label: Measure Turbo Frequencies
+  - label: avx-turbo
     command: |-
-        # measure turbo frequencies using calcfreq utility
         num_cores_per_socket=$( lscpu | grep 'Core(s) per socket:' | head -1 | awk '{print $4}' )
-        # if the first two 'core ids' from /proc/cpuinfo are the same then use -a1 option
-        cpu_0_core_id=$( grep 'core id' /proc/cpuinfo | head -1 | awk '{print $4}' )
-        cpu_1_core_id=$( grep 'core id' /proc/cpuinfo | head -2 | tail -1 | awk '{print $4}' )
-        if [ "$cpu_0_core_id" -eq "$cpu_1_core_id" ]; then
-            calcfreq_option="-a1"
-        fi
-        calcfreq -t"$num_cores_per_socket" "$calcfreq_option"
+        avx-turbo --min-threads=1 --max-threads=$num_cores_per_socket --test scalar_iadd,avx128_fma,avx256_fma,avx512_fma
     superuser: true
     modprobe: msr
   - label: CPU Turbo Test

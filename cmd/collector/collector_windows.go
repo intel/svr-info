@@ -12,7 +12,7 @@ import (
 	"github.com/intel/svr-info/internal/target"
 )
 
-func runCommand(label string, command string, superuser bool, sudoPassword string, binPath string, timeout int) (stdout string, stderr string, exitCode int, err error) {
+func runCommand(command string, superuser bool, sudoPassword string, binPath string, timeout int) (stdout string, stderr string, exitCode int, err error) {
 	if superuser {
 		return runSuperUserCommand(command, sudoPassword, timeout)
 	}

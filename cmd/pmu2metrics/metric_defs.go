@@ -39,7 +39,7 @@ func LoadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics 
 			return
 		}
 	} else {
-		if bytes, err = resources.ReadFile(filepath.Join("resources", fmt.Sprintf("%s_metrics.json", metadata.Microarchitecture))); err != nil {
+		if bytes, err = resources.ReadFile(filepath.Join("resources", fmt.Sprintf("%s_metrics.json", strings.ToLower(metadata.Microarchitecture)[:3]))); err != nil {
 			return
 		}
 	}

@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/intel/svr-info/internal/core"
-	"github.com/intel/svr-info/internal/cpu"
+	"github.com/intel/svr-info/internal/cpudb"
 	"github.com/intel/svr-info/internal/util"
 )
 
@@ -160,21 +160,22 @@ func getSources(inputFilePaths []string) (sources []*Source) {
 }
 
 func getReports(sources []*Source, reportTypes []string, outputDir string) (reportFilePaths []string, err error) {
-	cpusInfo, err := cpu.NewCPU()
-	if err != nil {
+	CPUdb := cpudb.NewCPUDB()
+	if CPUdb == nil {
+		err = fmt.Errorf("failed to load CPU database")
 		return
 	}
-	configReport := NewConfigurationReport(sources, cpusInfo)
-	briefReport := NewBriefReport(sources, configReport, cpusInfo)
+	configReport := NewConfigurationReport(sources, *CPUdb)
+	briefReport := NewBriefReport(sources, configReport, *CPUdb)
 	profileReport := NewProfileReport(sources)
 	analyzeReport := NewAnalyzeReport(sources)
-	benchmarkReport := NewBenchmarkReport(sources)
-	insightsReport := NewInsightsReport(sources, configReport, briefReport, profileReport, benchmarkReport, analyzeReport, cpusInfo)
+	benchmarkReport := NewBenchmarkReport(sources, *CPUdb)
+	insightsReport := NewInsightsReport(sources, configReport, briefReport, profileReport, benchmarkReport, analyzeReport, *CPUdb)
 	var rpt ReportGenerator
 	for _, rt := range reportTypes {
 		switch rt {
 		case "html":
-			rpt = newReportGeneratorHTML(outputDir, cpusInfo, configReport, insightsReport, profileReport, benchmarkReport, analyzeReport)
+			rpt = newReportGeneratorHTML(outputDir, *CPUdb, configReport, insightsReport, profileReport, benchmarkReport, analyzeReport)
 		case "json":
 			if gCmdLineArgs.internalJSON {
 				rpt = newReportGeneratorJSON(outputDir, configReport, insightsReport, profileReport, benchmarkReport, analyzeReport)

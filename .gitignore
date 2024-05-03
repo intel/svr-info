@@ -1,6 +1,5 @@
 dist
 bin
-build.*
 cmd/orchestrator/targets
 cmd/orchestrator/orchestrator_20*
 cmd/orchestrator/resources/collector_deps_*
@@ -8,5 +7,6 @@ cmd/orchestrator/resources/collector
 cmd/orchestrator/resources/collector_arm64
 cmd/orchestrator/resources/sshpass
 cmd/orchestrator/resources/reporter
-cmd/pmu2metrics/scripts
 cmd/reporter/debug_out/*
+*.log
+targets
