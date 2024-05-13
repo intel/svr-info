@@ -415,10 +415,15 @@ commands:
   - label: Memory MLC Loaded Latency Test
     command: |-
         # measure memory loaded latency
+        #  need at least 2 GB (2,097,152 KB) of huge pages per NUMA node
+        min_kb=2097152
         numa_nodes=$( lscpu | grep "NUMA node(s):" | awk '{print $3}' )
+        size_huge_pages_kb=$( cat /proc/meminfo | grep Hugepagesize | awk '{print $2}' )
         orig_num_huge_pages=$( cat /proc/sys/vm/nr_hugepages )
-        new_num_huge_pages=$( echo "$numa_nodes * 1000" | bc )
-        echo $new_num_huge_pages > /proc/sys/vm/nr_hugepages
+        needed_num_huge_pages=$( echo "$numa_nodes * $min_kb / $size_huge_pages_kb" | bc )
+        if [ $needed_num_huge_pages -gt $orig_num_huge_pages ]; then
+          echo $needed_num_huge_pages > /proc/sys/vm/nr_hugepages
+        fi
         mlc --loaded_latency
         echo $orig_num_huge_pages > /proc/sys/vm/nr_hugepages
     modprobe: msr
@@ -426,10 +431,15 @@ commands:
   - label: Memory MLC Bandwidth
     command: |-
         # measure memory bandwidth matrix
+        #  need at least 2 GB (2,097,152 KB) of huge pages per NUMA node
+        min_kb=2097152
         numa_nodes=$( lscpu | grep "NUMA node(s):" | awk '{print $3}' )
+        size_huge_pages_kb=$( cat /proc/meminfo | grep Hugepagesize | awk '{print $2}' )
         orig_num_huge_pages=$( cat /proc/sys/vm/nr_hugepages )
-        new_num_huge_pages=$( echo "$numa_nodes * 1000" | bc )
-        echo $new_num_huge_pages > /proc/sys/vm/nr_hugepages
+        needed_num_huge_pages=$( echo "$numa_nodes * $min_kb / $size_huge_pages_kb" | bc )
+        if [ $needed_num_huge_pages -gt $orig_num_huge_pages ]; then
+          echo $needed_num_huge_pages > /proc/sys/vm/nr_hugepages
+        fi
         mlc --bandwidth_matrix
         echo $orig_num_huge_pages > /proc/sys/vm/nr_hugepages
     modprobe: msr
