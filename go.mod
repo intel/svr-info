@@ -31,7 +31,7 @@ require (
 	github.com/xuri/excelize/v2 v2.8.1
 	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8
 	golang.org/x/term v0.20.0
-	golang.org/x/text v0.14.0
+	golang.org/x/text v0.15.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
