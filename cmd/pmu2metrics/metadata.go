@@ -307,7 +307,7 @@ func getTMASupported(perfPath string) (supported bool, output string, err error)
 		err = nil
 		return
 	}
-	// event values being equal is 2nd indication that these events are not (properly) supported
+	// event values being zero or equal to each other is 2nd indication that these events are not (properly) supported
 	output = errBuffer.String()
 	vals := make(map[string]float64)
 	lines := strings.Split(output, "\n")
@@ -318,11 +318,14 @@ func getTMASupported(perfPath string) (supported bool, output string, err error)
 		if match != nil {
 			vals[match[2]], err = strconv.ParseFloat(match[1], 64)
 			if err != nil {
-				return
+				// this should never happen
+				panic("failed to parse float")
 			}
 		}
 	}
-	supported = !(vals["TOPDOWN.SLOTS"] == vals["PERF_METRICS.BAD_SPECULATION"])
+	topDownSlots := vals["TOPDOWN.SLOTS"]
+	badSpeculation := vals["PERF_METRICS.BAD_SPECULATION"]
+	supported = topDownSlots != badSpeculation && topDownSlots != 0 && badSpeculation != 0
 	return
 }
 
