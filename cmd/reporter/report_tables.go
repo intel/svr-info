@@ -1442,31 +1442,34 @@ func newDiskTable(sources []*Source, category TableCategory) (table *Table) {
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
+	var infoFields = []string{"NAME", "MODEL", "SIZE", "MOUNTPOINT", "FSTYPE", "RQ-SIZE", "MIN-IO", "FIRMWARE", "ADDR", "NUMA"}
 	for _, source := range sources {
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
-				"NAME",
-				"MODEL",
-				"SIZE",
-				"MOUNTPOINT",
-				"FSTYPE",
-				"RQ-SIZE",
-				"MIN-IO",
-				"FwRev",
+				"Name",
+				"Model",
+				"Size",
+				"Mount Point",
+				"Type",
+				"Request Queue Size",
+				"Minimum I/O Size",
+				"Firmware Version",
+				"PCIe Address",
+				"NUMA Node",
 			},
 			Values: [][]string{},
 		}
-		for i, line := range source.getCommandOutputLines("lsblk -r -o") {
-			fields := strings.Split(line, " ")
-			if len(fields) != len(hostValues.ValueNames)-1 {
-				log.Printf("lsblk field count mismatch: %s", strings.Join(fields, ","))
+		for i, line := range source.getCommandOutputLines("disk info") {
+			fields := strings.Split(line, "|")
+			if len(fields) != len(infoFields) {
+				log.Printf("field count mismatch: %s", strings.Join(fields, ","))
 				continue
 			}
 			if i == 0 { // headers are in the first line
 				for idx, field := range fields {
-					if field != hostValues.ValueNames[idx] {
-						log.Printf("lsblk field name mismatch: %s", strings.Join(fields, ","))
+					if field != infoFields[idx] {
+						log.Printf("field name mismatch: %s", strings.Join(fields, ","))
 						break
 					}
 				}
@@ -1475,7 +1478,9 @@ func newDiskTable(sources []*Source, category TableCategory) (table *Table) {
 			// clean up the model name
 			fields[1] = strings.ReplaceAll(fields[1], `\x20`, " ")
 			fields[1] = strings.TrimSpace(fields[1])
-			fields = append(fields, source.getDiskFwRev(fields[0]))
+			if fields[7] == "" {
+				fields[7] = source.getDiskFwRev(fields[0])
+			}
 			hostValues.Values = append(hostValues.Values, fields)
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)

@@ -60,8 +60,30 @@ commands:
   - label: maximum frequency
     command: cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq
     parallel: true
-  - label: lsblk -r -o
-    command: lsblk -r -o NAME,MODEL,SIZE,MOUNTPOINT,FSTYPE,RQ-SIZE,MIN-IO -e7 -e1
+  - label: disk info
+    command: |-
+        echo "NAME|MODEL|SIZE|MOUNTPOINT|FSTYPE|RQ-SIZE|MIN-IO|FIRMWARE|ADDR|NUMA"
+        lsblk -r -o NAME,MODEL,SIZE,MOUNTPOINT,FSTYPE,RQ-SIZE,MIN-IO -e7 -e1 \
+        | cut -d' ' -f1,2,3,4,5,6,7 --output-delimiter='|' \
+        | while IFS='|' read -r name model size mountpoint fstype rqsize minio ;
+        do
+            fw=""
+            numa=""
+            addr=""
+            if [ "$name" = "NAME" ] ; then
+                continue
+            fi
+            if [ -f /sys/block/"$name"/device/firmware_rev ] ; then
+                fw=$( cat /sys/block/"$name"/device/firmware_rev )
+            fi
+            if [ -f /sys/block/"$name"/device/numa_node ] ; then
+                numa=$( cat /sys/block/"$name"/device/numa_node )
+            fi
+            if [ -f /sys/block/"$name"/device/address ] ; then
+                addr=$( cat /sys/block/"$name"/device/address )
+            fi
+            echo "$name|$model|$size|$mountpoint|$fstype|$rqsize|$minio|$fw|$addr|$numa"
+        done
     parallel: true
   - label: df -h
     command: df -h
