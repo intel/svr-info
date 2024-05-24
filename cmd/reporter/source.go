@@ -1013,7 +1013,7 @@ func (s *Source) getTDP() (val string) {
 	msrHex := s.getCommandOutputLine("rdmsr 0x610")
 	msr, err := strconv.ParseInt(msrHex, 16, 0)
 	if err == nil && msr != 0 {
-		val = fmt.Sprint(msr/8) + " watts"
+		val = fmt.Sprint(msr/8) + "W"
 	}
 	return
 }

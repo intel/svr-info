@@ -40,9 +40,9 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
-	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, HT On/Off?, Turbo On/Off?, NUMA xxx,  Integrated Accelerators Available [used]: xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of <mm/dd/yy>.
-	template := "1-node, %sx %s, %s cores, HT %s, Turbo %s, NUMA %s, Integrated Accelerators Available [used]: %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of %s."
-	var date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
+	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, 100W TDP, HT On/Off?, Turbo On/Off?, NUMA xxx,  Integrated Accelerators Available [used]: xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of <mm/dd/yy>.
+	template := "1-node, %sx %s, %s cores, %s TDP, HT %s, Turbo %s, NUMA %s, Integrated Accelerators Available [used]: %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of %s."
+	var date, socketCount, cpuModel, coreCount, tdp, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
 
 	for sourceIdx, source := range fullReport.Sources {
 		var hostValues = HostValues{
@@ -56,6 +56,10 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		socketCount, _ = fullReport.findTable("CPU").getValue(sourceIdx, "Sockets")
 		cpuModel, _ = fullReport.findTable("CPU").getValue(sourceIdx, "CPU Model")
 		coreCount, _ = fullReport.findTable("CPU").getValue(sourceIdx, "Cores per Socket")
+		tdp, _ = fullReport.findTable("Power").getValue(sourceIdx, "TDP")
+		if tdp == "" {
+			tdp = "?"
+		}
 		hyperthreading, _ := fullReport.findTable("CPU").getValue(sourceIdx, "Hyperthreading")
 		if hyperthreading == "Enabled" {
 			htOnOff = "On"
@@ -83,7 +87,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		disks, _ = tableDiskSummary.getValue(sourceIdx, "Disk")
 		operatingSystem, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "OS")
 		kernelVersion, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "Kernel")
-		claim := fmt.Sprintf(template, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, accelerators, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion, date)
+		claim := fmt.Sprintf(template, socketCount, cpuModel, coreCount, tdp, htOnOff, turboOnOff, numaNodes, accelerators, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion, date)
 		hostValues.Values = append(hostValues.Values, []string{claim})
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
