@@ -121,11 +121,11 @@ test:
 
 format_check:
 	@echo "Running gofmt -l to check for code formatting issues..."
-	@test -z $(shell gofmt -l -s internal/commandfile/ internal/core/ internal/cpu/ internal/progress/ internal/target/ cmd/orchestrator/ cmd/collector/ cmd/reporter/ cmd/pmu2metrics/ cmd/msrread/ cmd/msrwrite/) || { echo "[WARN] Formatting issues detected. Resolve with 'make format'"; exit 1; }
+	@test -z $(shell gofmt -l -s ./) || { echo "[WARN] Formatting issues detected. Resolve with 'make format'"; exit 1; }
 	@echo "gofmt detected no issues"
 
 check: format_check
 
 format:
-	gofmt -l -w -s internal/commandfile/ internal/core/ internal/cpu/ internal/progress/ internal/target/ orchestrator/ collector/ reporter/ pmu2metrics/ rdmsr/ wrmsr/
+	gofmt -l -w -s ./
 
