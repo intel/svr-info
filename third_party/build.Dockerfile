@@ -4,7 +4,7 @@
 # build image (third_party directory):
 #   $ GITHUB_ACCESS_TOKEN=<your token>
 #   $ docker image build -f build.Dockerfile --tag svr-info-third-party:v1 .
-FROM ubuntu:16.04 as builder
+FROM ubuntu:18.04 as builder
 ENV LANG en_US.UTF-8
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y apt-utils locales wget curl git netcat-openbsd software-properties-common jq zip unzip

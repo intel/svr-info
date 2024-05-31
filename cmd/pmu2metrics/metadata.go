@@ -314,6 +314,8 @@ func getTMASupported(perfPath string) (supported bool, output string, err error)
 	// example line: "         784333932      TOPDOWN.SLOTS                                                        (59.75%)"
 	re := regexp.MustCompile(`\s+(\d+)\s+(\w*\.*\w*)\s+.*`)
 	for _, line := range lines {
+		// count may include commas as thousands separators, remove them
+		line := strings.ReplaceAll(line, ",", "")
 		match := re.FindStringSubmatch(line)
 		if match != nil {
 			vals[match[2]], err = strconv.ParseFloat(match[1], 64)
