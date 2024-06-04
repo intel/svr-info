@@ -1446,7 +1446,7 @@ func newDiskTable(sources []*Source, category TableCategory) (table *Table) {
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
-	var infoFields = []string{"NAME", "MODEL", "SIZE", "MOUNTPOINT", "FSTYPE", "RQ-SIZE", "MIN-IO", "FIRMWARE", "ADDR", "NUMA"}
+	var infoFields = []string{"NAME", "MODEL", "SIZE", "MOUNTPOINT", "FSTYPE", "RQ-SIZE", "MIN-IO", "FIRMWARE", "ADDR", "NUMA", "LINKSPEED", "LINKWIDTH", "MAXLINKSPEED", "MAXLINKWIDTH"}
 	for _, source := range sources {
 		var hostValues = HostValues{
 			Name: source.getHostname(),
@@ -1461,6 +1461,10 @@ func newDiskTable(sources []*Source, category TableCategory) (table *Table) {
 				"Firmware Version",
 				"PCIe Address",
 				"NUMA Node",
+				"Link Speed",
+				"Link Width",
+				"Max Link Speed",
+				"Max Link Width",
 			},
 			Values: [][]string{},
 		}
@@ -1480,8 +1484,8 @@ func newDiskTable(sources []*Source, category TableCategory) (table *Table) {
 				continue
 			}
 			// clean up the model name
-			fields[1] = strings.ReplaceAll(fields[1], `\x20`, " ")
 			fields[1] = strings.TrimSpace(fields[1])
+			// if we don't have a firmware version, try to get it from another source
 			if fields[7] == "" {
 				fields[7] = source.getDiskFwRev(fields[0])
 			}

@@ -62,27 +62,49 @@ commands:
     parallel: true
   - label: disk info
     command: |-
-        echo "NAME|MODEL|SIZE|MOUNTPOINT|FSTYPE|RQ-SIZE|MIN-IO|FIRMWARE|ADDR|NUMA"
+        echo "NAME|MODEL|SIZE|MOUNTPOINT|FSTYPE|RQ-SIZE|MIN-IO|FIRMWARE|ADDR|NUMA|LINKSPEED|LINKWIDTH|MAXLINKSPEED|MAXLINKWIDTH"
         lsblk -r -o NAME,MODEL,SIZE,MOUNTPOINT,FSTYPE,RQ-SIZE,MIN-IO -e7 -e1 \
         | cut -d' ' -f1,2,3,4,5,6,7 --output-delimiter='|' \
         | while IFS='|' read -r name model size mountpoint fstype rqsize minio ;
         do
-            fw=""
-            numa=""
-            addr=""
+            # skip the lsblk output header
             if [ "$name" = "NAME" ] ; then
                 continue
             fi
-            if [ -f /sys/block/"$name"/device/firmware_rev ] ; then
-                fw=$( cat /sys/block/"$name"/device/firmware_rev )
+            fw=""
+            addr=""
+            numa=""
+            curlinkspeed=""
+            curlinkwidth=""
+            maxlinkspeed=""
+            maxlinkwidth=""
+            # replace \x20 with space in model
+            model=${model//\\x20/ }
+            # if name refers to an NVMe device e.g, nvme0n1 - nvme99n99
+            if [[ $name =~ ^(nvme[0-9]+)n[0-9]+$ ]]; then
+                # get the name without the namespace
+                nvme=${BASH_REMATCH[1]}
+                if [ -f /sys/block/"$name"/device/firmware_rev ] ; then
+                    fw=$( cat /sys/block/"$name"/device/firmware_rev )
+                fi
+                if [ -f /sys/block/"$name"/device/address ] ; then
+                    addr=$( cat /sys/block/"$name"/device/address )
+                fi
+                if [ -d "/sys/block/$name/device/${nvme}" ]; then
+                    numa=$( cat /sys/block/"$name"/device/"${nvme}"/numa_node )
+                    curlinkspeed=$( cat /sys/block/"$name"/device/"${nvme}"/device/current_link_speed )
+                    curlinkwidth=$( cat /sys/block/"$name"/device/"${nvme}"/device/current_link_width )
+                    maxlinkspeed=$( cat /sys/block/"$name"/device/"${nvme}"/device/max_link_speed )
+                    maxlinkwidth=$( cat /sys/block/"$name"/device/"${nvme}"/device/max_link_width )
+                elif [ -d "/sys/block/$name/device/device" ]; then
+                    numa=$( cat /sys/block/"$name"/device/device/numa_node )
+                    curlinkspeed=$( cat /sys/block/"$name"/device/device/current_link_speed )
+                    curlinkwidth=$( cat /sys/block/"$name"/device/device/current_link_width )
+                    maxlinkspeed=$( cat /sys/block/"$name"/device/device/max_link_speed )
+                    maxlinkwidth=$( cat /sys/block/"$name"/device/device/max_link_width )
+                fi
             fi
-            if [ -f /sys/block/"$name"/device/numa_node ] ; then
-                numa=$( cat /sys/block/"$name"/device/numa_node )
-            fi
-            if [ -f /sys/block/"$name"/device/address ] ; then
-                addr=$( cat /sys/block/"$name"/device/address )
-            fi
-            echo "$name|$model|$size|$mountpoint|$fstype|$rqsize|$minio|$fw|$addr|$numa"
+            echo "$name|$model|$size|$mountpoint|$fstype|$rqsize|$minio|$fw|$addr|$numa|$curlinkspeed|$curlinkwidth|$maxlinkspeed|$maxlinkwidth"
         done
     parallel: true
   - label: df -h
