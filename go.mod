@@ -30,7 +30,7 @@ require (
 	github.com/intel/svr-info/internal/util v0.0.0-00010101000000-000000000000
 	github.com/xuri/excelize/v2 v2.8.1
 	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8
-	golang.org/x/term v0.20.0
+	golang.org/x/term v0.21.0
 	golang.org/x/text v0.16.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -68,7 +68,7 @@ require (
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
