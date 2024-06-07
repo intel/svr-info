@@ -1614,6 +1614,7 @@ func newPMUTable(sources []*Source, category TableCategory) (table *Table) {
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
+				"PMU Driver Version",
 				"cpu_cycles",
 				"instructions",
 				"ref_cycles",
@@ -1629,12 +1630,13 @@ func newPMUTable(sources []*Source, category TableCategory) (table *Table) {
 			},
 			Values: [][]string{},
 		}
-		lines := source.getCommandOutputLines("msrbusy")
 		var vals []string
+		vals = append(vals, source.getCommandOutputLine("pmu driver version"))
+		lines := source.getCommandOutputLines("msrbusy")
 		if len(lines) == 2 {
-			vals = strings.Split(lines[1], "|")
+			vals = append(vals, strings.Split(lines[1], "|")...)
 		} else {
-			for range hostValues.ValueNames {
+			for i := 0; i < len(hostValues.ValueNames)-1; i++ {
 				vals = append(vals, "")
 			}
 		}

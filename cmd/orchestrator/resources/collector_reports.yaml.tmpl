@@ -286,6 +286,10 @@ commands:
     superuser: true
     modprobe: msr
     parallel: true
+  - label: pmu driver version
+    command: dmesg | grep -A 1 "Intel PMU driver" | tail -1 | awk '{print $NF}'
+    superuser: true
+    parallel: true
   - label: lspci -vmm
     command: lspci -vmm
     parallel: true
