@@ -16,7 +16,7 @@ Data can be collected from a single remote target by providing the login credent
 ./svr-info -ip 10.100.222.123 -user fred -key ~/.ssh/id_rsa
 ```
 ## Multiple Targets
-Data can be collected from multiple remote targets by placing login credentials of the targets in a 'targets' file and then referencing that targets file on the svr-info command line. See the included [targets.example](src/orchestrator/targets.example) file for the required file format.
+Data can be collected from multiple remote targets by placing login credentials of the targets in a 'targets' file and then referencing that targets file on the svr-info command line. See the included [targets.example](cmd/orchestrator/targets.example) file for the required file format.
 ```
 ./svr-info -targets <targets file>
 ```
