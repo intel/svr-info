@@ -243,19 +243,77 @@ commands:
     command: pcm-tpmi 2 0x18 -d -b 15:21
     superuser: true
     parallel: true
-  - label: active idle utilization point
+  - label: efficiency latency control
     command: |-
-        msrwrite 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
-        msrread -f 15:8 0xb1 # ACTIVE IDLE - UTILIZATION POINT
+      # Script derived from bhs-power-mode script in Intel PCM repository
+      # Run the pcm-tpmi command to determine I/O and compute dies
+      output=$(pcm-tpmi 2 0x10 -d -b 26:26)
+
+      # Parse the output to build lists of I/O and compute dies
+      io_dies=()
+      compute_dies=()
+      declare -A die_types
+      while read -r line; do
+          if [[ $line == *"instance 0"* ]]; then
+              die=$(echo "$line" | grep -oP 'entry \K[0-9]+')
+              if [[ $line == *"value 1"* ]]; then
+                  die_types[$die]="IO"
+            io_dies+=("$die")
+              elif [[ $line == *"value 0"* ]]; then
+                  die_types[$die]="Compute"
+            compute_dies+=("$die")
+              fi
+          fi
+      done <<< "$output"
+
+      # Function to extract and calculate metrics from the value
+      extract_and_print_metrics() {
+          local value=$1
+          local socket_id=$2
+          local die=$3
+          local die_type=${die_types[$die]}
+
+          # Extract bits and calculate metrics
+          local min_ratio=$(( (value >> 15) & 0x7F ))
+          local max_ratio=$(( (value >> 8) & 0x7F ))
+          local eff_latency_ctrl_ratio=$(( (value >> 22) & 0x7F ))
+          local eff_latency_ctrl_low_threshold=$(( (value >> 32) & 0x7F ))
+          local eff_latency_ctrl_high_threshold=$(( (value >> 40) & 0x7F ))
+          local eff_latency_ctrl_high_threshold_enable=$(( (value >> 39) & 0x1 ))
+
+          # Convert to MHz or percentage
+          min_ratio=$(( min_ratio * 100 ))
+          max_ratio=$(( max_ratio * 100 ))
+          eff_latency_ctrl_ratio=$(( eff_latency_ctrl_ratio * 100 ))
+          eff_latency_ctrl_low_threshold=$(( (eff_latency_ctrl_low_threshold * 100) / 127 ))
+          eff_latency_ctrl_high_threshold=$(( (eff_latency_ctrl_high_threshold * 100) / 127 ))
+
+          # Print metrics
+          echo -n "$socket_id,$die,$die_type,$min_ratio,$max_ratio,$eff_latency_ctrl_ratio,"
+          if [ $die_type == "IO" ] ; then
+              echo "$eff_latency_ctrl_low_threshold,$eff_latency_ctrl_high_threshold,$eff_latency_ctrl_high_threshold_enable"
+          else
+              echo ",,"
+          fi
+      }
+
+      # Print CSV header
+      echo "Socket,Die,Type,MIN_RATIO (MHz),MAX_RATIO (MHz),ELC_RATIO (MHz),ELC_LOW_THRESHOLD (%),ELC_HIGH_THRESHOLD (%),ELC_HIGH_THRESHOLD_ENABLE"
+
+      # Iterate over all dies and run pcm-tpmi for each to get the metrics
+      for die in "${!die_types[@]}"; do
+          output=$(pcm-tpmi 2 0x18 -d -e "$die")
+
+          # Parse the output and extract metrics for each socket
+          while read -r line; do
+              if [[ $line == *"Read value"* ]]; then
+                  value=$(echo "$line" | grep -oP 'value \K[0-9]+')
+                  socket_id=$(echo "$line" | grep -oP 'instance \K[0-9]+')
+                  extract_and_print_metrics "$value" "$socket_id" "$die"
+              fi
+          done <<< "$output"
+      done
     superuser: true
-    modprobe: msr
-    parallel: true
-  - label: active idle mesh frequency
-    command: |-
-        msrwrite 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
-        msrread -f 7:0 0xb1 # ACTIVE IDLE - MESH FREQUENCY
-    superuser: true
-    modprobe: msr
     parallel: true
   - label: ipmitool sel time get
     command: LC_ALL=C ipmitool sel time get

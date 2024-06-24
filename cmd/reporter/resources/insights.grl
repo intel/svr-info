@@ -22,7 +22,8 @@ rule DIMMSpeed {
 		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "CLX" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 2933) ||
 		(Report.GetValue("Configuration", "CPU", "Microarchitecture") == "ICX" && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 3200) ||
 		(Report.GetValue("Configuration", "CPU", "Microarchitecture").Contains("SPR") && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 4800) ||
-		(Report.GetValue("Configuration", "CPU", "Microarchitecture").Contains("EMR") && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 5600)
+		(Report.GetValue("Configuration", "CPU", "Microarchitecture").Contains("EMR") && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 5600) ||
+		(Report.GetValue("Configuration", "CPU", "Microarchitecture").Contains("SRF") && Report.GetValueAsInt("Configuration", "DIMM", "Speed") < 6400)
 		)
 	then
 		Report.AddInsight(
@@ -118,6 +119,18 @@ rule FrequencyGovernor {
 		"Consider setting the CPU frequency governors to 'performance'."
 		);
 		Retract("FrequencyGovernor");
+}
+
+rule ELCMode {
+	when
+		Report.GetValuesFromColumn("Configuration", "Efficiency Latency Control", 9).Count("Default") != 0 ||
+		Report.GetValuesFromColumn("Configuration", "Efficiency Latency Control", 9).Count("Custom") != 0
+	then
+		Report.AddInsight(
+			"Efficiency Latency Control mode is not set to 'Latency Optimized' on all IO dies.",
+			"Consider setting the Efficiency Latency Control mode to 'Latency Optimized'."
+			);
+		Retract("ELCMode");
 }
 
 rule TurboBoost {

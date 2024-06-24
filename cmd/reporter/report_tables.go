@@ -1018,6 +1018,49 @@ func newPowerTable(sources []*Source, category TableCategory) (table *Table) {
 	return
 }
 
+func newEfficiencyLatencyControlTable(sources []*Source, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "Efficiency Latency Control",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, source := range sources {
+		var hostValues = HostValues{
+			Name: source.getHostname(),
+		}
+		hostValues.ValueNames, hostValues.Values = source.getEfficiencyLatencyControl()
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
+
+func newEfficiencyLatencyControlSummaryTable(tableELC *Table, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "Efficiency Latency Control",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, srcHv := range tableELC.AllHostValues {
+		var hostValues = HostValues{
+			Name:       srcHv.Name,
+			ValueNames: []string{"ELC Mode"},
+		}
+		var modes []string
+		for _, row := range srcHv.Values {
+			if row[9] != "" {
+				modes = append(modes, row[9])
+			}
+		}
+		hostValues.Values = make([][]string, 1)
+		hostValues.Values[0] = append(hostValues.Values[0], strings.Join(modes, ", "))
+		if hostValues.Values[0][0] == "" {
+			hostValues.Values[0][0] = "N/A"
+		}
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
+
 func newGPUTable(sources []*Source, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "GPU",

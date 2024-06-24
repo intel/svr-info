@@ -1246,3 +1246,40 @@ func (s *Source) getPMUMetrics() (orderedMetricNames []string, timeStamps []floa
 	}
 	return
 }
+
+func (s *Source) getEfficiencyLatencyControl() (valueNames []string, values [][]string) {
+	output := strings.Join(s.getCommandOutputLines("efficiency latency control"), "\n")
+	if output == "" {
+		return
+	}
+	r := csv.NewReader(strings.NewReader(output))
+	rows, err := r.ReadAll()
+	if err != nil {
+		log.Printf("failed to read ELC CSV")
+		return
+	}
+	if len(rows) < 2 {
+		log.Printf("no ELC data found")
+		return
+	}
+	// first row is headers / valueNames
+	valueNames = rows[0]
+	// 2nd-nth rows are values
+	values = rows[1:]
+	// let's add an interpretation of the values in an additional column
+	valueNames = append(valueNames, "Mode")
+	for i, row := range values {
+		var mode string
+		if row[2] == "IO" {
+			if row[5] == "0" && row[6] == "0" && row[7] == "0" {
+				mode = "Latency Optimized"
+			} else if row[5] == "800" && row[6] == "10" && row[7] == "94" {
+				mode = "Default"
+			} else {
+				mode = "Custom"
+			}
+		}
+		values[i] = append(values[i], mode)
+	}
+	return
+}
