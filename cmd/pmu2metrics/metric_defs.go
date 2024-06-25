@@ -39,7 +39,14 @@ func LoadMetricDefinitions(metricDefinitionOverridePath string, selectedMetrics 
 			return
 		}
 	} else {
-		if bytes, err = resources.ReadFile(filepath.Join("resources", fmt.Sprintf("%s_metrics.json", strings.ToLower(metadata.Microarchitecture)[:3]))); err != nil {
+		uarch := strings.ToLower(metadata.Microarchitecture)[:3]
+		// use alternate events/metrics when TMA fixed counters are not supported
+		alternate := ""
+		if (uarch == "icx" || uarch == "spr" || uarch == "emr") && !metadata.FixedCounterTMASupported {
+			alternate = "_nofixedtma"
+		}
+		metricFileName := fmt.Sprintf("%s%s_metrics.json", uarch, alternate)
+		if bytes, err = resources.ReadFile(filepath.Join("resources", metricFileName)); err != nil {
 			return
 		}
 	}
@@ -112,7 +119,7 @@ func ConfigureMetrics(metrics []MetricDefinition, evaluatorFunctions map[string]
 		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CHAS_PER_SOCKET]", chasPerSocket)
 		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[SOCKET_COUNT]", socketCount)
 		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[HYPERTHREADING_ON]", hyperThreadingOn)
-		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[const_thread_count]", threadsPerCore)
+		metrics[metricIdx].Expression = strings.ReplaceAll(metrics[metricIdx].Expression, "[CONST_THREAD_COUNT]", threadsPerCore)
 		// get a list of the variables in the expression
 		metrics[metricIdx].Variables = make(map[string]int)
 		expressionIdx := 0

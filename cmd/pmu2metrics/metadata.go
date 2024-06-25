@@ -28,23 +28,30 @@ import (
 
 // Metadata is the representation of the platform's state and capabilities
 type Metadata struct {
-	CoresPerSocket      int `yaml:"CoresPerSocket"`
-	CPUSocketMap        map[int]int
-	DeviceIDs           map[string][]int `yaml:"DeviceIDs"`
-	Microarchitecture   string           `yaml:"Microarchitecture"`
-	ModelName           string
-	PerfSupportedEvents string `yaml:"PerfSupportedEvents"`
-	RefCyclesSupported  bool   `yaml:"RefCyclesSupported"`
-	SocketCount         int    `yaml:"SocketCount"`
-	ThreadsPerCore      int    `yaml:"ThreadsPerCore"`
-	TMASupported        bool   `yaml:"TMASupported"`
-	TSC                 int    `yaml:"TSC"`
-	TSCFrequencyHz      int    `yaml:"TSCFrequencyHz"`
+	CoresPerSocket           int `yaml:"CoresPerSocket"`
+	CPUSocketMap             map[int]int
+	DeviceIDs                map[string][]int `yaml:"DeviceIDs"`
+	FixedCounterTMASupported bool             `yaml:"FixedCounterTMASupported"`
+	Microarchitecture        string           `yaml:"Microarchitecture"`
+	ModelName                string
+	PerfSupportedEvents      string `yaml:"PerfSupportedEvents"`
+	PMUDriverVersion         string `yaml:"PMUDriverVersion"`
+	RefCyclesSupported       bool   `yaml:"RefCyclesSupported"`
+	SocketCount              int    `yaml:"SocketCount"`
+	ThreadsPerCore           int    `yaml:"ThreadsPerCore"`
+	TSC                      int    `yaml:"TSC"`
+	TSCFrequencyHz           int    `yaml:"TSCFrequencyHz"`
 }
 
 // LoadMetadata - populates and returns a Metadata structure containing state of the
 // system.
 func LoadMetadata(perfPath string) (metadata Metadata, err error) {
+	// PMU driver version
+	metadata.PMUDriverVersion, err = getPMUDriverVersion()
+	if err != nil {
+		err = fmt.Errorf("failed to retrieve PMU driver version: %v", err)
+		return
+	}
 	// reduce startup time by running the three perf commands in their own threads while
 	// the rest of the metadata is being collected
 	slowFuncChannel := make(chan error)
@@ -68,15 +75,15 @@ func LoadMetadata(perfPath string) (metadata Metadata, err error) {
 		}
 		slowFuncChannel <- err
 	}()
-	// TMA
+	// Fixed-counter TMA events
 	go func() {
 		var err error
 		var output string
-		if metadata.TMASupported, output, err = getTMASupported(perfPath); err != nil {
+		if metadata.FixedCounterTMASupported, output, err = getFixedCounterTMASupported(perfPath); err != nil {
 			err = fmt.Errorf("failed to determine if TMA is supported: %v", err)
 		}
-		if !metadata.TMASupported && gCmdLineArgs.verbose {
-			log.Printf("TMA not supported:\n%s\n", output)
+		if !metadata.FixedCounterTMASupported && gCmdLineArgs.verbose {
+			log.Printf("TMA fixed counter not supported:\n%s\n", output)
 		}
 		slowFuncChannel <- err
 	}()
@@ -178,7 +185,8 @@ func (md Metadata) String() string {
 		"TSC Frequency (Hz): %d, "+
 		"TSC: %d, "+
 		"ref-cycles supported: %t, "+
-		"TMA events supported: %t, ",
+		"Fixed Counter TMA events supported: %t, "+
+		"PMU Driver version: %s, ",
 		md.ModelName,
 		md.Microarchitecture,
 		md.SocketCount,
@@ -187,7 +195,8 @@ func (md Metadata) String() string {
 		md.TSCFrequencyHz,
 		md.TSC,
 		md.RefCyclesSupported,
-		md.TMASupported)
+		md.FixedCounterTMASupported,
+		md.PMUDriverVersion)
 	for deviceName, deviceIds := range md.DeviceIDs {
 		var ids []string
 		for _, id := range deviceIds {
@@ -294,8 +303,9 @@ func getRefCyclesSupported(perfPath string) (supported bool, output string, err 
 	return
 }
 
-// getTMASupported - checks if the TMA events are supported by perf
-func getTMASupported(perfPath string) (supported bool, output string, err error) {
+// getFixedCounterTMASupported - checks if the fixed TMA counter events are supported by perf
+// We check for the TOPDOWN.SLOTS and PERF_METRICS.BAD_SPECULATION events as an indicator of support for fixed TMA counter support
+func getFixedCounterTMASupported(perfPath string) (supported bool, output string, err error) {
 	cmd := exec.Command(perfPath, "stat", "-a", "-e", "'{cpu/event=0x00,umask=0x04,period=10000003,name='TOPDOWN.SLOTS'/,cpu/event=0x00,umask=0x81,period=10000003,name='PERF_METRICS.BAD_SPECULATION'/}'", "sleep", ".1")
 	var outBuffer, errBuffer bytes.Buffer
 	cmd.Stderr = &errBuffer
@@ -328,6 +338,18 @@ func getTMASupported(perfPath string) (supported bool, output string, err error)
 	topDownSlots := vals["TOPDOWN.SLOTS"]
 	badSpeculation := vals["PERF_METRICS.BAD_SPECULATION"]
 	supported = topDownSlots != badSpeculation && topDownSlots != 0 && badSpeculation != 0
+	return
+}
+
+func getPMUDriverVersion() (version string, err error) {
+	cmd := exec.Command("sh", "-c", `dmesg | grep -A 1 "Intel PMU driver" | tail -1 | awk '{print $NF}'`)
+	var outBuffer, errBuffer bytes.Buffer
+	cmd.Stderr = &errBuffer
+	cmd.Stdout = &outBuffer
+	if err = cmd.Run(); err != nil {
+		return
+	}
+	version = strings.TrimSpace(outBuffer.String())
 	return
 }
 
