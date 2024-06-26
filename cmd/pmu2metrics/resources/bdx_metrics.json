@@ -346,22 +346,22 @@
     },
     {
         "name": "metric_TMA_......Ports_Utilized_0(%)",
-        "expression": "100 * (([UOPS_EXECUTED.CORE_i1_c1] / [const_thread_count]) if ([const_thread_count] > 1) else ([RS_EVENTS.EMPTY_CYCLES] if ([CYCLE_ACTIVITY.STALLS_TOTAL] - ([IDQ_UOPS_NOT_DELIVERED.CYCLES_0_UOPS_DELIV.CORE] / ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])) ) > 0.1 else 0)) / ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count]) ",
+        "expression": "100 * (([UOPS_EXECUTED.CORE_i1_c1] / [CONST_THREAD_COUNT]) if ([CONST_THREAD_COUNT] > 1) else ([RS_EVENTS.EMPTY_CYCLES] if ([CYCLE_ACTIVITY.STALLS_TOTAL] - ([IDQ_UOPS_NOT_DELIVERED.CYCLES_0_UOPS_DELIV.CORE] / ([CPU_CLK_UNHALTED.THREAD_ANY] / [CONST_THREAD_COUNT])) ) > 0.1 else 0)) / ([CPU_CLK_UNHALTED.THREAD_ANY] / [CONST_THREAD_COUNT]) ",
         "origin": "perfspect"
     },
     {
         "name": "metric_TMA_......Ports_Utilized_1(%)",
-        "expression": "100 * (([UOPS_EXECUTED.CORE_c1] - [UOPS_EXECUTED.CORE_c2]) / [const_thread_count]) / ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])",
+        "expression": "100 * (([UOPS_EXECUTED.CORE_c1] - [UOPS_EXECUTED.CORE_c2]) / [CONST_THREAD_COUNT]) / ([CPU_CLK_UNHALTED.THREAD_ANY] / [CONST_THREAD_COUNT])",
         "origin": "perfspect"
     },
     {
         "name": "metric_TMA_......Ports_Utilized_2(%)",
-        "expression": "100 * (([UOPS_EXECUTED.CORE_c2] - [UOPS_EXECUTED.CORE_c3]) / [const_thread_count]) / ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])",
+        "expression": "100 * (([UOPS_EXECUTED.CORE_c2] - [UOPS_EXECUTED.CORE_c3]) / [CONST_THREAD_COUNT]) / ([CPU_CLK_UNHALTED.THREAD_ANY] / [CONST_THREAD_COUNT])",
         "origin": "perfspect"
     },
     {
         "name": "metric_TMA_......Ports_Utilized_3m(%)",
-        "expression": "100 * ([UOPS_EXECUTED.CORE_c3] / [const_thread_count]) / ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])",
+        "expression": "100 * ([UOPS_EXECUTED.CORE_c3] / [CONST_THREAD_COUNT]) / ([CPU_CLK_UNHALTED.THREAD_ANY] / [CONST_THREAD_COUNT])",
         "origin": "perfspect"
     },
     {
@@ -390,7 +390,7 @@
     },
     {
         "name": "metric_TMA_..Microcode_Sequencer(%)",
-        "expression": "100 * (([UOPS_RETIRED.RETIRE_SLOTS] / [UOPS_ISSUED.ANY]) * [IDQ.MS_UOPS] )/ (4 * ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count]))",
+        "expression": "100 * (([UOPS_RETIRED.RETIRE_SLOTS] / [UOPS_ISSUED.ANY]) * [IDQ.MS_UOPS] )/ (4 * ([CPU_CLK_UNHALTED.THREAD_ANY] / [CONST_THREAD_COUNT]))",
         "origin": "perfspect"
     }
 ]
