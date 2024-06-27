@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -67,11 +68,10 @@ func renderExcelTable(tableHeaders []string, tableValues [][]string, f *excelize
 			for _, header := range tableHeaders {
 				// if possible, convert strings to floats before inserting into the sheet
 				floatValue, err := strconv.ParseFloat(header, 64)
-				if err == nil {
+				if err == nil && !math.IsNaN(floatValue) { // if it's a number, right align it
 					f.SetCellFloat(reportSheetName, cellName(col, row), floatValue, 1, 64)
 					f.SetCellStyle(reportSheetName, cellName(col, row), cellName(col, row), boldAlignLeft)
 				} else {
-
 					f.SetCellStr(reportSheetName, cellName(col, row), header)
 					f.SetCellStyle(reportSheetName, cellName(col, row), cellName(col, row), bold)
 				}
@@ -85,7 +85,7 @@ func renderExcelTable(tableHeaders []string, tableValues [][]string, f *excelize
 				for rowIdx, value := range rowValues {
 					// if possible, convert strings to floats before inserting into the sheet
 					floatValue, err := strconv.ParseFloat(value, 64)
-					if err == nil {
+					if err == nil && !math.IsNaN(floatValue) { // if it's a number, right align it
 						f.SetCellFloat(reportSheetName, cellName(col, row), floatValue, 1, 64)
 						f.SetCellStyle(reportSheetName, cellName(col, row), cellName(col, row), alignLeft)
 					} else {
