@@ -39,7 +39,14 @@ func LoadEventGroups(eventDefinitionOverridePath string, metadata Metadata) (gro
 			return
 		}
 	} else {
-		if file, err = resources.Open(filepath.Join("resources", fmt.Sprintf("%s_events.txt", strings.ToLower(metadata.Microarchitecture)[:3]))); err != nil {
+		uarch := strings.ToLower(metadata.Microarchitecture)[:3]
+		// use alternate events/metrics when TMA fixed counters are not supported
+		alternate := ""
+		if (uarch == "icx" || uarch == "spr" || uarch == "emr") && !metadata.FixedCounterTMASupported {
+			alternate = "_nofixedtma"
+		}
+		eventFileName := fmt.Sprintf("%s%s_events.txt", uarch, alternate)
+		if file, err = resources.Open(filepath.Join("resources", eventFileName)); err != nil {
 			return
 		}
 	}
@@ -56,11 +63,7 @@ func LoadEventGroups(eventDefinitionOverridePath string, metadata Metadata) (gro
 		if event, err = parseEventDefinition(line[:len(line)-1]); err != nil {
 			return
 		}
-		var collectable bool
-		if collectable, err = isCollectableEvent(event, metadata); err != nil {
-			return
-		}
-		if collectable {
+		if isCollectableEvent(event, metadata) {
 			group = append(group, event)
 		} else {
 			uncollectableEvents.Add(event.Name)
@@ -80,20 +83,20 @@ func LoadEventGroups(eventDefinitionOverridePath string, metadata Metadata) (gro
 	}
 	// expand uncore groups for all uncore devices
 	groups, err = expandUncoreGroups(groups, metadata)
-	// "fixed" PMU counters are not supported on (most) IaaS VMs, so we add a separate group
-	if !isUncoreSupported(metadata) {
-		group = GroupDefinition{EventDefinition{Raw: "cpu-cycles"}, EventDefinition{Raw: "instructions"}}
-		if metadata.RefCyclesSupported {
-			group = append(group, EventDefinition{Raw: "ref-cycles"})
-		}
-		groups = append(groups, group)
-		group = GroupDefinition{EventDefinition{Raw: "cpu-cycles:k"}, EventDefinition{Raw: "instructions"}}
-		if metadata.RefCyclesSupported {
-			group = append(group, EventDefinition{Raw: "ref-cycles:k"})
-		}
-		groups = append(groups, group)
+	// // "fixed" PMU counters are not supported on (most) IaaS VMs, so we add a separate group
+	// if !isUncoreSupported(metadata) {
+	// 	group = GroupDefinition{EventDefinition{Raw: "cpu-cycles"}, EventDefinition{Raw: "instructions"}}
+	// 	if metadata.RefCyclesSupported {
+	// 		group = append(group, EventDefinition{Raw: "ref-cycles"})
+	// 	}
+	// 	groups = append(groups, group)
+	// 	group = GroupDefinition{EventDefinition{Raw: "cpu-cycles:k"}, EventDefinition{Raw: "instructions"}}
+	// 	if metadata.RefCyclesSupported {
+	// 		group = append(group, EventDefinition{Raw: "ref-cycles:k"})
+	// 	}
+	// 	groups = append(groups, group)
 
-	}
+	// }
 	if uncollectableEvents.Cardinality() != 0 && gCmdLineArgs.verbose {
 		log.Printf("Uncollectable events: %s", uncollectableEvents)
 	}
@@ -113,16 +116,14 @@ func isUncoreSupported(metadata Metadata) (supported bool) {
 }
 
 // isCollectableEvent confirms if given event can be collected on the platform
-func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable bool, err error) {
-	collectable = true
-	// TMA
-	if !metadata.TMASupported && (event.Name == "TOPDOWN.SLOTS" || strings.HasPrefix(event.Name, "PERF_METRICS.")) {
-		collectable = false
-		return
+func isCollectableEvent(event EventDefinition, metadata Metadata) bool {
+	// fixed-counter TMA
+	if !metadata.FixedCounterTMASupported && (event.Name == "TOPDOWN.SLOTS" || strings.HasPrefix(event.Name, "PERF_METRICS.")) {
+		return false
 	}
 	// short-circuit for cpu events
 	if event.Device == "cpu" && !strings.HasPrefix(event.Name, "OCR") {
-		return
+		return true
 	}
 	// short-circuit off-core response events
 	if event.Device == "cpu" &&
@@ -130,15 +131,14 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 		isUncoreSupported(metadata) &&
 		!(gCmdLineArgs.scope == ScopeProcess) &&
 		!(gCmdLineArgs.scope == ScopeCgroup) {
-		return
+		return true
 	}
 	// exclude uncore events when
 	// - their corresponding device is not found
 	// - not in system-wide collection scope
 	if event.Device != "cpu" && event.Device != "" {
 		if gCmdLineArgs.scope == ScopeProcess || gCmdLineArgs.scope == ScopeCgroup {
-			collectable = false
-			return
+			return false
 		}
 		deviceExists := false
 		for uncoreDeviceName := range metadata.DeviceIDs {
@@ -148,33 +148,29 @@ func isCollectableEvent(event EventDefinition, metadata Metadata) (collectable b
 			}
 		}
 		if !deviceExists {
-			collectable = false
+			return false
 		} else if !strings.Contains(event.Raw, "umask") && !strings.Contains(event.Raw, "event") {
-			collectable = false
+			return false
 		}
-		return
+		return true
 	}
 	// if we got this far, event.Device is empty
 	// is ref-cycles supported?
 	if !metadata.RefCyclesSupported && strings.Contains(event.Name, "ref-cycles") {
-		collectable = false
-		return
+		return false
 	}
 	// no uncore means we're on a VM where cpu fixed cycles are likely not supported
-	if strings.Contains(event.Name, "cpu-cycles") && !isUncoreSupported(metadata) {
-		collectable = false
-		return
-	}
+	// if strings.Contains(event.Name, "cpu-cycles") && !isUncoreSupported(metadata) {
+	// 	return false
+	// }
 	// no cstate and power events when collecting at process or cgroup scope
 	if (gCmdLineArgs.scope == ScopeProcess || gCmdLineArgs.scope == ScopeCgroup) &&
 		(strings.Contains(event.Name, "cstate_") || strings.Contains(event.Name, "power/energy")) {
-		collectable = false
-		return
+		return false
 	}
 	// finally, if it isn't in the perf list output, it isn't collectable
 	name := strings.Split(event.Name, ":")[0]
-	collectable = strings.Contains(metadata.PerfSupportedEvents, name)
-	return
+	return strings.Contains(metadata.PerfSupportedEvents, name)
 }
 
 // parseEventDefinition parses one line from the event definition file into a representative structure

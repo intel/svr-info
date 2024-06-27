@@ -16,7 +16,7 @@ Data can be collected from a single remote target by providing the login credent
 ./svr-info -ip 10.100.222.123 -user fred -key ~/.ssh/id_rsa
 ```
 ## Multiple Targets
-Data can be collected from multiple remote targets by placing login credentials of the targets in a 'targets' file and then referencing that targets file on the svr-info command line. See the included [targets.example](src/orchestrator/targets.example) file for the required file format.
+Data can be collected from multiple remote targets by placing login credentials of the targets in a 'targets' file and then referencing that targets file on the svr-info command line. See the included [targets.example](cmd/orchestrator/targets.example) file for the required file format.
 ```
 ./svr-info -targets <targets file>
 ```
@@ -50,19 +50,13 @@ For example, Intel® Memory Latency Checker can be downloaded from here: [MLC](h
 We welcome bug reports, questions and feature requests. Please submit via Github Issues.
 ## Building svr-info
 Due to the large number of build dependencies required, a Docker container-based build environment is provided. Assuming your system has Docker installed (instructions not provided here), the following steps are required to build svr-info:
-- `builder/build_docker_image` creates the docker image
-- `builder/build` runs `make dist` in the container
+- `builder/build` creates the necessary docker images and runs make in the container
 After a successful build, you will find the build output in the `dist` folder.
 
-Other builder commands available:
-- `builder/test` runs the automated tests in the container via `make test`
-- `builder/shell` starts the container and provides a bash prompt useful for debugging build problems
 ### Incremental Builds
-After a complete build using the build container, you can perform incremental builds directly on your host assuming dependencies are installed there. This can make the code/build/test cycle much quicker than rebuilding everything using the Docker container. You can look at the Dockerfile in the builder directory to get the build dependencies for everything or, more likely, you only need go(lang) so install the latest and get to work.
+After a complete build using the build container, you can perform incremental builds directly on your host assuming dependencies are installed there. This can make the code/build/test cycle much quicker than rebuilding everything using the Docker container.
 
-From the project's root directory, you can use the makefile. There are quite a few targets. Most useful may be `make apps`.  This will build all the go-based apps.
-
-If you are working on a single go-based app. You can run `go build` in the app's source directory to build it.
+If you are working on a single go-based app. You can run `go build` to build it.
 
 ### Including Additional Collection Tools In The Build
 Additional data collection tools can be built into the svr-info distribution by placing binaries in the bin directory before starting the build.

@@ -45,6 +45,7 @@ func NewConfigurationReport(sources []*Source, CPUdb cpudb.CPUDB) (report *Repor
 
 			newPowerTable(sources, Power),
 			newUncoreTable(sources, CPUdb, Power),
+			newEfficiencyLatencyControlTable(sources, Power),
 		}...,
 	)
 
@@ -94,6 +95,7 @@ func NewBriefReport(sources []*Source, fullReport *Report, CPUdb cpudb.CPUDB) (r
 	tableDiskSummary := newDiskSummaryTable(fullReport.findTable("Disk"), Storage)
 	tableNicSummary := newNICSummaryTable(fullReport.findTable("NIC"), Network)
 	tableAcceleratorSummary := newAcceleratorSummaryTable(fullReport.findTable("Accelerator"), CPUCategory)
+	tableEfficiencyLatencyControlSummary := newEfficiencyLatencyControlSummaryTable(fullReport.findTable("Efficiency Latency Control"), Power)
 	report.Tables = append(report.Tables,
 		[]*Table{
 			fullReport.findTable("Host"),
@@ -108,6 +110,7 @@ func NewBriefReport(sources []*Source, fullReport *Report, CPUdb cpudb.CPUDB) (r
 			newBIOSSummaryTable(fullReport.findTable("BIOS"), Software),
 			newOperatingSystemBriefTable(fullReport.findTable("Operating System"), Software),
 			fullReport.findTable("Power"),
+			tableEfficiencyLatencyControlSummary,
 			newVulnerabilitySummaryTable(fullReport.findTable("Vulnerability"), Security),
 			newMarketingClaimTable(fullReport, tableNicSummary, tableDiskSummary, tableAcceleratorSummary, NoCategory),
 		}...,

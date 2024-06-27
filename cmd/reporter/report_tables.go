@@ -40,9 +40,9 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
-	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, HT On/Off?, Turbo On/Off?, NUMA xxx,  Integrated Accelerators Available [used]: xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of <mm/dd/yy>.
-	template := "1-node, %sx %s, %s cores, HT %s, Turbo %s, NUMA %s, Integrated Accelerators Available [used]: %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of %s."
-	var date, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
+	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, 100W TDP, HT On/Off?, Turbo On/Off?, NUMA xxx,  Integrated Accelerators Available [used]: xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of <mm/dd/yy>.
+	template := "1-node, %sx %s, %s cores, %s TDP, HT %s, Turbo %s, NUMA %s, Integrated Accelerators Available [used]: %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of %s."
+	var date, socketCount, cpuModel, coreCount, tdp, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
 
 	for sourceIdx, source := range fullReport.Sources {
 		var hostValues = HostValues{
@@ -56,6 +56,10 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		socketCount, _ = fullReport.findTable("CPU").getValue(sourceIdx, "Sockets")
 		cpuModel, _ = fullReport.findTable("CPU").getValue(sourceIdx, "CPU Model")
 		coreCount, _ = fullReport.findTable("CPU").getValue(sourceIdx, "Cores per Socket")
+		tdp, _ = fullReport.findTable("Power").getValue(sourceIdx, "TDP")
+		if tdp == "" {
+			tdp = "?"
+		}
 		hyperthreading, _ := fullReport.findTable("CPU").getValue(sourceIdx, "Hyperthreading")
 		if hyperthreading == "Enabled" {
 			htOnOff = "On"
@@ -83,7 +87,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		disks, _ = tableDiskSummary.getValue(sourceIdx, "Disk")
 		operatingSystem, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "OS")
 		kernelVersion, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "Kernel")
-		claim := fmt.Sprintf(template, socketCount, cpuModel, coreCount, htOnOff, turboOnOff, numaNodes, accelerators, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion, date)
+		claim := fmt.Sprintf(template, socketCount, cpuModel, coreCount, tdp, htOnOff, turboOnOff, numaNodes, accelerators, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion, date)
 		hostValues.Values = append(hostValues.Values, []string{claim})
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
@@ -1014,6 +1018,49 @@ func newPowerTable(sources []*Source, category TableCategory) (table *Table) {
 	return
 }
 
+func newEfficiencyLatencyControlTable(sources []*Source, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "Efficiency Latency Control",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, source := range sources {
+		var hostValues = HostValues{
+			Name: source.getHostname(),
+		}
+		hostValues.ValueNames, hostValues.Values = source.getEfficiencyLatencyControl()
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
+
+func newEfficiencyLatencyControlSummaryTable(tableELC *Table, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "Efficiency Latency Control",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, srcHv := range tableELC.AllHostValues {
+		var hostValues = HostValues{
+			Name:       srcHv.Name,
+			ValueNames: []string{"ELC Mode"},
+		}
+		var modes []string
+		for _, row := range srcHv.Values {
+			if row[9] != "" {
+				modes = append(modes, row[9])
+			}
+		}
+		hostValues.Values = make([][]string, 1)
+		hostValues.Values[0] = append(hostValues.Values[0], strings.Join(modes, ", "))
+		if hostValues.Values[0][0] == "" {
+			hostValues.Values[0][0] = "N/A"
+		}
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
+
 func newGPUTable(sources []*Source, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "GPU",
@@ -1442,40 +1489,49 @@ func newDiskTable(sources []*Source, category TableCategory) (table *Table) {
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
+	var infoFields = []string{"NAME", "MODEL", "SIZE", "MOUNTPOINT", "FSTYPE", "RQ-SIZE", "MIN-IO", "FIRMWARE", "ADDR", "NUMA", "LINKSPEED", "LINKWIDTH", "MAXLINKSPEED", "MAXLINKWIDTH"}
 	for _, source := range sources {
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
-				"NAME",
-				"MODEL",
-				"SIZE",
-				"MOUNTPOINT",
-				"FSTYPE",
-				"RQ-SIZE",
-				"MIN-IO",
-				"FwRev",
+				"Name",
+				"Model",
+				"Size",
+				"Mount Point",
+				"Type",
+				"Request Queue Size",
+				"Minimum I/O Size",
+				"Firmware Version",
+				"PCIe Address",
+				"NUMA Node",
+				"Link Speed",
+				"Link Width",
+				"Max Link Speed",
+				"Max Link Width",
 			},
 			Values: [][]string{},
 		}
-		for i, line := range source.getCommandOutputLines("lsblk -r -o") {
-			fields := strings.Split(line, " ")
-			if len(fields) != len(hostValues.ValueNames)-1 {
-				log.Printf("lsblk field count mismatch: %s", strings.Join(fields, ","))
+		for i, line := range source.getCommandOutputLines("disk info") {
+			fields := strings.Split(line, "|")
+			if len(fields) != len(infoFields) {
+				log.Printf("field count mismatch: %s", strings.Join(fields, ","))
 				continue
 			}
 			if i == 0 { // headers are in the first line
 				for idx, field := range fields {
-					if field != hostValues.ValueNames[idx] {
-						log.Printf("lsblk field name mismatch: %s", strings.Join(fields, ","))
+					if field != infoFields[idx] {
+						log.Printf("field name mismatch: %s", strings.Join(fields, ","))
 						break
 					}
 				}
 				continue
 			}
 			// clean up the model name
-			fields[1] = strings.ReplaceAll(fields[1], `\x20`, " ")
 			fields[1] = strings.TrimSpace(fields[1])
-			fields = append(fields, source.getDiskFwRev(fields[0]))
+			// if we don't have a firmware version, try to get it from another source
+			if fields[7] == "" {
+				fields[7] = source.getDiskFwRev(fields[0])
+			}
 			hostValues.Values = append(hostValues.Values, fields)
 		}
 		table.AllHostValues = append(table.AllHostValues, hostValues)
@@ -1601,6 +1657,7 @@ func newPMUTable(sources []*Source, category TableCategory) (table *Table) {
 		var hostValues = HostValues{
 			Name: source.getHostname(),
 			ValueNames: []string{
+				"PMU Driver Version",
 				"cpu_cycles",
 				"instructions",
 				"ref_cycles",
@@ -1616,12 +1673,13 @@ func newPMUTable(sources []*Source, category TableCategory) (table *Table) {
 			},
 			Values: [][]string{},
 		}
-		lines := source.getCommandOutputLines("msrbusy")
 		var vals []string
+		vals = append(vals, source.getCommandOutputLine("pmu driver version"))
+		lines := source.getCommandOutputLines("msrbusy")
 		if len(lines) == 2 {
-			vals = strings.Split(lines[1], "|")
+			vals = append(vals, strings.Split(lines[1], "|")...)
 		} else {
-			for range hostValues.ValueNames {
+			for i := 0; i < len(hostValues.ValueNames)-1; i++ {
 				vals = append(vals, "")
 			}
 		}

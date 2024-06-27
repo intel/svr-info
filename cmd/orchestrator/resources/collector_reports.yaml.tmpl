@@ -60,8 +60,52 @@ commands:
   - label: maximum frequency
     command: cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq
     parallel: true
-  - label: lsblk -r -o
-    command: lsblk -r -o NAME,MODEL,SIZE,MOUNTPOINT,FSTYPE,RQ-SIZE,MIN-IO -e7 -e1
+  - label: disk info
+    command: |-
+        echo "NAME|MODEL|SIZE|MOUNTPOINT|FSTYPE|RQ-SIZE|MIN-IO|FIRMWARE|ADDR|NUMA|LINKSPEED|LINKWIDTH|MAXLINKSPEED|MAXLINKWIDTH"
+        lsblk -r -o NAME,MODEL,SIZE,MOUNTPOINT,FSTYPE,RQ-SIZE,MIN-IO -e7 -e1 \
+        | cut -d' ' -f1,2,3,4,5,6,7 --output-delimiter='|' \
+        | while IFS='|' read -r name model size mountpoint fstype rqsize minio ;
+        do
+            # skip the lsblk output header
+            if [ "$name" = "NAME" ] ; then
+                continue
+            fi
+            fw=""
+            addr=""
+            numa=""
+            curlinkspeed=""
+            curlinkwidth=""
+            maxlinkspeed=""
+            maxlinkwidth=""
+            # replace \x20 with space in model
+            model=${model//\\x20/ }
+            # if name refers to an NVMe device e.g, nvme0n1 - nvme99n99
+            if [[ $name =~ ^(nvme[0-9]+)n[0-9]+$ ]]; then
+                # get the name without the namespace
+                nvme=${BASH_REMATCH[1]}
+                if [ -f /sys/block/"$name"/device/firmware_rev ] ; then
+                    fw=$( cat /sys/block/"$name"/device/firmware_rev )
+                fi
+                if [ -f /sys/block/"$name"/device/address ] ; then
+                    addr=$( cat /sys/block/"$name"/device/address )
+                fi
+                if [ -d "/sys/block/$name/device/${nvme}" ]; then
+                    numa=$( cat /sys/block/"$name"/device/"${nvme}"/numa_node )
+                    curlinkspeed=$( cat /sys/block/"$name"/device/"${nvme}"/device/current_link_speed )
+                    curlinkwidth=$( cat /sys/block/"$name"/device/"${nvme}"/device/current_link_width )
+                    maxlinkspeed=$( cat /sys/block/"$name"/device/"${nvme}"/device/max_link_speed )
+                    maxlinkwidth=$( cat /sys/block/"$name"/device/"${nvme}"/device/max_link_width )
+                elif [ -d "/sys/block/$name/device/device" ]; then
+                    numa=$( cat /sys/block/"$name"/device/device/numa_node )
+                    curlinkspeed=$( cat /sys/block/"$name"/device/device/current_link_speed )
+                    curlinkwidth=$( cat /sys/block/"$name"/device/device/current_link_width )
+                    maxlinkspeed=$( cat /sys/block/"$name"/device/device/max_link_speed )
+                    maxlinkwidth=$( cat /sys/block/"$name"/device/device/max_link_width )
+                fi
+            fi
+            echo "$name|$model|$size|$mountpoint|$fstype|$rqsize|$minio|$fw|$addr|$numa|$curlinkspeed|$curlinkwidth|$maxlinkspeed|$maxlinkwidth"
+        done
     parallel: true
   - label: df -h
     command: df -h
@@ -199,19 +243,77 @@ commands:
     command: pcm-tpmi 2 0x18 -d -b 15:21
     superuser: true
     parallel: true
-  - label: active idle utilization point
+  - label: efficiency latency control
     command: |-
-        msrwrite 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
-        msrread -f 15:8 0xb1 # ACTIVE IDLE - UTILIZATION POINT
+      # Script derived from bhs-power-mode script in Intel PCM repository
+      # Run the pcm-tpmi command to determine I/O and compute dies
+      output=$(pcm-tpmi 2 0x10 -d -b 26:26)
+
+      # Parse the output to build lists of I/O and compute dies
+      io_dies=()
+      compute_dies=()
+      declare -A die_types
+      while read -r line; do
+          if [[ $line == *"instance 0"* ]]; then
+              die=$(echo "$line" | grep -oP 'entry \K[0-9]+')
+              if [[ $line == *"value 1"* ]]; then
+                  die_types[$die]="IO"
+            io_dies+=("$die")
+              elif [[ $line == *"value 0"* ]]; then
+                  die_types[$die]="Compute"
+            compute_dies+=("$die")
+              fi
+          fi
+      done <<< "$output"
+
+      # Function to extract and calculate metrics from the value
+      extract_and_print_metrics() {
+          local value=$1
+          local socket_id=$2
+          local die=$3
+          local die_type=${die_types[$die]}
+
+          # Extract bits and calculate metrics
+          local min_ratio=$(( (value >> 15) & 0x7F ))
+          local max_ratio=$(( (value >> 8) & 0x7F ))
+          local eff_latency_ctrl_ratio=$(( (value >> 22) & 0x7F ))
+          local eff_latency_ctrl_low_threshold=$(( (value >> 32) & 0x7F ))
+          local eff_latency_ctrl_high_threshold=$(( (value >> 40) & 0x7F ))
+          local eff_latency_ctrl_high_threshold_enable=$(( (value >> 39) & 0x1 ))
+
+          # Convert to MHz or percentage
+          min_ratio=$(( min_ratio * 100 ))
+          max_ratio=$(( max_ratio * 100 ))
+          eff_latency_ctrl_ratio=$(( eff_latency_ctrl_ratio * 100 ))
+          eff_latency_ctrl_low_threshold=$(( (eff_latency_ctrl_low_threshold * 100) / 127 ))
+          eff_latency_ctrl_high_threshold=$(( (eff_latency_ctrl_high_threshold * 100) / 127 ))
+
+          # Print metrics
+          echo -n "$socket_id,$die,$die_type,$min_ratio,$max_ratio,$eff_latency_ctrl_ratio,"
+          if [ $die_type == "IO" ] ; then
+              echo "$eff_latency_ctrl_low_threshold,$eff_latency_ctrl_high_threshold,$eff_latency_ctrl_high_threshold_enable"
+          else
+              echo ",,"
+          fi
+      }
+
+      # Print CSV header
+      echo "Socket,Die,Type,MIN_RATIO (MHz),MAX_RATIO (MHz),ELC_RATIO (MHz),ELC_LOW_THRESHOLD (%),ELC_HIGH_THRESHOLD (%),ELC_HIGH_THRESHOLD_ENABLE"
+
+      # Iterate over all dies and run pcm-tpmi for each to get the metrics
+      for die in "${!die_types[@]}"; do
+          output=$(pcm-tpmi 2 0x18 -d -e "$die")
+
+          # Parse the output and extract metrics for each socket
+          while read -r line; do
+              if [[ $line == *"Read value"* ]]; then
+                  value=$(echo "$line" | grep -oP 'value \K[0-9]+')
+                  socket_id=$(echo "$line" | grep -oP 'instance \K[0-9]+')
+                  extract_and_print_metrics "$value" "$socket_id" "$die"
+              fi
+          done <<< "$output"
+      done
     superuser: true
-    modprobe: msr
-    parallel: true
-  - label: active idle mesh frequency
-    command: |-
-        msrwrite 0xb0 0x80000694  # must write this value to this MSR before reading 0xb1
-        msrread -f 7:0 0xb1 # ACTIVE IDLE - MESH FREQUENCY
-    superuser: true
-    modprobe: msr
     parallel: true
   - label: ipmitool sel time get
     command: LC_ALL=C ipmitool sel time get
@@ -241,6 +343,10 @@ commands:
     command: msrbusy 0x30a 0x309 0x30b 0x30c 0xc1 0xc2 0xc3 0xc4 0xc5 0xc6 0xc7 0xc8
     superuser: true
     modprobe: msr
+    parallel: true
+  - label: pmu driver version
+    command: dmesg | grep -A 1 "Intel PMU driver" | tail -1 | awk '{print $NF}'
+    superuser: true
     parallel: true
   - label: lspci -vmm
     command: lspci -vmm
@@ -415,10 +521,15 @@ commands:
   - label: Memory MLC Loaded Latency Test
     command: |-
         # measure memory loaded latency
+        #  need at least 2 GB (2,097,152 KB) of huge pages per NUMA node
+        min_kb=2097152
         numa_nodes=$( lscpu | grep "NUMA node(s):" | awk '{print $3}' )
+        size_huge_pages_kb=$( cat /proc/meminfo | grep Hugepagesize | awk '{print $2}' )
         orig_num_huge_pages=$( cat /proc/sys/vm/nr_hugepages )
-        new_num_huge_pages=$( echo "$numa_nodes * 1000" | bc )
-        echo $new_num_huge_pages > /proc/sys/vm/nr_hugepages
+        needed_num_huge_pages=$( echo "$numa_nodes * $min_kb / $size_huge_pages_kb" | bc )
+        if [ $needed_num_huge_pages -gt $orig_num_huge_pages ]; then
+          echo $needed_num_huge_pages > /proc/sys/vm/nr_hugepages
+        fi
         mlc --loaded_latency
         echo $orig_num_huge_pages > /proc/sys/vm/nr_hugepages
     modprobe: msr
@@ -426,10 +537,15 @@ commands:
   - label: Memory MLC Bandwidth
     command: |-
         # measure memory bandwidth matrix
+        #  need at least 2 GB (2,097,152 KB) of huge pages per NUMA node
+        min_kb=2097152
         numa_nodes=$( lscpu | grep "NUMA node(s):" | awk '{print $3}' )
+        size_huge_pages_kb=$( cat /proc/meminfo | grep Hugepagesize | awk '{print $2}' )
         orig_num_huge_pages=$( cat /proc/sys/vm/nr_hugepages )
-        new_num_huge_pages=$( echo "$numa_nodes * 1000" | bc )
-        echo $new_num_huge_pages > /proc/sys/vm/nr_hugepages
+        needed_num_huge_pages=$( echo "$numa_nodes * $min_kb / $size_huge_pages_kb" | bc )
+        if [ $needed_num_huge_pages -gt $orig_num_huge_pages ]; then
+          echo $needed_num_huge_pages > /proc/sys/vm/nr_hugepages
+        fi
         mlc --bandwidth_matrix
         echo $orig_num_huge_pages > /proc/sys/vm/nr_hugepages
     modprobe: msr
@@ -451,7 +567,7 @@ commands:
   - label: CPU Turbo Test
     command: |-
         # measure tdp and all-core turbo frequency
-        ((turbostat -i 2 2>/dev/null &) ; stress-ng --cpu 1 -t 20s 2>&1 ; stress-ng --cpu 0 -t 60s 2>&1 ; pkill -9 -f turbostat) | awk '$0~"stress" {print $0} $1=="Package" || $1=="CPU" || $1=="Core" || $1=="Node" {if(f!=1) print $0;f=1} $1=="-" {print $0}'
+        ((turbostat --show 'Package','Core','Bzy_MHz','PkgWatt','PkgTmp' -i 2 &) ; stress-ng --cpu 1 -t 20s 2>&1 ; stress-ng --cpu 0 -t 60s 2>&1 ; pkill -9 -f turbostat) | awk '$0~"stress" {print $0} $1=="Package" || $1=="CPU" || $1=="Core" || $1=="Node" {if(f!=1) print $0;f=1} $1=="-" {print $0}'
     superuser: true
     modprobe: msr
   - label: CPU Idle
