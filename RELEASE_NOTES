@@ -3,8 +3,21 @@ Intel® System Health Inspector (AKA svr-info)
 
 Fully Supported Platforms
 - Xeon Micro-Architectures: SRF,EMR,SPR,CPX,ICX,CLX,SKX,BDX,HSX
-- Operating Systems: Ubuntu 16.04, 18.04, 20.04, 22.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
+- Operating Systems: Ubuntu 18.04, 20.04, 22.04, 24.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
+
+2.11.0
+Features Added
+- Report Efficiency Latency Control (ELC) configuration on SRF and GNR
+- Report PCIe address, NUMA node, and more for NVME drives
+- Add support for PMU profiling on AWS ICX and SPR VMs ... and SRF servers.
+- Report L3 size on GNR
+- Processor TDP added to Summary field of Excel 'brief' report
+
+Bugs Fixed
+- Fix turbo benchmark on systems with many cores, e.g., SRF
+- Fix memory performance benchmark when run on systems with large huge page sizes
+- Fix Excel report corruption when NaN values result from '-profile pmu'
 
 2.10.0
 Features Added
