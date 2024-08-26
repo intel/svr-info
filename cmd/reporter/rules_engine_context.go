@@ -261,6 +261,8 @@ func (r *RulesEngineContext) CompareMicroarchitecture(x, y string) int {
 		"ICX": 5,
 		"SPR": 6,
 		"EMR": 7,
+		"SRF": 8,
+		"GNR": 8,
 	}
 	var xArch, yArch int
 	var ok bool

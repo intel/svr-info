@@ -22,7 +22,7 @@ tools: async-profiler avx-turbo cpuid dmidecode ethtool fio flamegraph ipmitool 
 	cp lspci/pci.ids.gz bin/
 	-cp mlc/mlc bin/
 	cp pcm/build/bin/pcm-tpmi bin/
-	cp linux/tools/perf/perf bin/
+	cp linux_perf/tools/perf/perf bin/
 	cp spectre-meltdown-checker/spectre-meltdown-checker.sh bin/
 	cp sshpass/sshpass bin/
 	cp stress-ng/stress-ng bin/
@@ -30,7 +30,7 @@ tools: async-profiler avx-turbo cpuid dmidecode ethtool fio flamegraph ipmitool 
 	cp sysstat/iostat bin/
 	cp sysstat/sar bin/
 	cp sysstat/sadc bin/
-	cp linux/tools/power/x86/turbostat/turbostat bin/
+	cp linux_turbostat/tools/power/x86/turbostat/turbostat bin/
 
 ASYNCPROFILER_VERSION := 2.9
 async-profiler:
@@ -41,17 +41,11 @@ endif
 	tar -xf async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64.tar.gz && mv async-profiler-$(ASYNCPROFILER_VERSION)-linux-x64 async-profiler
 endif
 
-# if you change the commit, check the sed hacks below
-AVXTURBO_COMMIT := 4a04a45
 avx-turbo:
 ifeq ("$(wildcard avx-turbo)","")
-	git clone https://github.com/travisdowns/avx-turbo.git
-else
-	cd avx-turbo && git checkout master && git pull
+	git clone https://github.com/harp-intel/avx-turbo.git
 endif
-	cd avx-turbo && git checkout $(AVXTURBO_COMMIT)
-	cd avx-turbo && sed -i 281s/"read_msr_cur_cpu(MSR_IA32_MPERF/read_msr(1, MSR_IA32_MPERF"/ avx-turbo.cpp
-	cd avx-turbo && sed -i 282s/"read_msr_cur_cpu(MSR_IA32_APERF/read_msr(1, MSR_IA32_APERF"/ avx-turbo.cpp
+	cd avx-turbo && git checkout threadcpuid && git pull
 	cd avx-turbo && make
 
 # if you change the version, check the sed hacks below
@@ -159,11 +153,14 @@ else
 	cd pcm && git checkout master && git pull
 endif
 	mkdir -p pcm/build
-	cd pcm/build &&	cmake ..
+	cd pcm/build &&	cmake -DNO_ASAN=1 ..
 	cd pcm/build && cmake --build .
 
-perf: linux-source
-	cd linux/tools/perf && make LDFLAGS=-static
+PERF_LINUX_VERSION := 6.1.52
+perf:
+	wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(PERF_LINUX_VERSION).tar.xz
+	tar -xf linux-$(PERF_LINUX_VERSION).tar.xz && mv linux-$(PERF_LINUX_VERSION)/ linux_perf/
+	cd linux_perf/tools/perf && make LDFLAGS="-static --static"
 
 spectre-meltdown-checker:
 ifeq ("$(wildcard spectre-meltdown-checker)","")
@@ -175,7 +172,7 @@ endif
 SSHPASS_VERSION := 1.10
 sshpass:
 ifeq ("$(wildcard sshpass)","")
-	wget https://cytranet.dl.sourceforge.net/project/sshpass/sshpass/$(SSHPASS_VERSION)/sshpass-$(SSHPASS_VERSION).tar.gz
+	wget https://sourceforge.net/projects/sshpass/files/sshpass/$(SSHPASS_VERSION)/sshpass-$(SSHPASS_VERSION).tar.gz
 	tar -xf sshpass-$(SSHPASS_VERSION).tar.gz
 	mv sshpass-$(SSHPASS_VERSION) sshpass
 	rm sshpass-$(SSHPASS_VERSION).tar.gz
@@ -203,17 +200,12 @@ ifeq ("$(wildcard sysstat/Makefile)","")
 endif
 	cd sysstat && make
 
-LINUX_VERSION := 6.1.52
-linux-source:
-ifeq ("$(wildcard linux)","")
-ifeq ("$(wildcard linux-$(LINUX_VERSION).tar.xz)","")
-	wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUX_VERSION).tar.xz
-endif
-	tar -xf linux-$(LINUX_VERSION).tar.xz && mv linux-$(LINUX_VERSION)/ linux/
-endif
-
-turbostat: linux-source
-	cd linux/tools/power/x86/turbostat && make
+TURBOSTAT_LINUX_VERSION := 6.9.12
+turbostat:
+	wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(TURBOSTAT_LINUX_VERSION).tar.xz
+	tar -xf linux-$(TURBOSTAT_LINUX_VERSION).tar.xz && mv linux-$(TURBOSTAT_LINUX_VERSION)/ linux_turbostat/
+	sed -i '/_Static_assert/d' linux_turbostat/tools/power/x86/turbostat/turbostat.c
+	cd linux_turbostat/tools/power/x86/turbostat && make
 
 reset:
 	cd async-profiler
@@ -227,12 +219,12 @@ reset:
 	cd lspci && git clean -fdx && git reset --hard
 	cd pcm && git clean -fdx && git reset --hard
 	-cd mlc && git clean -fdx && git reset --hard
-	cd linux/tools/perf && make clean
+	cd linux_perf/tools/perf && make clean
 	cd spectre-meltdown-checker
 	cd sshpass && make clean
 	cd stress-ng && git clean -fdx && git reset --hard
 	cd sysstat && git clean -fdx && git reset --hard
-	cd linux/tools/power/x86/turbostat && make clean
+	cd linux_turbostat/tools/power/x86/turbostat && make clean
 
 # not used in build but required in oss archive file because some of the tools are statically linked
 glibc-2.19.tar.bz2:
@@ -244,5 +236,5 @@ libcrypt.tar.gz:
 libs: glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 
 oss-source: reset libs
-	tar --exclude-vcs -czf oss_source.tgz async-profiler/ cpuid/ dmidecode/ ethtool/ fio/ flamegraph/ ipmitool/ lshw/ lspci/ pcm/ linux/tools/perf spectre-meltdown-checker/ sshpass/ stress-ng/ sysstat/ linux/tools/power/x86/turbostat glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
+	tar --exclude-vcs -czf oss_source.tgz async-profiler/ cpuid/ dmidecode/ ethtool/ fio/ flamegraph/ ipmitool/ lshw/ lspci/ pcm/ linux_perf/tools/perf spectre-meltdown-checker/ sshpass/ stress-ng/ sysstat/ linux_turbostat/tools/power/x86/turbostat glibc-2.19.tar.bz2 zlib.tar.gz libcrypt.tar.gz
 	md5sum oss_source.tgz > oss_source.tgz.md5

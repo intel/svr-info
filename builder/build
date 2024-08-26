@@ -2,11 +2,21 @@
 
 # run this script from repo's root directory
 # set GITHUB_ACCESS_TOKEN environment variable to your token, if you want to build MLC
-
+set -x
+set -e
 TAG=v1
 
 # build third-party components image
 docker build -f third_party/build.Dockerfile --build-arg GITHUB_ACCESS_TOKEN="${GITHUB_ACCESS_TOKEN}" --tag svr-info-third-party:$TAG ./third_party
+# Create a temporary container
+id=$(docker create svr-info-third-party:$TAG foo)
+
+# Copy the files from the container to your local disk
+# Note: not used in build process, but useful to have around
+docker cp "$id":/bin ./third_party
+
+# Remove the temporary container
+docker rm "$id"
 
 # build go cmd builder image
 docker build -f cmd/build.Dockerfile --tag svr-info-cmd-builder:$TAG .
