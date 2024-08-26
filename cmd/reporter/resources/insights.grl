@@ -6,7 +6,7 @@
 //
 rule XeonGeneration {
 	when
-		Report.CompareMicroarchitecture(Report.GetValue("Configuration", "CPU", "Microarchitecture"), "ICX") == -1
+		Report.CompareMicroarchitecture(Report.GetValue("Configuration", "CPU", "Microarchitecture"), "SPR") == -1
 	then
 		Report.AddInsight(
 			"CPU is 2 or more generations behind current generation Xeon.",

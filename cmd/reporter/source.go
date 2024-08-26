@@ -1278,6 +1278,14 @@ func (s *Source) getEfficiencyLatencyControl() (valueNames []string, values [][]
 			} else {
 				mode = "Custom"
 			}
+		} else { // COMPUTE
+			if row[5] == "0" {
+				mode = "Latency Optimized"
+			} else if row[5] == "1200" {
+				mode = "Default"
+			} else {
+				mode = "Custom"
+			}
 		}
 		values[i] = append(values[i], mode)
 	}

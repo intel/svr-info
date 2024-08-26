@@ -4,8 +4,10 @@
 # build image (third_party directory):
 #   $ GITHUB_ACCESS_TOKEN=<your token>
 #   $ docker image build -f build.Dockerfile --tag svr-info-third-party:v1 .
-FROM ubuntu:18.04 as builder
-ENV LANG en_US.UTF-8
+FROM ubuntu:18.04 AS builder
+ENV http_proxy=${http_proxy}
+ENV https_proxy=${https_proxy}
+ENV LANG=en_US.UTF-8
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y apt-utils locales wget curl git netcat-openbsd software-properties-common jq zip unzip
 RUN locale-gen en_US.UTF-8 &&  echo "LANG=en_US.UTF-8" > /etc/default/locale
@@ -24,9 +26,9 @@ RUN cp /usr/local/lib/libz.a /usr/lib/x86_64-linux-gnu/libz.a
 RUN mkdir workdir
 COPY Makefile workdir/
 ARG GITHUB_ACCESS_TOKEN
-ENV GITHUB_ACCESS_TOKEN ${GITHUB_ACCESS_TOKEN}
+ENV GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN}
 RUN cd workdir && make -j4 tools && make oss-source
 
-FROM scratch as output
+FROM scratch AS output
 COPY --from=builder workdir/bin /bin
 COPY --from=builder workdir/oss_source* /

@@ -11,7 +11,7 @@ ARG TAG=
 FROM ${REGISTRY}${PREFIX}svr-info-third-party:${TAG} AS third-party
 
 # STAGE 2- image contains svr-info's Go components build environment
-FROM ${REGISTRY}${PREFIX}svr-info-cmd-builder:${TAG} as svr-info
+FROM ${REGISTRY}${PREFIX}svr-info-cmd-builder:${TAG} AS svr-info
 RUN mkdir /prebuilt
 RUN mkdir /prebuilt/third-party
 RUN mkdir /prebuilt/bin

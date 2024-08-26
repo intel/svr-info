@@ -2,9 +2,14 @@ RELEASE NOTES
 Intel® System Health Inspector (AKA svr-info)
 
 Fully Supported Platforms
-- Xeon Micro-Architectures: SRF,EMR,SPR,CPX,ICX,CLX,SKX,BDX,HSX
+- Xeon Micro-Architectures: GNR,SRF,EMR,SPR,CPX,ICX,CLX,SKX
 - Operating Systems: Ubuntu 18.04, 20.04, 22.04, 24.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
+
+2.11.1
+Bugs Fixed
+- Fix frequency benchmark on GNR
+- Add ELC mode for compute dies on SRF and GNR
 
 2.11.0
 Features Added
