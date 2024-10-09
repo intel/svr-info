@@ -6,6 +6,13 @@ Fully Supported Platforms
 - Operating Systems: Ubuntu 18.04, 20.04, 22.04, 24.04, CentOS 7, Amazon Linux 2, Debian 11, RHEL 9, Rocky Linux 8
   Note: svr-info may work on other micro-architectures and Linux distributions, but has not been thoroughly tested
 
+2.12.0
+Features Added/Changed
+- Gaudi devices enumerated
+- GNR-D vRAN accelerators enumerated
+- Minor modification to Excel 'brief' report's System Summary field
+- Show ELC thresholds for Compute Die(s)
+
 2.11.1
 Bugs Fixed
 - Fix frequency benchmark on GNR

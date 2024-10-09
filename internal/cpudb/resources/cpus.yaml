@@ -209,6 +209,14 @@
   channels: 12
   threads: 2
 
+# Granite Rapids - D
+- architecture: GNR_D
+  family: 6
+  model: 174
+  stepping:
+  channels:
+  threads: 2
+
 ##########
 # AMD CPUs
 ##########

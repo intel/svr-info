@@ -32,3 +32,9 @@
   devid: 37C8
   full_name: Intel Quick Assist Technology
   description: accelerates data encryption and compression for applications from networking to enterprise, cloud to storage, and content delivery to database
+
+- name: vRAN Boost
+  mfgid: 8086
+  devid: 57C2
+  full_name: Intel vRAN Boost Accelerator
+  description: accelerates vRAN workloads
