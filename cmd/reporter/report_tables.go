@@ -34,15 +34,15 @@ import (
  *   nicSummaryTable() - has info derived from the full table, but is presented in summary format
  */
 
-func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDiskSummary *Table, tableAcceleratorSummary *Table, category TableCategory) (table *Table) {
+func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDiskSummary *Table, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "Marketing Claim",
 		Category:      category,
 		AllHostValues: []HostValues{},
 	}
-	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, 100W TDP, HT On/Off?, Turbo On/Off?, NUMA xxx,  Integrated Accelerators Available [used]: xxx, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of <mm/dd/yy>.
-	template := "1-node, %sx %s, %s cores, %s TDP, HT %s, Turbo %s, NUMA %s, Integrated Accelerators Available [used]: %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s. Software: WORKLOAD+VERSION, COMPILER, LIBRARIES, OTHER_SW. Test by Intel as of %s."
-	var date, socketCount, cpuModel, coreCount, tdp, htOnOff, turboOnOff, numaNodes, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
+	// BASELINE: 1-node, 2x Intel® Xeon® <SKU, processor>, xx cores, 100W TDP, HT On/Off?, Turbo On/Off?, Total Memory xxx GB (xx slots/ xx GB/ xxxx MHz [run @ xxxx MHz] ), <BIOS version>, <ucode version>, <OS Version>, <kernel version>. Test by Intel as of <mm/dd/yy>.
+	template := "1-node, %sx %s, %s cores, %s TDP, HT %s, Turbo %s, Total Memory %s, BIOS %s, microcode %s, %s, %s, %s, %s. Test by Intel as of %s."
+	var date, socketCount, cpuModel, coreCount, tdp, htOnOff, turboOnOff, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion string
 
 	for sourceIdx, source := range fullReport.Sources {
 		var hostValues = HostValues{
@@ -78,8 +78,6 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		} else {
 			turboOnOff = "?"
 		}
-		numaNodes, _ = fullReport.findTable("CPU").getValue(sourceIdx, "NUMA Nodes")
-		accelerators, _ := tableAcceleratorSummary.getValue(sourceIdx, "Accelerators Available [used]")
 		installedMem, _ = fullReport.findTable("Memory").getValue(sourceIdx, "Installed Memory")
 		biosVersion, _ = fullReport.findTable("BIOS").getValue(sourceIdx, "Version")
 		uCodeVersion, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "Microcode")
@@ -87,7 +85,7 @@ func newMarketingClaimTable(fullReport *Report, tableNicSummary *Table, tableDis
 		disks, _ = tableDiskSummary.getValue(sourceIdx, "Disk")
 		operatingSystem, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "OS")
 		kernelVersion, _ = fullReport.findTable("Operating System").getValue(sourceIdx, "Kernel")
-		claim := fmt.Sprintf(template, socketCount, cpuModel, coreCount, tdp, htOnOff, turboOnOff, numaNodes, accelerators, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion, date)
+		claim := fmt.Sprintf(template, socketCount, cpuModel, coreCount, tdp, htOnOff, turboOnOff, installedMem, biosVersion, uCodeVersion, nics, disks, operatingSystem, kernelVersion, date)
 		hostValues.Values = append(hostValues.Values, []string{claim})
 		table.AllHostValues = append(table.AllHostValues, hostValues)
 	}
@@ -1131,6 +1129,133 @@ func newGPUTable(sources []*Source, category TableCategory) (table *Table) {
 	return
 }
 
+type Gaudi struct {
+	ModuleID      string
+	SerialNumber  string
+	BusID         string
+	DriverVersion string
+	EROM          string
+	CPLD          string
+	SPI           string
+	NUMA          string
+}
+
+func newGaudiTable(sources []*Source, category TableCategory) (table *Table) {
+	table = &Table{
+		Name:          "Gaudi",
+		Category:      category,
+		AllHostValues: []HostValues{},
+	}
+	for _, source := range sources {
+		gaudis := []Gaudi{}
+		for i, line := range source.getCommandOutputLines("gaudi info") {
+			if line == "" || i == 0 { // skip blank lines and header
+				continue
+			}
+			fields := strings.Split(line, ", ")
+			if len(fields) != 4 {
+				log.Printf("unexpected number of fields in gaudi info output")
+				continue
+			}
+			gaudis = append(gaudis, Gaudi{ModuleID: fields[0], SerialNumber: fields[1], BusID: fields[2], DriverVersion: fields[3]})
+		}
+		// sort the gaudis by module ID
+		sort.Slice(gaudis, func(i, j int) bool {
+			return gaudis[i].ModuleID < gaudis[j].ModuleID
+		})
+		// get NUMA affinity
+		numaAffinities := source.valsArrayFromRegexSubmatch("gaudi numa", `^(\d+)\s+(\d+)$`)
+		if len(numaAffinities) != len(gaudis) {
+			log.Printf("number of gaudis in gaudi info and numa output do not match")
+			return nil
+		}
+		for i, numaAffinity := range numaAffinities {
+			gaudis[i].NUMA = numaAffinity[1]
+		}
+		// get firmware versions
+		reDevice := regexp.MustCompile(`^\[(\d+)] AIP \(accel\d+\) (.*)$`)
+		reErom := regexp.MustCompile(`^erom$`)
+		reCpld := regexp.MustCompile(`^cpld$`)
+		rePreboot := regexp.MustCompile(`^preboot$`)
+		reComponent := regexp.MustCompile(`^component\s+:\s+hl-gaudi\d-(.*)-sec-\d+`)
+		reCpldComponent := regexp.MustCompile(`^component\s+:\s+(0x[0-9a-fA-F]+\.[0-9a-fA-F]+)$`)
+		deviceIdx := -1
+		state := -1
+		for _, line := range source.getCommandOutputLines("gaudi firmware") {
+			if line == "" {
+				continue
+			}
+			match := reDevice.FindStringSubmatch(line)
+			if match != nil {
+				var err error
+				deviceIdx, err = strconv.Atoi(match[1])
+				if err != nil {
+					log.Printf("failed to parse device index")
+					return nil
+				}
+				if deviceIdx >= len(gaudis) {
+					log.Printf("device index out of range")
+					return nil
+				}
+				continue
+			}
+			if deviceIdx == -1 {
+				continue
+			}
+			if reErom.FindString(line) != "" {
+				state = 0
+				continue
+			}
+			if reCpld.FindString(line) != "" {
+				state = 1
+				continue
+			}
+			if rePreboot.FindString(line) != "" {
+				state = 2
+				continue
+			}
+			if state != -1 {
+				switch state {
+				case 0:
+					match := reComponent.FindStringSubmatch(line)
+					if match != nil {
+						gaudis[deviceIdx].EROM = match[1]
+					}
+				case 1:
+					match := reCpldComponent.FindStringSubmatch(line)
+					if match != nil {
+						gaudis[deviceIdx].CPLD = match[1]
+					}
+				case 2:
+					match := reComponent.FindStringSubmatch(line)
+					if match != nil {
+						gaudis[deviceIdx].SPI = match[1]
+					}
+				}
+				state = -1
+			}
+		}
+		var hostValues = HostValues{
+			Name: source.getHostname(),
+			ValueNames: []string{
+				"Module ID",
+				"Serial Number",
+				"Bus ID",
+				"Driver Version",
+				"EROM",
+				"CPLD",
+				"SPI",
+				"NUMA Node",
+			},
+		}
+		for _, gaudi := range gaudis {
+			hostValues.Values = append(hostValues.Values, []string{gaudi.ModuleID, gaudi.SerialNumber, gaudi.BusID, gaudi.DriverVersion, gaudi.EROM, gaudi.CPLD, gaudi.SPI, gaudi.NUMA})
+		}
+		table.AllHostValues = append(table.AllHostValues, hostValues)
+	}
+	return
+}
+
 func newNICTable(sources []*Source, category TableCategory) (table *Table) {
 	table = &Table{
 		Name:          "NIC",
@@ -1140,7 +1265,7 @@ func newNICTable(sources []*Source, category TableCategory) (table *Table) {
 	idxNicName := 0
 	idxNicModel := 1
 	for _, source := range sources {
-		nicsInfo := source.valsArrayFromRegexSubmatch("lshw", `^pci.*? (\S+)\s+network\s+(\S.*?)\s+\[\w+:\w+]$`)
+		nicsInfo := source.valsArrayFromRegexSubmatch("lshw", `^\S+\s+(\S+)\s+network\s+([^\[]+?)(?:\s+\[.*\])?$`)
 		nicsInfo = append(nicsInfo, source.valsArrayFromRegexSubmatch("lshw", `^usb.*? (\S+)\s+network\s+(\S.*?)$`)...)
 		var nics [][]string
 		for _, nic := range nicsInfo {

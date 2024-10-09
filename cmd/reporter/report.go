@@ -65,6 +65,7 @@ func NewConfigurationReport(sources []*Source, CPUdb cpudb.CPUDB) (report *Repor
 			newFilesystemTable(sources, Storage),
 
 			newGPUTable(sources, GPU),
+			newGaudiTable(sources, GPU),
 
 			newCXLDeviceTable(sources, CXL),
 
@@ -112,7 +113,7 @@ func NewBriefReport(sources []*Source, fullReport *Report, CPUdb cpudb.CPUDB) (r
 			fullReport.findTable("Power"),
 			tableEfficiencyLatencyControlSummary,
 			newVulnerabilitySummaryTable(fullReport.findTable("Vulnerability"), Security),
-			newMarketingClaimTable(fullReport, tableNicSummary, tableDiskSummary, tableAcceleratorSummary, NoCategory),
+			newMarketingClaimTable(fullReport, tableNicSummary, tableDiskSummary, NoCategory),
 		}...,
 	)
 	// TODO: remove check when code is stable

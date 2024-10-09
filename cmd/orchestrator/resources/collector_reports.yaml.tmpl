@@ -290,11 +290,7 @@ commands:
 
           # Print metrics
           echo -n "$socket_id,$die,$die_type,$min_ratio,$max_ratio,$eff_latency_ctrl_ratio,"
-          if [ $die_type == "IO" ] ; then
-              echo "$eff_latency_ctrl_low_threshold,$eff_latency_ctrl_high_threshold,$eff_latency_ctrl_high_threshold_enable"
-          else
-              echo ",,"
-          fi
+          echo "$eff_latency_ctrl_low_threshold,$eff_latency_ctrl_high_threshold,$eff_latency_ctrl_high_threshold_enable"
       }
 
       # Print CSV header
@@ -383,8 +379,20 @@ commands:
         done
     superuser: true
     parallel: true
+  - label: gaudi info
+    command: hl-smi -Q module_id,serial,bus_id,driver_version -f csv
+    superuser: true
+    parallel: true
+  - label: gaudi firmware
+    command: hl-smi --fw-version
+    superuser: true
+    parallel: true
+  - label: gaudi numa
+    command: hl-smi topo -N
+    superuser: true
+    parallel: true
   - label: lspci bits
-    command: lspci -s $(lspci | grep 325b | awk 'NR==1{{print $1}}') -xxx |  awk '$1 ~ /^90/{{print $9 $8 $7 $6; exit}}'
+    command: lspci -s $(lspci | grep 325b | awk 'NR==1{print $1}') -xxx |  awk '$1 ~ /^90/{print $9 $8 $7 $6; exit}'
     superuser: true
     parallel: true
   - label: lspci devices
