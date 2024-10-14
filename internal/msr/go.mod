@@ -1,3 +1,3 @@
 module github.com/intel/svr-info/internal/msr
 
-go 1.22
+go 1.22.0
