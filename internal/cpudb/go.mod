@@ -1,6 +1,6 @@
 module github.com/intel/svr-info/internal/cpudb
 
-go 1.22
+go 1.22.0
 
 require gopkg.in/yaml.v2 v2.4.0
 
