@@ -1,3 +1,10 @@
+# IMPORTANT NOTICE
+<span style="font-size: 24px; font-weight: bold;">Intel&reg; System Health Inspector functionality and future development has been moved to Intel&reg; [PerfSpect](https://github.com/intel/PerfSpect). For the latest updates and continued development, please visit the [PerfSpect](https://github.com/intel/PerfSpect) project at https://github.com/intel/PerfSpect.</span>
+ 
+---
+---
+---
+
 # Intel&reg; System Health Inspector [![Build](https://github.com/intel/svr-info/actions/workflows/build-test.yml/badge.svg)](https://github.com/intel/svr-info/actions/workflows/build-test.yml)[![License](https://img.shields.io/badge/License-MIT-blue)](https://github.com/intel/svr-info/blob/master/LICENSE)
 System Health Inspector aka "svr-info" is a Linux command line tool used to assess the health of Intel® Xeon® processor-based servers.
 ## Quick Start
