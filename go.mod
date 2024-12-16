@@ -32,8 +32,8 @@ require (
 	github.com/intel/svr-info/internal/util v0.0.0-20240826225705-4df592082b12
 	github.com/xuri/excelize/v2 v2.8.1
 	golang.org/x/exp v0.0.0-20241004190924-225e2abe05e6
-	golang.org/x/term v0.25.0
-	golang.org/x/text v0.19.0
+	golang.org/x/term v0.27.0
+	golang.org/x/text v0.21.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -66,8 +66,8 @@ require (
 	github.com/xuri/nfp v0.0.0-20240318013403-ab9948c2c4a7 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.28.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/net v0.30.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
