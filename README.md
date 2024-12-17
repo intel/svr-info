@@ -1,4 +1,4 @@
-\# PROJECT NOT UNDER ACTIVE MANAGEMENT
+# PROJECT NOT UNDER ACTIVE MANAGEMENT
 
 This project will no longer be maintained by Intel.
 
